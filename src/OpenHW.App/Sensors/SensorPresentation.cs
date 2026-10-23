@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using OpenFan.Core.Hardware;
-using OpenFan.Linux.Hw;
+using OpenHW.Hardware;
 
 namespace OpenHW.App.Sensors;
 
@@ -12,7 +11,7 @@ public sealed record SensorView(string Id, string Name, HardwareKind Kind, strin
 public sealed record SensorGroupView(string Key, string Title, IReadOnlyList<SensorView> Sensors);
 
 /// <summary>
-/// Turns openfan-linux's flat inventory into HWiNFO's layout: one group per physical device, rows ordered
+/// Turns the engines' flat inventory into HWiNFO's layout: one group per physical device, rows ordered
 /// temperatures → voltages → fans → … with HWiNFO-like names, and values formatted the way HWiNFO does.
 /// Pure presentation — no I/O beyond the machine identity strings passed in.
 /// </summary>
@@ -81,7 +80,7 @@ public static partial class SensorPresentation
         {
             "k10temp" or "amd_hsmp_hwmon" => "cpu-enhanced",
             "spd5118" or "jc42" => "dimms",
-            var chip when IsNetwork(chip) => NetworkBackend.GroupKey(chip), // hwmon PHY temps join the rates
+            var chip when IsNetwork(chip) => NetworkEngine.GroupKey(chip), // hwmon PHY temps join the rates
             // A drive's hwmon temperature joins its SMART/activity rows under one "Drive:" heading.
             "nvme" => machine.Drives.FirstOrDefault(d => d.HwmonPath is { } p &&
                           Path.GetFileName(p) == "hwmon" + item.Id.Split(':')[2])?.Group ?? item.Group,
@@ -92,9 +91,9 @@ public static partial class SensorPresentation
     private static (int Order, string Title) GroupTitle(string key, HardwareItem sample, MachineInfo machine, IReadOnlyList<string> gpus)
     {
         var vendor = ShortVendor(machine.BoardVendor);
-        if (key == SystemBackend.SystemGroup) return (0, $"System: {vendor}");
-        if (key == SystemBackend.CpuGroup) return (1, $"CPU [#0]: {machine.CpuModel}");
-        if (key == SystemBackend.CStateGroup) return (2, $"CPU [#0]: {machine.CpuModel}: C-State Residency");
+        if (key == SystemEngine.SystemGroup) return (0, $"System: {vendor}");
+        if (key == SystemEngine.CpuGroup) return (1, $"CPU [#0]: {machine.CpuModel}");
+        if (key == SystemEngine.CStateGroup) return (2, $"CPU [#0]: {machine.CpuModel}: C-State Residency");
         if (key == "cpu-enhanced") return (2, $"CPU [#0]: {machine.CpuModel}: Enhanced");
         if (key == "dimms") return (3, "DDR5 DIMMs: SPD5118 Hubs");
         if (key == "edac") return (4, "Memory Controller: EDAC");
@@ -160,7 +159,7 @@ public static partial class SensorPresentation
     {
         var suffix = item.Id.Split(':', 3).ElementAtOrDefault(2) ?? "";
         if (suffix.StartsWith("extra:", StringComparison.Ordinal))
-            return NvmlExtrasBackend.DisplayName(suffix[6..]) ?? item.Name;
+            return NvidiaEngine.ExtraDisplayName(suffix[6..]) ?? item.Name;
         var fan = FanIndex().Match(suffix);
         if (fan.Success) return $"GPU Fan{int.Parse(fan.Groups[1].Value, CultureInfo.InvariantCulture) + 1}";
         return suffix switch

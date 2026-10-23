@@ -1,15 +1,13 @@
 using System.Diagnostics;
 using System.Globalization;
-using OpenFan.Core.Hardware;
-using OpenFan.Linux.Hw;
 
-namespace OpenHW.App.Sensors;
+namespace OpenHW.Hardware;
 
 /// <summary>
 /// HWiNFO's "Network:" rows — download/upload rate and totals per physical interface, from
 /// /sys/class/net/*/statistics. Virtual interfaces (lo, docker0, bridges) have no device link and are skipped.
 /// </summary>
-public sealed class NetworkBackend(string root = "/sys/class/net") : ISensorBackend
+public sealed class NetworkEngine(string root = "/sys/class/net") : ISensorEngine
 {
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Dictionary<string, (double Rx, double Tx, TimeSpan At)> _previous = [];

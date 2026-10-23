@@ -1,5 +1,5 @@
 using Avalonia.Media;
-using OpenFan.Core.Hardware;
+using OpenHW.Hardware;
 
 namespace OpenHW.App.SensorWindow;
 

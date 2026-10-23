@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using OpenFan.Core.Hud;
 
 namespace OpenHW.App.Tray;
 
@@ -19,7 +18,7 @@ public static class TrayIconRenderer
     public static IconPixmap[] Render(string text, string backgroundHex)
     {
         var background = Color.Parse(backgroundHex);
-        var foreground = Color.Parse(HudTheme.TextColorFor(backgroundHex)); // readable on any tile colour
+        var foreground = TextColorFor(background); // readable on any tile colour
         return Sizes.Select(size => RenderOne(text, background, foreground, size)).ToArray();
     }
 
@@ -49,6 +48,12 @@ public static class TrayIconRenderer
         }
         return new IconPixmap(size, size, ToArgb(bgra));
     }
+
+    // BT.601 luminance: a pale tile gets dark text, anything else white.
+    private static Color TextColorFor(Color background) =>
+        (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255.0 > 0.62
+            ? Color.Parse("#141414")
+            : Colors.White;
 
     // Largest bold size whose width still fits the tile, so "45" is big and "100" shrinks to fit.
     private static FormattedText FitText(string text, int size, Color foreground)

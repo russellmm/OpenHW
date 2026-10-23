@@ -11,8 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Same Avalonia as openfan-linux: it pins Tmds.DBus.Protocol 0.20, which the tray code and the shared
-         hardware layer both use. Upgrade the three together, never one alone. -->
+    <!-- Avalonia 11.2 pins Tmds.DBus.Protocol 0.20, which the tray code also uses. Upgrade them together. -->
     <PackageReference Include="Avalonia" Version="11.2.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
@@ -21,9 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Sensor reading is shared with openfan-linux rather than copied (libsensors, NVML, HSMP, NVMe, EDAC). -->
-    <ProjectReference Include="..\..\..\..\ChatGPT\openfan-linux\src\OpenFan.Core\OpenFan.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\ChatGPT\openfan-linux\src\OpenFan.Linux.Hw\OpenFan.Linux.Hw.csproj" />
+    <ProjectReference Include="..\OpenHW.Hardware\OpenHW.Hardware.csproj" />
   </ItemGroup>
 
 </Project>

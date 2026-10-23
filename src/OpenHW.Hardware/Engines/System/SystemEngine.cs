@@ -1,16 +1,14 @@
 using System.Globalization;
-using OpenFan.Core.Hardware;
-using OpenFan.Linux.Hw;
 
-namespace OpenHW.App.Sensors;
+namespace OpenHW.Hardware;
 
 /// <summary>
-/// HWiNFO's system and CPU groups, which openfan-linux has no equivalent for: "System" (memory, pressure stall
+/// HWiNFO's system and CPU groups, which no other engine covers: "System" (memory, pressure stall
 /// info, load average), per-core CPU clocks/usage (cpufreq + /proc/stat) and C-state residency (cpuidle).
 /// Per-core rows are children of an aggregate row, so <see cref="Children"/> tells the window which rows nest
 /// under which.
 /// </summary>
-public sealed partial class SystemBackend : ISensorBackend
+public sealed partial class SystemEngine : ISensorEngine
 {
     public const string SystemGroup = "openhw:system";
     public const string CpuGroup = "openhw:cpu";

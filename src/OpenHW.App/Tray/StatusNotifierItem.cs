@@ -8,7 +8,7 @@ public sealed record IconPixmap(int Width, int Height, byte[] Argb);
 /// <summary>
 /// A StatusNotifierItem (KDE/freedesktop tray icon) whose picture we draw ourselves, so a sensor value can sit
 /// on a coloured tile exactly like HWiNFO's tray icons. Avalonia's TrayIcon cannot do this (it takes an icon
-/// file and no text), and the appindicator text label cannot be coloured — see openfan-linux STATUS.md.
+/// file and no text), and the appindicator text label (XAyatanaLabel) cannot be coloured.
 ///
 /// Each item owns its own session-bus connection: watchers identify items by bus name and every item lives at
 /// /StatusNotifierItem, so one connection per icon is how several sensors get several icons.

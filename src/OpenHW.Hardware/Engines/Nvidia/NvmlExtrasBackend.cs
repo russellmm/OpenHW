@@ -1,15 +1,13 @@
 using System.Runtime.InteropServices;
-using OpenFan.Core.Hardware;
-using OpenFan.Linux.Hw;
 
-namespace OpenHW.App.Sensors;
+namespace OpenHW.Hardware;
 
 /// <summary>
-/// GPU readings HWiNFO shows that openfan-linux's NvmlBackend does not publish: video clock, PCIe link speed /
+/// GPU readings HWiNFO shows that <see cref="NvmlBackend"/> does not publish: video clock, PCIe link speed /
 /// width / throughput, encoder and decoder load, P-state and performance limiters. Rows join each GPU's own
 /// group (same backend name and group label), so they appear under the matching "GPU [#n]" heading.
 /// </summary>
-public sealed class NvmlExtrasBackend : ISensorBackend
+internal sealed class NvmlExtrasBackend : ISensorEngine
 {
     // nvmlClocksEventReasons bits (nvml.h): which limiter is holding clocks below the requested level.
     private static readonly (string Key, string Name, ulong Mask)[] Limiters =
@@ -28,14 +26,14 @@ public sealed class NvmlExtrasBackend : ISensorBackend
 
     public NvmlExtrasBackend()
     {
-        try { _initialized = Native.nvmlInit_v2() == Native.Success; } // reference-counted alongside openfan's init
+        try { _initialized = Native.nvmlInit_v2() == Native.Success; } // reference-counted alongside NvmlBackend's init
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
     }
 
     public string Name => "nvml";
     public bool Available => _initialized;
 
-    /// <summary>GPUs as openfan named them (uuid → group label), taken from its inventory.</summary>
+    /// <summary>GPUs as NvmlBackend named them (uuid → group label), taken from its inventory.</summary>
     public void UseGpus(IEnumerable<HardwareItem> nvmlItems) =>
         _gpus = nvmlItems.Select(i => (Uuid: i.Id.Split(':')[1], i.Group)).Distinct().ToList();
 

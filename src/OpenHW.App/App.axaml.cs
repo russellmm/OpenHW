@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using OpenFan.Core.Hardware;
+using OpenHW.Hardware;
 using OpenHW.App.Sensors;
 using OpenHW.App.Tray;
 
@@ -90,8 +90,7 @@ public sealed class App : Application
     private void UpdateTray()
     {
         if (_cpuTempIcon is null) return;
-        var id = SensorPollingPlan.ResolveHudId(_hub.Inventory, "cpu:temp:c");
-        var temp = _hub.Get(id).Current;
+        var temp = _hub.CpuTemperatureId() is { } id ? _hub.Get(id).Current : null;
         _cpuTempIcon.Update(
             TrayIconRenderer.Render(temp is { } t ? Math.Round(t).ToString("0") : "--", TrayBackground),
             _hub.Machine.CpuModel,

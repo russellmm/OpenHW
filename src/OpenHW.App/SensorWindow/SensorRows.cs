@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Media;
-using OpenFan.Core.Hardware;
+using OpenHW.Hardware;
 using OpenHW.App.Sensors;
 
 namespace OpenHW.App.SensorWindow;
