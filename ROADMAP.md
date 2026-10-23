@@ -38,6 +38,23 @@ per drive — each read is an admin command to the drive, which can also wake it
 - [x] PCIe throughput sampled every 10 s instead of every poll.
 - [ ] Pause reads while the window is hidden (tray only), optionally — HWiNFO keeps statistics running.
 
+### Memory
+
+Measured 2026-10-22 (b68a473, everything collapsed, window open): ~0.7% of one core, ~310 MB resident
+(~190 MB private). Breakdown: ~130 MB .NET runtime (GC heap, JIT code, 35 MB W^X double-mapping), ~70 MB
+NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libraries.
+
+- [ ] **Runtime settings first** (no code changes; measure before/after with the same collapse state):
+      disable W^X double-mapping (`DOTNET_EnableWriteXorExecute=0` via the launcher, ~35 MB),
+      `<ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>` and `<TieredPGO>false</TieredPGO>`,
+      GC conserve-memory (`System.GC.ConserveMemory`), optionally a heap hard limit. Expect 40–60 MB less.
+- [ ] Optional software rendering (`X11RenderingMode.Software`) as a setting: drops most of the ~70 MB driver
+      mappings, at some CPU cost while the window is visible — measure both.
+- [ ] **Native AOT later**: compile ahead of time to remove the JIT and most runtime overhead (large memory and
+      startup win). Needs trim-safe code first: replace reflection `Binding("Name")` in the row templates with
+      compiled bindings, check Tmds.DBus and System.Text.Json (source-generated context for `ViewState`) and
+      the P/Invoke declarations for AOT warnings.
+
 ## Window and tray
 
 - [ ] Choose which sensors get tray icons, with per-icon colours (HWiNFO "Tray Icon" settings tab).
