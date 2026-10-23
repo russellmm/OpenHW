@@ -15,13 +15,14 @@ public static class HelperSocket
 }
 
 /// <summary>
-/// One line-based request → one reply. Read-only by construction: the only commands are fixed reads, every
-/// argument is validated against what the system enumerates, and nothing a client sends becomes a path,
-/// device or opcode. Replies are "ok …" or "err …".
+/// One line-based request → one reply. Every command is fixed, every argument is validated against what the
+/// system enumerates, and nothing a client sends becomes a path, device, value or opcode. The one write,
+/// <c>cpufreqrestore</c>, takes no arguments: it puts each cpufreq ceiling back to the hardware maximum.
+/// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null)
 {
-    public const string Version = "1";
+    public const string Version = "2";
 
     public string HandleLine(string line)
     {
@@ -39,6 +40,11 @@ public sealed partial class HelperSession(INvmeSmartReader smart)
                     var data = smart.Read(parts[1], parts[2]);
                     return data.Length == 512 ? "ok " + Convert.ToBase64String(data) : "err invalid NVMe log length";
                 }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+
+            case "cpufreqrestore" when parts.Length == 1:
+                if (cpufreq is null) return "err cpufreq unavailable";
+                try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
 
             default:
@@ -74,7 +80,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 256; // longest valid request is ~80 bytes
 
@@ -126,7 +132,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath) : IA
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart);
+        var session = new HelperSession(smart, cpufreq);
         try
         {
             using (client)

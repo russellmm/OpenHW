@@ -7,16 +7,27 @@ public sealed record TrayMenuItem(string Label, Action? Clicked)
 {
     public bool IsSeparator { get; private init; }
     public static TrayMenuItem Separator { get; } = new("", null) { IsSeparator = true };
+
+    /// <summary>Makes this a radio item; returns whether it is the selected one.</summary>
+    public Func<bool>? Checked { get; init; }
+
+    /// <summary>Hides the item while this returns false.</summary>
+    public Func<bool>? Visible { get; init; }
+
+    /// <summary>Label that changes with state; <see cref="Label"/> is used when null.</summary>
+    public Func<string>? DynamicLabel { get; init; }
 }
 
 /// <summary>
-/// Minimal com.canonical.dbusmenu: a flat, static list of items under root id 0 (ids 1..n). This is what the
-/// panel renders when a tray icon is right-clicked.
+/// Minimal com.canonical.dbusmenu: a flat list of items under root id 0 (ids 1..n). This is what the panel
+/// renders when a tray icon is right-clicked. Items are fixed; their labels, radio state and visibility are read
+/// on each request, and <see cref="Invalidate"/> tells the panel to re-read them.
 /// </summary>
 public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
 {
     public const string MenuPath = "/MenuBar";
-    private const uint Revision = 1; // static menu: the layout never changes, so no LayoutUpdated signals
+    private uint _revision = 1;
+    private uint Revision => _revision;
 
     private static readonly string[] Properties = ["Version", "TextDirection", "Status", "IconThemePath"];
 
@@ -104,6 +115,17 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
 
     private bool IsItem(int id) => id >= 1 && id <= items.Count;
 
+    /// <summary>State behind a label, radio or visibility changed: the panel re-reads the layout.</summary>
+    public void Invalidate(Connection connection)
+    {
+        var revision = Interlocked.Increment(ref _revision);
+        using var writer = connection.GetMessageWriter();
+        writer.WriteSignalHeader(destination: null, path: MenuPath, @interface: "com.canonical.dbusmenu", member: "LayoutUpdated", signature: "ui");
+        writer.WriteUInt32(revision);
+        writer.WriteInt32(0);
+        connection.TrySendMessage(writer.CreateMessage());
+    }
+
     private void WriteRoot(ref MessageWriter writer)
     {
         writer.WriteStructureStart();
@@ -147,7 +169,23 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
             {
                 writer.WriteDictionaryEntryStart();
                 writer.WriteString("label");
-                writer.WriteVariantString(item.Label);
+                writer.WriteVariantString(item.DynamicLabel?.Invoke() ?? item.Label);
+                if (item.Checked is { } isChecked)
+                {
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("toggle-type");
+                    writer.WriteVariantString("radio");
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("toggle-state");
+                    writer.WriteSignature("i");
+                    writer.WriteInt32(isChecked() ? 1 : 0);
+                }
+            }
+            if (item.Visible is { } visible)
+            {
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("visible");
+                writer.WriteVariantBool(visible());
             }
         }
         writer.WriteDictionaryEnd(props);

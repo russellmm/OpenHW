@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Path = Avalonia.Controls.Shapes.Path;
+using OpenHW.App.Power;
 using OpenHW.App.Sensors;
 using OpenHW.App.SensorWindow;
 
@@ -37,10 +38,16 @@ public sealed class MainWindow : Window
     private readonly Stopwatch _elapsed = Stopwatch.StartNew();
     private readonly TextBlock _elapsedText = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
     private readonly ListBox _list;
+    private readonly PowerModeController? _power;
+    private ComboBox? _powerMode;
+    private Button? _removeCap;
+    private TextBlock? _powerError;
+    private bool _showingPower; // RefreshPower is setting the selection: not a user choice
 
-    public MainWindow(SensorHub hub)
+    public MainWindow(SensorHub hub, PowerModeController? power = null)
     {
         _hub = hub;
+        _power = power;
         _collapsedGroups = _view.CollapsedGroups;
         _expandedSensors = _view.ExpandedSensors;
         Title = "OpenHW Sensors Status";
@@ -353,6 +360,7 @@ public sealed class MainWindow : Window
         var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, Hide);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _elapsedText, reset, close } };
+        if (BuildPowerControls() is { } power) right.Children.Insert(0, power);
         var bar = new DockPanel { Height = 54, Background = Palette.Window, Margin = new Thickness(4, 0) };
         DockPanel.SetDock(right, Dock.Right);
         bar.Children.Add(right);
@@ -363,6 +371,67 @@ public sealed class MainWindow : Window
         };
         bar.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse, version } });
         return bar;
+    }
+
+    // ── power mode ───────────────────────────────────────────────────────────────────────────────────────────
+
+    private Control? BuildPowerControls()
+    {
+        if (_power is null) return null;
+        _powerMode = new ComboBox { Width = 130, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
+        ToolTip.SetTip(_powerMode, "Power mode (power-profiles-daemon). If the CPU is still held at base clock after " +
+                                   "leaving Power saver, OpenHW lifts that cap so boost really comes back.");
+        _powerMode.SelectionChanged += (_, _) =>
+        {
+            if (!_showingPower && _powerMode.SelectedItem is ComboBoxItem { Tag: string profile }) _ = _power.SetProfileAsync(profile);
+        };
+        _removeCap = new Button
+        {
+            IsVisible = false, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4),
+            Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1),
+            Foreground = new SolidColorBrush(Color.Parse("#F0B429")),
+        };
+        _removeCap.Click += (_, _) => _ = _power.RemoveCapAsync();
+        _powerError = new TextBlock
+        {
+            IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextWrapping = TextWrapping.Wrap,
+        };
+        RefreshPower();
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 8, 0),
+            Children = { _powerError, _removeCap, _powerMode },
+        };
+    }
+
+    /// <summary>Shows the active profile, any CPU frequency cap, and the last error. UI thread.</summary>
+    public void RefreshPower()
+    {
+        if (_power is null || _powerMode is null || _removeCap is null || _powerError is null) return;
+        _showingPower = true;
+        try
+        {
+            _powerMode.IsVisible = _power.Available;
+            if (_powerMode.Items.Count != _power.Profiles.Count)
+            {
+                _powerMode.Items.Clear();
+                foreach (var profile in _power.Profiles)
+                    _powerMode.Items.Add(new ComboBoxItem { Content = PowerModeController.Label(profile), Tag = profile });
+            }
+            _powerMode.SelectedItem = _powerMode.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == _power.ActiveProfile);
+        }
+        finally
+        {
+            _showingPower = false;
+        }
+
+        var cpu = _power.Cpu;
+        _removeCap.IsVisible = cpu.Capped;
+        _removeCap.Content = $"CPU capped at {PowerModeController.Ghz(cpu.LowestMaxKHz)}";
+        ToolTip.SetTip(_removeCap, $"Click to restore the full {PowerModeController.Ghz(cpu.HardwareMaxKHz)} (needs openhw-helper).");
+        _powerError.Text = _power.LastError ?? "";
+        _powerError.IsVisible = _power.LastError is not null;
     }
 
     /// <summary>"OpenHW 0.1.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>

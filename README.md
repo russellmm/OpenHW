@@ -46,20 +46,35 @@ or its output is silently lost and the bus disconnects the app for sending a mal
 | `NetworkEngine` | Download/upload rate and totals per physical interface |
 
 `src/OpenHW.App/Sensors/SensorHub.cs` samples every engine once per 2 s poll; the window and tray share that sample.
-OpenHW is read-only today: the engines contain no fan or power-limit writes. Write features (GPU/CPU power
-limits, CPU max frequency) are planned through the helper — see [ROADMAP.md](ROADMAP.md).
+The engines are read-only: no fan or power-limit writes. Write features (GPU/CPU power limits, CPU max frequency)
+are planned through the helper — see [ROADMAP.md](ROADMAP.md).
 
 NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (below); without it, drive health
 rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
 (effective clocks, per-core power) — they will go through the same helper.
 
+## Power modes
+
+The window footer and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
+the same setting as GNOME's power menu; no root needed). Power saver turns CPU boost off and the kernel holds every
+cpufreq ceiling (`scaling_max_freq`) at the base clock. Leaving it normally restores the previous ceiling, but if
+the stored ceiling was the base clock (seen on the 9970X after a session that started in power-saver), Performance
+silently stays at 4.0 GHz. So whenever a profile change — from OpenHW, GNOME or `powerprofilesctl` — turns boost
+back on and the CPU is still capped, OpenHW asks the helper to restore each ceiling to `cpuinfo_max_freq`. A cap
+present for any other reason (another tool, or already there when OpenHW started) is shown as **CPU capped at …**
+in the footer and the tray menu, and lifted only when clicked. Code: `src/OpenHW.App/Power/`,
+`src/OpenHW.Hardware/CpuFrequency/`.
+
 ## Root helper
 
-`openhw-helper` (`src/OpenHW.Helper`) is a small read-only daemon for the readings Linux reserves for root. It
-listens on `/run/openhw/helper.sock` (`0660 root:openhw`) and answers only fixed queries — today `ping` and
-`nvmesmart <controller> <identity>`, where both arguments must match a drive the system enumerates. It has no
-write commands, caps request lines at 256 bytes, reads each drive at most once per 10 s, and runs under a
-hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem, no network, NVMe devices only).
+`openhw-helper` (`src/OpenHW.Helper`) is a small daemon for what Linux reserves for root. It listens on
+`/run/openhw/helper.sock` (`0660 root:openhw`) and answers only fixed commands: `ping`,
+`nvmesmart <controller> <identity>` (both arguments must match a drive the system enumerates), and
+`cpufreqrestore` — no arguments: raises every cpufreq policy whose `scaling_max_freq` is below its
+`cpuinfo_max_freq` back to that maximum (see [Power modes](#power-modes)). No client input becomes a path or a
+value. It caps request lines at 256 bytes, reads each drive at most once per 10 s, and runs under a hardened
+systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem except `/sys/devices/system/cpu`, no
+network, NVMe devices only). Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
 lingering is enabled for your account — `ls /var/lib/systemd/linger` — since the user manager keeps its boot-time
@@ -87,5 +102,6 @@ a display — useful for checking changes headlessly.
 ## Status
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
-highlight, expand/collapse all, reset), one CPU-temperature tray icon, and the root helper for NVMe SMART.
+highlight, expand/collapse all, reset), one CPU-temperature tray icon, power-mode switching that keeps boost
+working, and the root helper for NVMe SMART and the CPU frequency ceiling restore.
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using OpenHW.Hardware;
+using OpenHW.App.Power;
 using OpenHW.App.Sensors;
 using OpenHW.App.Tray;
 
@@ -15,10 +16,12 @@ public sealed class App : Application
     private static readonly TimeSpan PollPeriod = TimeSpan.FromSeconds(2); // HWiNFO's default polling period
 
     private readonly SensorHub _hub = new();
+    private readonly PowerModeController _power = new(new CpuFrequencyLimits());
     private MainWindow? _window;
     private StatusNotifierItem? _cpuTempIcon;
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
+    private int _polls;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -29,15 +32,19 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
-            _window = new MainWindow(_hub);
+            _window = new MainWindow(_hub, _power);
             _window.Show();
 
             lifetime.Exit += (_, _) =>
             {
                 _poll?.Dispose();
                 _cpuTempIcon?.Dispose();
+                _power.Dispose();
                 _hub.Dispose();
             };
+
+            _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
+            _ = _power.StartAsync();
 
             _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => _window?.RebuildTree());
             _poll = new Timer(_ => Poll(), null, PollPeriod, PollPeriod);
@@ -49,12 +56,26 @@ public sealed class App : Application
 
     private async Task StartTrayAsync(IClassicDesktopStyleApplicationLifetime lifetime)
     {
-        var menu = new[]
+        // power-profiles-daemon offers these three; ones it doesn't list on this machine stay hidden.
+        var modes = new[] { "power-saver", "balanced", "performance" }.Select(profile =>
+            new TrayMenuItem(PowerModeController.Label(profile), () => _ = _power.SetProfileAsync(profile))
+            {
+                Checked = () => _power.ActiveProfile == profile,
+                Visible = () => _power.Profiles.Contains(profile),
+            });
+        var menu = new List<TrayMenuItem>
         {
-            new TrayMenuItem("Show Sensors", () => Dispatcher.UIThread.Post(ShowWindow)),
+            new("Show Sensors", () => Dispatcher.UIThread.Post(ShowWindow)),
             TrayMenuItem.Separator,
-            new TrayMenuItem("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())),
         };
+        menu.AddRange(modes);
+        menu.Add(new TrayMenuItem("", () => _ = _power.RemoveCapAsync())
+        {
+            DynamicLabel = () => $"Remove CPU cap ({PowerModeController.Ghz(_power.Cpu.LowestMaxKHz)} → {PowerModeController.Ghz(_power.Cpu.HardwareMaxKHz)})",
+            Visible = () => _power.Cpu.Capped,
+        });
+        menu.Add(TrayMenuItem.Separator);
+        menu.Add(new TrayMenuItem("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())));
 
         try
         {
@@ -75,6 +96,14 @@ public sealed class App : Application
         try
         {
             _hub.Sample();
+            // Another tool (or the power menu while OpenHW was closed) can change the ceilings; re-check every 10 s.
+            if (++_polls % 5 == 0)
+            {
+                var before = _power.Cpu;
+                _power.Refresh();
+                if (before.Capped != _power.Cpu.Capped || before.LowestMaxKHz != _power.Cpu.LowestMaxKHz)
+                    Dispatcher.UIThread.Post(PowerChanged);
+            }
         }
         finally
         {
@@ -97,6 +126,12 @@ public sealed class App : Application
             TrayIconRenderer.Render(temp is { } t ? Math.Round(t).ToString("0") : "--", TrayBackground),
             _hub.Machine.CpuModel,
             temp is { } c ? $"CPU temperature: {c:0.0} °C" : "CPU temperature unavailable");
+    }
+
+    private void PowerChanged()
+    {
+        _window?.RefreshPower();
+        _cpuTempIcon?.RefreshMenu();
     }
 
     private void ShowWindow()

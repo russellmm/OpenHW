@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHW privileged sensor reader (NVMe SMART)
+Description=OpenHW privileged helper (NVMe SMART, CPU frequency ceiling restore)
 Documentation=https://github.com/russellmm/OpenHW
 
 [Service]
@@ -10,10 +10,12 @@ RuntimeDirectory=openhw
 Restart=on-failure
 RestartSec=2
 
-# Read-only daemon: it only needs the NVMe admin ioctl (CAP_SYS_ADMIN) and to hand its socket to the group.
+# It needs the NVMe admin ioctl (CAP_SYS_ADMIN), to hand its socket to the group, and one writable sysfs tree:
+# cpufreq's scaling_max_freq (root-owned 0644, so no DAC override), to undo the base-clock clamp power-saver leaves.
 CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN
 NoNewPrivileges=true
 ProtectSystem=strict
+ReadWritePaths=/sys/devices/system/cpu
 ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true

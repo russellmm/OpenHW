@@ -230,6 +230,9 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
         </interface>
         """;
 
+    /// <summary>Menu labels, radio state or visibility changed.</summary>
+    public void RefreshMenu() => _menu.Invalidate(_connection);
+
     public void Dispose()
     {
         _watcherMatch?.Dispose();

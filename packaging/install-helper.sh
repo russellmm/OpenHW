@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs openhw-helper (root daemon for NVMe SMART reads) and adds the invoking user to the openhw group.
+# Installs openhw-helper (root daemon: NVMe SMART reads, CPU frequency ceiling restore) and adds the invoking user to the openhw group.
 # Run from the repository root:  sudo packaging/install-helper.sh
 set -euo pipefail
 

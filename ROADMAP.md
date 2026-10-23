@@ -14,8 +14,13 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [ ] **CPU socket power limit (PPT)** — `amd_hsmp_hwmon` `power1_cap` (HSMP SET_SOCKET_POWER_LIMIT), live
       limit plus optional "keep after reboot" boot service. Source: `CpuPowerControl`, `HsmpLimitConfig`,
       `CbsSetupReader` (BIOS default), helper `cpupower` / `cpuboot`.
+- [x] **Power modes** — switch power-profiles-daemon's profile from the footer and tray, and lift the base-clock
+      cap left after power-saver (helper `cpufreqrestore`). See README "Power modes".
 - [ ] **CPU maximum frequency** — cpufreq `scaling_max_freq` ceilings per policy (never boost, governor, EPP
       or minimum). Source: `CpuFrequencyControl`, `CpuFrequencyMonitor`, helper `cpufreq` / `cpufreqbatch`.
+      Builds on `CpuFrequencyLimits`; a deliberate cap should be remembered so the power-mode fix doesn't undo it.
+- [ ] **Confirm where the 4.0 GHz clamp comes from**: set Power saver, reboot, switch to Performance with OpenHW
+      closed, and check `scaling_max_freq`. If it stays at 4.0 GHz, it's the boot sequence — report it upstream.
 - [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect.
       Source: openfan-linux `HwmonBackend` / `NvmlFanWriter` / `FanController`.
 
@@ -29,8 +34,8 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 Compared against the HWiNFO captures in `reference/`. Method for board mappings: [docs/board-profiles.md](docs/board-profiles.md).
 
 - [x] **Super I/O voltages named and scaled** on the TRX50-SAGE (in0–in16; in17 hidden) — `BoardProfiles`.
-- [ ] **Confirm the inferred rails**: in6 CPU Core1 (×1.11), in13 CPU VSOC (×1.11), in15 VIN9 (×1) — load test in
-      both OSes, or a BIOS voltage change; then set `Confirmed: true`.
+- [x] **in6 CPU Core1 confirmed** (×1.11) by a per-CCD load sweep — see docs/board-profiles.md.
+- [ ] **Confirm in13 CPU VSOC** (×1.11) with a BIOS SoC-voltage change. in15 VIN9 follows temperature, not load.
 - [ ] **Name the Super I/O temperatures and fans** on this board. HWiNFO shows Motherboard, Temp2, CPU (Weighted
       Value), CPU Package, CPU, Temp9, TSI0 (CPU), Temp14 and fans Chassis 1, CPU, Chassis 2–4, Water Pump+.
       Fan speeds differ between OSes (different fan control), so match by behaviour (stop/start a fan, or

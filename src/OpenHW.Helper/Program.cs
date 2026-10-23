@@ -3,9 +3,9 @@ using OpenHW.Hardware;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
 
-// openhw-helper — root daemon for the few sensor reads Linux reserves for root (NVMe SMART today; RAPL and
-// MSR later). Read-only: it serves fixed, validated queries over /run/openhw/helper.sock (root:openhw 0660)
-// and never writes hardware state.
+// openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, and putting the
+// cpufreq ceilings back to the hardware maximum after power-saver (RAPL and MSR reads later). It serves fixed,
+// validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path or value.
 
 if (Native.geteuid() != 0)
 {
@@ -15,7 +15,7 @@ if (Native.geteuid() != 0)
 
 using var smart = new CachedSmartReader(new NativeNvmeSmartReader(), TimeSpan.FromSeconds(10));
 var socketPath = HelperSocket.Path;
-var server = new HelperServer(smart, socketPath);
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits());
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
 Console.WriteLine($"openhw-helper {HelperSession.Version} listening on {socketPath}" +
