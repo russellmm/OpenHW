@@ -6,7 +6,17 @@ Design references are in [`reference/`](reference/) (HWiNFO64 v8.54 captures).
 Built with Avalonia 11 / .NET 8. Self-contained: the sensor code started as a copy of openfan-linux's read paths
 and now lives here, so changes to openfan-linux cannot break OpenHW.
 
-## Build and run
+## Install
+
+```bash
+packaging/install-app.sh
+```
+
+Publishes a Release build to `~/.local/lib/openhw` (on the system drive, so it runs without the source tree),
+links `~/.local/bin/openhw`, and adds an "OpenHW" entry with icon to the app grid. No root; re-run to update.
+Drive health also needs the root helper — see [Root helper](#root-helper).
+
+## Build and run from source
 
 ```bash
 dotnet build

@@ -30,4 +30,6 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [ ] Settings dialog modelled on `reference/` (polling period, units, shown columns, row shading, highlight).
 - [ ] Column resizing; remember window size, expanded groups and hidden sensors.
 - [ ] CSV logging.
+- [ ] Single instance (a second launch should show the running window, not add a second tray icon).
+- [ ] Optional start at login (GNOME autostart entry), minimised to tray.
 - [ ] Friendly labels for Super I/O inputs (`in0`…`in17`, `AUXTIN*`) on known boards.

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Chip with a temperature tile: OpenHW's app icon. -->
+  <g stroke="#9AA3AD" stroke-width="3" stroke-linecap="round">
+    <path d="M20 4v8M32 4v8M44 4v8M20 52v8M32 52v8M44 52v8M4 20h8M4 32h8M4 44h8M52 20h8M52 32h8M52 44h8"/>
+  </g>
+  <rect x="11" y="11" width="42" height="42" rx="6" fill="#2A2E35" stroke="#9AA3AD" stroke-width="2"/>
+  <rect x="17" y="17" width="30" height="30" rx="3" fill="#C0392B"/>
+  <text x="32" y="38.5" font-family="Inter, DejaVu Sans, sans-serif" font-size="17" font-weight="700"
+        fill="#FFFFFF" text-anchor="middle">HW</text>
+</svg>
