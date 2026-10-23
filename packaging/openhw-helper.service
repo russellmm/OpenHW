@@ -1,0 +1,30 @@
+[Unit]
+Description=OpenHW privileged sensor reader (NVMe SMART)
+Documentation=https://github.com/russellmm/OpenHW
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/openhw/openhw-helper
+# /run/openhw is created on start and removed on stop; the socket inside is 0660 root:openhw.
+RuntimeDirectory=openhw
+Restart=on-failure
+RestartSec=2
+
+# Read-only daemon: it only needs the NVMe admin ioctl (CAP_SYS_ADMIN) and to hand its socket to the group.
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+DevicePolicy=closed
+DeviceAllow=char-nvme r
+LockPersonality=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

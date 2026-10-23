@@ -36,11 +36,36 @@ or its output is silently lost and the bus disconnects the app for sending a mal
 | `NetworkEngine` | Download/upload rate and totals per physical interface |
 
 `src/OpenHW.App/Sensors/SensorHub.cs` samples every engine once per 2 s poll; the window and tray share that sample.
-OpenHW is read-only: the engines contain no fan or power-limit writes.
+OpenHW is read-only today: the engines contain no fan or power-limit writes. Write features (GPU/CPU power
+limits, CPU max frequency) are planned through the helper — see [ROADMAP.md](ROADMAP.md).
 
-NVMe SMART needs root, so `NvmeEngine` reads it through openfan-linux's helper socket (`/run/openfan/helper.sock`,
-override with `OPENFAN_HELPER_SOCKET`); without that helper, drive health rows stay empty. Not yet read (root only):
-RAPL package energy and the MSRs (effective clocks, per-core power).
+NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (below); without it, drive health
+rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
+(effective clocks, per-core power) — they will go through the same helper.
+
+## Root helper
+
+`openhw-helper` (`src/OpenHW.Helper`) is a small read-only daemon for the readings Linux reserves for root. It
+listens on `/run/openhw/helper.sock` (`0660 root:openhw`) and answers only fixed queries — today `ping` and
+`nvmesmart <controller> <identity>`, where both arguments must match a drive the system enumerates. It has no
+write commands, caps request lines at 256 bytes, reads each drive at most once per 10 s, and runs under a
+hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem, no network, NVMe devices only).
+
+Install once, then log out and back in so your account joins the `openhw` group:
+
+```bash
+sudo packaging/install-helper.sh
+```
+
+`OPENHW_HELPER_SOCKET` relocates the socket for both ends (the tests use a private socket).
+
+## Tests
+
+```bash
+dotnet test
+```
+
+Headless: the helper protocol, its validation and the client/server socket round trip run without root or a display.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
@@ -48,5 +73,5 @@ a display — useful for checking changes headlessly.
 ## Status
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
-highlight, expand/collapse all, reset) and one CPU-temperature tray icon. Not yet: settings dialog, logging,
-per-sensor tray icon selection, column resizing.
+highlight, expand/collapse all, reset), one CPU-temperature tray icon, and the root helper for NVMe SMART.
+Planned work is tracked in [ROADMAP.md](ROADMAP.md).

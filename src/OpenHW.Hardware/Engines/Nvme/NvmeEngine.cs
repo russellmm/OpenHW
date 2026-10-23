@@ -3,7 +3,7 @@ namespace OpenHW.Hardware;
 /// <summary>
 /// NVMe drives: SMART health (endurance, spare, lifetime data, error counters) and live activity (rates and
 /// busy %). Drive temperatures come from the hwmon engine; the window joins both under one "Drive:" heading.
-/// SMART needs root, so it is read through openfan-linux's helper (see <see cref="NvmeSmartClient"/>).
+/// SMART needs root, so it is read through openhw-helper (see <see cref="NvmeSmartClient"/>).
 /// </summary>
 public sealed class NvmeEngine : ISensorEngine
 {
