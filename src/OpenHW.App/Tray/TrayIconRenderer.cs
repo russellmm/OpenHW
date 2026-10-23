@@ -1,0 +1,81 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
+using Avalonia;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using OpenFan.Core.Hud;
+
+namespace OpenHW.App.Tray;
+
+/// <summary>
+/// Draws a sensor value onto a solid square tile, HWiNFO-style. Several sizes are sent because the panel picks
+/// the closest one to its own icon size (16 px × display scale on GNOME); scaling a single bitmap blurs the digits.
+/// Must run on the UI thread (Avalonia rendering).
+/// </summary>
+public static class TrayIconRenderer
+{
+    private static readonly int[] Sizes = [16, 22, 24, 32, 48, 64];
+
+    public static IconPixmap[] Render(string text, string backgroundHex)
+    {
+        var background = Color.Parse(backgroundHex);
+        var foreground = Color.Parse(HudTheme.TextColorFor(backgroundHex)); // readable on any tile colour
+        return Sizes.Select(size => RenderOne(text, background, foreground, size)).ToArray();
+    }
+
+    private static IconPixmap RenderOne(string text, Color background, Color foreground, int size)
+    {
+        using var bitmap = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
+        using (var context = bitmap.CreateDrawingContext())
+        {
+            context.FillRectangle(new SolidColorBrush(background), new Rect(0, 0, size, size));
+            var formatted = FitText(text, size, foreground);
+            // Centre the glyph outlines, not the line box: digits have no descenders, so line-box centring sits them high.
+            var ink = formatted.BuildGeometry(default)?.Bounds ?? new Rect(0, 0, formatted.Width, formatted.Height);
+            context.DrawText(formatted, new Point(Math.Round((size - ink.Width) / 2 - ink.X),
+                                                  Math.Round((size - ink.Height) / 2 - ink.Y)));
+        }
+
+        var stride = size * 4;
+        var bgra = new byte[stride * size];
+        var handle = GCHandle.Alloc(bgra, GCHandleType.Pinned);
+        try
+        {
+            bitmap.CopyPixels(new PixelRect(0, 0, size, size), handle.AddrOfPinnedObject(), bgra.Length, stride);
+        }
+        finally
+        {
+            handle.Free();
+        }
+        return new IconPixmap(size, size, ToArgb(bgra));
+    }
+
+    // Largest bold size whose width still fits the tile, so "45" is big and "100" shrinks to fit.
+    private static FormattedText FitText(string text, int size, Color foreground)
+    {
+        var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+        var brush = new SolidColorBrush(foreground);
+        for (var em = size * 0.8; ; em -= 0.5)
+        {
+            var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                              typeface, em, brush);
+            if (formatted.Width <= size - 1 || em <= 4) return formatted;
+        }
+    }
+
+    // Skia hands back premultiplied BGRA (little-endian); SNI wants straight ARGB in network byte order.
+    private static byte[] ToArgb(byte[] bgra)
+    {
+        var argb = new byte[bgra.Length];
+        for (var i = 0; i < bgra.Length; i += 4)
+        {
+            var a = bgra[i + 3];
+            argb[i] = a;
+            if (a == 0) continue;
+            argb[i + 1] = (byte)Math.Min(255, bgra[i + 2] * 255 / a);
+            argb[i + 2] = (byte)Math.Min(255, bgra[i + 1] * 255 / a);
+            argb[i + 3] = (byte)Math.Min(255, bgra[i] * 255 / a);
+        }
+        return argb;
+    }
+}
