@@ -6,22 +6,23 @@ using Avalonia.Threading;
 using OpenHW.Hardware;
 using OpenHW.App.Power;
 using OpenHW.App.Sensors;
+using OpenHW.App.Settings;
 using OpenHW.App.Tray;
 
 namespace OpenHW.App;
 
 public sealed class App : Application
 {
-    private const string TrayBackground = "#C0392B";
-    private static readonly TimeSpan PollPeriod = TimeSpan.FromSeconds(2); // HWiNFO's default polling period
-
     private readonly SensorHub _hub = new();
     private readonly PowerModeController _power = new(new CpuFrequencyLimits());
     private MainWindow? _window;
     private CpuFrequencyWindow? _cpuFrequency;
     private PowerLimitsWindow? _powerLimits;
     private readonly GpuPowerLimits _gpuPower = new();
-    private StatusNotifierItem? _cpuTempIcon;
+    private readonly AppSettings _settings = AppSettings.Load();
+    private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
+    private List<TrayMenuItem> _trayMenu = [];
+    private SettingsWindow? _settingsWindow;
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
     private int _polls;
@@ -35,13 +36,15 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
-            _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, () => lifetime.Shutdown()));
-            _window.Show();
+            _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown()));
+            if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
+            if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
 
             lifetime.Exit += (_, _) =>
             {
                 _poll?.Dispose();
-                _cpuTempIcon?.Dispose();
+                foreach (var (_, icon) in _trayIcons) icon.Dispose();
+                Program.Instance?.Dispose();
                 _power.Dispose();
                 _gpuPower.Dispose();
                 _hub.Dispose();
@@ -51,14 +54,16 @@ public sealed class App : Application
             _ = _power.StartAsync();
 
             _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => _window?.RebuildTree());
-            _poll = new Timer(_ => Poll(), null, PollPeriod, PollPeriod);
-            _ = StartTrayAsync(lifetime);
+            var period = TimeSpan.FromSeconds(_settings.PollSeconds); // 2 s by default, HWiNFO's polling period
+            _poll = new Timer(_ => Poll(), null, period, period);
+            BuildTrayMenu(lifetime);
+            _ = RebuildTrayAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private async Task StartTrayAsync(IClassicDesktopStyleApplicationLifetime lifetime)
+    private void BuildTrayMenu(IClassicDesktopStyleApplicationLifetime lifetime)
     {
         // power-profiles-daemon offers these three; ones it doesn't list on this machine stay hidden.
         var modes = new[] { "power-saver", "balanced", "performance" }.Select(profile =>
@@ -67,32 +72,53 @@ public sealed class App : Application
                 Checked = () => _power.ActiveProfile == profile,
                 Visible = () => _power.Profiles.Contains(profile),
             });
-        var menu = new List<TrayMenuItem>
-        {
+        _trayMenu =
+        [
             new("Show Sensors", () => Dispatcher.UIThread.Post(ShowWindow)),
             TrayMenuItem.Separator,
-        };
-        menu.AddRange(modes);
-        menu.Add(new TrayMenuItem("", () => _ = _power.RestoreCapsAsync())
-        {
-            DynamicLabel = () => $"Remove unexpected CPU cap ({PowerModeController.Ghz(_power.UnexpectedCapKHz ?? 0)})",
-            Visible = () => _power.UnexpectedCapKHz is not null,
-        });
-        menu.Add(new TrayMenuItem("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)));
-        menu.Add(new TrayMenuItem("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)));
-        menu.Add(TrayMenuItem.Separator);
-        menu.Add(new TrayMenuItem("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())));
+            .. modes,
+            new("", () => _ = _power.RestoreCapsAsync())
+            {
+                DynamicLabel = () => $"Remove unexpected CPU cap ({PowerModeController.Ghz(_power.UnexpectedCapKHz ?? 0)})",
+                Visible = () => _power.UnexpectedCapKHz is not null,
+            },
+            new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)),
+            new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
+            TrayMenuItem.Separator,
+            new("Settings…", () => Dispatcher.UIThread.Post(ShowSettings)),
+            new("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())),
+        ];
+    }
 
-        try
+    /// <summary>One icon per configured tray sensor, in order. Each has its own bus connection and the same menu.</summary>
+    private async Task RebuildTrayAsync()
+    {
+        foreach (var (_, icon) in _trayIcons) icon.Dispose();
+        _trayIcons.Clear();
+        var index = 0;
+        foreach (var config in _settings.TrayIcons)
         {
-            _cpuTempIcon = await StatusNotifierItem.CreateAsync("openhw-cpu-temp", "OpenHW", menu);
-            _cpuTempIcon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
-            UpdateTray();
+            try
+            {
+                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW", _trayMenu);
+                icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
+                _trayIcons.Add((config, icon));
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"openhw: tray unavailable ({ex.Message})");
+                break;
+            }
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"openhw: tray unavailable ({ex.Message})");
-        }
+        UpdateTray();
+    }
+
+    /// <summary>Settings changed: poll interval and tray icons take effect now.</summary>
+    private void ApplySettings()
+    {
+        var period = TimeSpan.FromSeconds(_settings.PollSeconds);
+        _poll?.Change(period, period);
+        _ = RebuildTrayAsync();
     }
 
     // Runs on a timer thread: hardware reads stay off the UI thread; only the repaint is posted to it.
@@ -121,23 +147,51 @@ public sealed class App : Application
         });
     }
 
+    private string? ResolveTrayId(TraySensor config) =>
+        config.SensorId == AppSettings.CpuTemperature ? _hub.CpuTemperatureId() : config.SensorId;
+
     private void UpdateTray()
     {
-        if (_cpuTempIcon is null) return;
-        var id = _hub.CpuTemperatureId();
-        _hub.SetPinned(id is null ? [] : [id]); // the tray keeps its sensor live even inside a collapsed group
-        var temp = id is null ? null : _hub.Get(id).Current;
-        _cpuTempIcon.Update(
-            TrayIconRenderer.Render(temp is { } t ? Math.Round(t).ToString("0") : "--", TrayBackground),
-            _hub.Machine.CpuModel,
-            temp is { } c ? $"CPU temperature: {c:0.0} °C" : "CPU temperature unavailable");
+        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().ToArray();
+        _hub.SetPinned(ids); // tray sensors stay live even inside a collapsed group
+        var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
+        foreach (var (config, icon) in _trayIcons)
+        {
+            var id = ResolveTrayId(config);
+            var item = id is null ? null : items.GetValueOrDefault(id);
+            var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
+            var name = item is null ? "Sensor unavailable" : SensorPresentation.DisplayName(item);
+            icon.Update(
+                TrayIconRenderer.Render(TrayText(value), config.Colour),
+                _hub.Machine.CpuModel,
+                item is null ? name : $"{name}: {(value is null ? "–" : SensorPresentation.Format(value, item.Unit))}");
+        }
+    }
+
+    /// <summary>A value short enough for a 16 px tile: 45, 250, 5.3k, 1.25.</summary>
+    internal static string TrayText(double? value)
+    {
+        if (value is not { } v || !double.IsFinite(v)) return "--";
+        var a = Math.Abs(v);
+        return a >= 9999.5 ? $"{v / 1000:0}k"
+            : a >= 999.5 ? $"{v / 1000:0.0}k"
+            : a >= 9.95 ? $"{v:0}"
+            : a >= 0.995 ? $"{v:0.0#}" // volts and small powers keep their decimals
+            : $"{v:0.##}";
     }
 
     private void PowerChanged()
     {
         _window?.RefreshPower();
         _cpuFrequency?.RefreshFromController();
-        _cpuTempIcon?.RefreshMenu();
+        foreach (var (_, icon) in _trayIcons) icon.RefreshMenu();
+    }
+
+    private void ShowSettings()
+    {
+        _settingsWindow ??= new SettingsWindow(_settings, _hub, ApplySettings);
+        _settingsWindow.Show();
+        _settingsWindow.Activate();
     }
 
     private void ShowPowerLimits()

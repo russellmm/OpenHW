@@ -4,10 +4,19 @@ namespace OpenHW.App;
 
 internal static class Program
 {
+    /// <summary>This process's claim to be the one OpenHW; null under tests and --dump.</summary>
+    public static Settings.SingleInstance? Instance { get; private set; }
+
+    /// <summary>--tray: start with only the tray icons (used by the login autostart entry).</summary>
+    public static bool StartInTray { get; private set; }
+
     [STAThread]
     public static int Main(string[] args)
     {
         if (args.Contains("--dump")) return Dump();
+        Instance = Settings.SingleInstance.Claim();
+        if (Instance is null) return 0; // the running OpenHW was asked to show its window
+        StartInTray = args.Contains("--tray");
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

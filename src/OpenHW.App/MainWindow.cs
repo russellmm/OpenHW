@@ -18,7 +18,7 @@ using OpenHW.App.SensorWindow;
 namespace OpenHW.App;
 
 /// <summary>App-level actions the window's menu and footer shortcuts call.</summary>
-public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLimits, Action Exit);
+public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLimits, Action ShowSettings, Action Exit);
 
 /// <summary>
 /// HWiNFO-style "Sensors Status" window: one virtualized list of group headings, sensor rows and spacers with
@@ -378,6 +378,7 @@ public sealed class MainWindow : Window
         file.Items.Add(Item("_Hide Window", Hide, "Ctrl+W"));
         if (_commands is { } c)
         {
+            file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());
             file.Items.Add(Item("E_xit OpenHW", c.Exit, "Ctrl+Q"));
         }

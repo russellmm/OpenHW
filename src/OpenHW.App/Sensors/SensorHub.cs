@@ -22,7 +22,7 @@ public sealed class SensorHub : IDisposable
 
     public SensorHub()
     {
-        _engines = [_system, _hwmon, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia];
+        _engines = [_system, _hwmon, new HsmpEngine(), new EdacEngine(), _nvme, new NetworkEngine(), _nvidia];
     }
 
     public SensorStatistics Statistics { get; } = new();

@@ -1,0 +1,105 @@
+using System.Text.Json;
+
+namespace OpenHW.App.Settings;
+
+/// <summary>A sensor shown as its own tray icon: the value drawn on a tile of <see cref="Colour"/>.</summary>
+public sealed class TraySensor
+{
+    /// <summary>A sensor id, or <see cref="AppSettings.CpuTemperature"/> for "this machine's CPU temperature".</summary>
+    public string SensorId { get; set; } = AppSettings.CpuTemperature;
+    public string Colour { get; set; } = "#C0392B";
+}
+
+/// <summary>
+/// User preferences, kept in ~/.config/openhw/settings.json. A missing or unreadable file means the defaults, which
+/// match OpenHW before settings existed: 2 s polls and one CPU-temperature tray icon on a red tile.
+/// </summary>
+public sealed class AppSettings
+{
+    public const string CpuTemperature = "auto:cpu-temperature";
+    public const int MaxTrayIcons = 8;
+    public static readonly double[] PollChoices = [1, 2, 3, 5, 10];
+
+    /// <summary>Tile colours offered for tray icons: distinct on a dark panel, each readable with white or black text.</summary>
+    public static readonly (string Name, string Hex)[] Colours =
+    [
+        ("Red", "#C0392B"), ("Orange", "#D35400"), ("Amber", "#F0B429"), ("Green", "#27AE60"), ("Teal", "#16A085"),
+        ("Blue", "#2E86DE"), ("Purple", "#8E44AD"), ("Grey", "#5D6D7E"), ("White", "#ECF0F1"),
+    ];
+
+    public double PollSeconds { get; set; } = 2;
+    public bool StartAtLogin { get; set; }
+    public bool StartInTray { get; set; } = true;
+    public List<TraySensor> TrayIcons { get; set; } = [new()];
+
+    private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
+        ? config
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+
+    private static string FilePath => Path.Combine(ConfigHome, "openhw", "settings.json");
+
+    /// <summary>Freedesktop autostart entry; GNOME starts it at login.</summary>
+    public static string AutostartPath => Path.Combine(ConfigHome, "autostart", "openhw.desktop");
+
+    public static AppSettings Load()
+    {
+        AppSettings settings;
+        try { settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new AppSettings(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { settings = new AppSettings(); }
+        settings.Normalise();
+        return settings;
+    }
+
+    // A hand-edited or older file can hold anything: clamp to what the UI could have produced.
+    private void Normalise()
+    {
+        if (!PollChoices.Contains(PollSeconds)) PollSeconds = 2;
+        TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).Take(MaxTrayIcons).ToList();
+        foreach (var icon in TrayIcons)
+            if (!Colours.Any(c => c.Hex.Equals(icon.Colour, StringComparison.OrdinalIgnoreCase))) icon.Colour = Colours[0].Hex;
+        StartAtLogin = File.Exists(AutostartPath); // the file is the truth: the user may have removed it elsewhere
+    }
+
+    public void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            WriteAutostart();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"openhw: could not save settings ({ex.Message})");
+        }
+    }
+
+    private void WriteAutostart()
+    {
+        if (!StartAtLogin)
+        {
+            if (File.Exists(AutostartPath)) File.Delete(AutostartPath);
+            return;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(AutostartPath)!);
+        var exe = LauncherPath();
+        File.WriteAllText(AutostartPath, $"""
+            [Desktop Entry]
+            Type=Application
+            Name=OpenHW
+            Comment=Hardware monitor
+            Exec="{exe}"{(StartInTray ? " --tray" : "")}
+            Icon=openhw
+            Terminal=false
+            X-GNOME-Autostart-enabled=true
+
+            """);
+    }
+
+    // The installed launcher (~/.local/bin/openhw) when there is one, so autostart survives reinstalls; else this process.
+    private static string LauncherPath()
+    {
+        var launcher = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "openhw");
+        return File.Exists(launcher) ? launcher : Environment.ProcessPath ?? "openhw";
+    }
+}

@@ -35,7 +35,7 @@ public sealed class MenuAndPowerLimitsTests
         using var hub = new SensorHub();
         hub.Sample();
         var power = new PowerModeController(new CpuFrequencyLimits());
-        var window = new MainWindow(hub, power, new WindowCommands(() => { }, () => { }, () => { })) { Height = 600 };
+        var window = new MainWindow(hub, power, new WindowCommands(() => { }, () => { }, () => { }, () => { })) { Height = 600 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-menu.png"));

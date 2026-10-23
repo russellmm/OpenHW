@@ -30,7 +30,8 @@ public static partial class SensorPresentation
     public static bool IsShown(HardwareItem item) => item.Kind switch
     {
         HardwareKind.TemperatureLimit => false,
-        HardwareKind.Status => item.Backend == "nvml", // GPU performance limiters; hwmon alarm bits are noise
+        // GPU performance limiters and HSMP frequency-limit sources/PROCHOT; hwmon alarm bits are noise
+        HardwareKind.Status => item.Backend == "nvml" || item.Id.StartsWith("hsmp:", StringComparison.Ordinal),
         HardwareKind.Control => item.Backend == "nvml", // GPU fan % is a reading on NVIDIA; hwmon PWM is a setting
         _ => true,
     };
