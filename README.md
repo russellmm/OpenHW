@@ -78,6 +78,8 @@ dotnet test
 ```
 
 Headless: the helper protocol, its validation and the client/server socket round trip run without root or a display.
+`tests/OpenHW.App.Tests` renders the real window with Avalonia's headless Skia backend (no display) to check what
+rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.

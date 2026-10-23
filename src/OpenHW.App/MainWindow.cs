@@ -196,7 +196,7 @@ public sealed class MainWindow : Window
         _view.Save();
     }
 
-    private void SetAllExpanded(bool expanded)
+    internal void SetAllExpanded(bool expanded)
     {
         foreach (var group in _groups)
             if (expanded) _collapsedGroups.Remove(group.Group.Key);
