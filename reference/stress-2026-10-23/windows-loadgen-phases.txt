@@ -1,0 +1,9 @@
+loadgen: 64 logical CPUs, 30 s per phase
+PHASE idle           threads=0   start_unix=1792773173 secs=30
+PHASE scalar-1t      threads=1   start_unix=1792773203 secs=30
+PHASE avx2-1t        threads=1   start_unix=1792773233 secs=30
+PHASE scalar-8t      threads=8   start_unix=1792773263 secs=30
+PHASE scalar-all     threads=64  start_unix=1792773293 secs=30
+PHASE avx2-all       threads=64  start_unix=1792773323 secs=30
+PHASE idle-after     threads=0   start_unix=1792773353 secs=30
+DONE end_unix=1792773383

@@ -1,0 +1,1214 @@
+# sig=0x53695748 ver=2.1 sensors=37 readings=1141
+
+== System: ASUS   [0xf0000301/0]
+  other    0x8000000  Virtual Memory Committed                           24950.0000 MB     min 24904.0000 max 25051.0000 avg 25002.6667
+  other    0x8000001  Virtual Memory Available                          589818.0000 MB     min 589717.0000 max 589864.0000 avg 589765.5000
+  other    0x8000002  Virtual Memory Load                                    4.0000 %      min 4.0000 max 4.0000 avg 4.0000
+  other    0x8000003  Physical Memory Used                               22140.0000 MB     min 22069.0000 max 22167.0000 avg 22144.8333
+  other    0x8000004  Physical Memory Available                         108276.0000 MB     min 108249.0000 max 108348.0000 avg 108271.3333
+  other    0x8000005  Physical Memory Load                                  16.9000 %      min 16.9000 max 16.9000 avg 16.9000
+  other    0x8000006  Page File Usage                                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000007  Page File Total                                   484352.0000 MB     min 484352.0000 max 484352.0000 avg 484352.0000
+  other    0x8000008  Page File Used                                         0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+
+== CPU [#0]: AMD Ryzen Threadripper 9970X  [0xf0000300/0]
+  volt     0x2000000  Core 0 VID                                             0.9750 V      min 0.9700 max 0.9750 avg 0.9742
+  volt     0x2000001  Core 1 VID                                             0.9750 V      min 0.9700 max 1.0950 avg 0.9846
+  volt     0x2000002  Core 2 VID                                             0.9750 V      min 0.9700 max 1.0950 avg 0.9846
+  volt     0x2000003  Core 3 VID                                             0.9750 V      min 0.9700 max 1.0950 avg 0.9846
+  volt     0x2000004  Core 4 VID                                             0.9750 V      min 0.9750 max 1.0950 avg 0.9850
+  volt     0x2000005  Core 5 VID                                             0.9750 V      min 0.9750 max 1.0950 avg 0.9850
+  volt     0x2000006  Core 6 VID                                             0.9750 V      min 0.9750 max 1.0950 avg 0.9850
+  volt     0x2000007  Core 7 VID                                             0.9750 V      min 0.9700 max 1.0950 avg 0.9846
+  volt     0x2000008  Core 8 VID                                             0.7650 V      min 0.7600 max 0.9850 avg 0.7992
+  volt     0x2000009  Core 9 VID                                             0.7650 V      min 0.7600 max 0.9650 avg 0.7808
+  volt     0x200000a  Core 10 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x200000b  Core 11 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x200000c  Core 12 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x200000d  Core 13 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x200000e  Core 14 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x200000f  Core 15 VID                                            0.7650 V      min 0.7600 max 0.9650 avg 0.7804
+  volt     0x2000010  Core 16 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7833
+  volt     0x2000011  Core 17 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7837
+  volt     0x2000012  Core 18 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7837
+  volt     0x2000013  Core 19 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7837
+  volt     0x2000014  Core 20 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7833
+  volt     0x2000015  Core 21 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7833
+  volt     0x2000016  Core 22 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7833
+  volt     0x2000017  Core 23 VID                                            0.7650 V      min 0.7600 max 0.9950 avg 0.7833
+  volt     0x2000018  Core 24 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9846
+  volt     0x2000019  Core 25 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001a  Core 26 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001b  Core 27 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001c  Core 28 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001d  Core 29 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001e  Core 30 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  volt     0x200001f  Core 31 VID                                            0.9750 V      min 0.9700 max 1.0950 avg 0.9842
+  clock    0x6000000  Core 0 Clock (perf #2)                              4516.8550 MHz    min 2470.1551 max 4516.8550 avg 4175.7383
+  clock    0x6000001  Core 1 Clock (perf #4)                              2470.1551 MHz    min 2470.1551 max 4516.8550 avg 3664.0634
+  clock    0x6000002  Core 2 Clock (perf #1)                              2470.1551 MHz    min 4516.8550 max 4516.8550 avg 4516.8550
+  clock    0x6000003  Core 3 Clock (perf #5)                              2470.1551 MHz    min 2470.1551 max 4516.8550 avg 2640.7134
+  clock    0x6000004  Core 4 Clock (perf #3)                              2470.1551 MHz    min 2470.1551 max 4516.8550 avg 3322.9467
+  clock    0x6000005  Core 5 Clock (perf #1)                              4516.8550 MHz    min 4516.8550 max 4516.8550 avg 4516.8550
+  clock    0x6000006  Core 6 Clock (perf #6)                              2470.1551 MHz    min 2470.1551 max 4516.8550 avg 2640.7134
+  clock    0x6000007  Core 7 Clock (perf #7)                              2470.1551 MHz    min 2470.1551 max 4516.8550 avg 2640.7134
+  clock    0x6000008  Core 8 Clock (perf #16)                             2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000009  Core 9 Clock (perf #16)                             2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000a  Core 10 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000b  Core 11 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000c  Core 12 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000d  Core 13 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000e  Core 14 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x600000f  Core 15 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000010  Core 16 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000011  Core 17 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000012  Core 18 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000013  Core 19 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000014  Core 20 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000015  Core 21 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000016  Core 22 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000017  Core 23 Clock (perf #16)                            2495.5000 MHz    min 2495.5000 max 2495.5000 avg 2495.5000
+  clock    0x6000018  Core 24 Clock (perf #10)                            2495.5000 MHz    min 2495.5000 max 4516.8550 avg 2663.9462
+  clock    0x6000019  Core 25 Clock (perf #8)                             2495.5000 MHz    min 2495.5000 max 4516.8550 avg 2663.9462
+  clock    0x600001a  Core 26 Clock (perf #9)                             2495.5000 MHz    min 2495.5000 max 4516.8550 avg 2663.9462
+  clock    0x600001b  Core 27 Clock (perf #11)                            2495.5000 MHz    min 2495.5000 max 4516.8550 avg 2663.9462
+  clock    0x600001c  Core 28 Clock (perf #13)                            2495.5000 MHz    min 2470.1551 max 2495.5000 avg 2493.3879
+  clock    0x600001d  Core 29 Clock (perf #12)                            2495.5000 MHz    min 2495.5000 max 4516.8550 avg 2663.9462
+  clock    0x600001e  Core 30 Clock (perf #15)                            2495.5000 MHz    min 2470.1551 max 2495.5000 avg 2493.3879
+  clock    0x600001f  Core 31 Clock (perf #14)                            2495.5000 MHz    min 2470.1551 max 2495.5000 avg 2493.3879
+  clock    0x6000020  Bus Clock                                             99.8200 MHz    min 99.8200 max 99.8200 avg 99.8200
+  clock    0x600002a  Core 0 T0 Effective Clock                           1343.9738 MHz    min 1139.1327 max 2683.0562 avg 1465.2011
+  clock    0x600002b  Core 0 T1 Effective Clock                            862.8734 MHz    min 713.3718 max 2225.0065 avg 1015.9373
+  clock    0x600002c  Core 1 T0 Effective Clock                            207.9048 MHz    min 0.9810 max 229.7084 avg 144.3685
+  clock    0x600002d  Core 1 T1 Effective Clock                              2.2233 MHz    min 0.5388 max 141.8223 avg 30.6782
+  clock    0x600002e  Core 2 T0 Effective Clock                           1616.4753 MHz    min 1428.3108 max 2363.6538 avg 1864.3754
+  clock    0x600002f  Core 2 T1 Effective Clock                           2272.8497 MHz    min 1671.6987 max 3069.5920 avg 2075.7358
+  clock    0x6000030  Core 3 T0 Effective Clock                              2.6802 MHz    min 0.7361 max 40.3789 avg 4.9787
+  clock    0x6000031  Core 3 T1 Effective Clock                              2.4590 MHz    min 0.6750 max 64.6123 avg 7.5040
+  clock    0x6000032  Core 4 T0 Effective Clock                            236.5615 MHz    min 1.0403 max 1497.2411 avg 475.6284
+  clock    0x6000033  Core 4 T1 Effective Clock                            159.6391 MHz    min 1.2041 max 1525.2369 avg 430.9450
+  clock    0x6000034  Core 5 T0 Effective Clock                           1854.4024 MHz    min 1583.2802 max 2383.3928 avg 1927.5417
+  clock    0x6000035  Core 5 T1 Effective Clock                           2034.5994 MHz    min 1498.4390 max 3053.8237 avg 2084.2677
+  clock    0x6000036  Core 6 T0 Effective Clock                              2.7988 MHz    min 0.8045 max 15.9369 avg 3.0033
+  clock    0x6000037  Core 6 T1 Effective Clock                              2.4784 MHz    min 0.6183 max 21.7714 avg 4.0188
+  clock    0x6000038  Core 7 T0 Effective Clock                              2.8373 MHz    min 0.8631 max 6.6303 avg 2.1619
+  clock    0x6000039  Core 7 T1 Effective Clock                              2.4312 MHz    min 0.7467 max 10.4989 avg 2.7626
+  clock    0x600003a  Core 8 T0 Effective Clock                              3.1642 MHz    min 1.1014 max 3.6987 avg 1.9954
+  clock    0x600003b  Core 8 T1 Effective Clock                              3.0821 MHz    min 0.8145 max 3.5715 avg 1.8223
+  clock    0x600003c  Core 9 T0 Effective Clock                              3.4827 MHz    min 1.4004 max 3.9252 avg 2.2343
+  clock    0x600003d  Core 9 T1 Effective Clock                              3.0489 MHz    min 0.9506 max 3.2987 avg 1.7786
+  clock    0x600003e  Core 10 T0 Effective Clock                             3.1084 MHz    min 0.9473 max 4.0581 avg 2.1121
+  clock    0x600003f  Core 10 T1 Effective Clock                             3.2176 MHz    min 0.9481 max 4.0098 avg 1.9624
+  clock    0x6000040  Core 11 T0 Effective Clock                             3.1910 MHz    min 0.9104 max 3.5172 avg 1.9420
+  clock    0x6000041  Core 11 T1 Effective Clock                             3.0673 MHz    min 0.8494 max 3.8607 avg 1.9105
+  clock    0x6000042  Core 12 T0 Effective Clock                             3.4645 MHz    min 1.0786 max 4.1596 avg 2.2166
+  clock    0x6000043  Core 12 T1 Effective Clock                             3.2986 MHz    min 1.0489 max 4.2607 avg 2.1458
+  clock    0x6000044  Core 13 T0 Effective Clock                             3.4502 MHz    min 1.0970 max 4.1256 avg 2.1010
+  clock    0x6000045  Core 13 T1 Effective Clock                             5.2329 MHz    min 2.0022 max 5.9666 avg 3.3706
+  clock    0x6000046  Core 14 T0 Effective Clock                             3.9159 MHz    min 1.2895 max 4.0465 avg 2.3396
+  clock    0x6000047  Core 14 T1 Effective Clock                             3.8672 MHz    min 1.2382 max 4.4326 avg 2.3278
+  clock    0x6000048  Core 15 T0 Effective Clock                             3.6859 MHz    min 1.2010 max 4.3579 avg 2.3733
+  clock    0x6000049  Core 15 T1 Effective Clock                             3.5463 MHz    min 1.0823 max 4.4684 avg 2.2499
+  clock    0x600004a  Core 16 T0 Effective Clock                             4.0733 MHz    min 1.4868 max 4.2219 avg 2.5976
+  clock    0x600004b  Core 16 T1 Effective Clock                             3.2350 MHz    min 0.9083 max 3.1852 avg 1.8916
+  clock    0x600004c  Core 17 T0 Effective Clock                             3.5797 MHz    min 1.0597 max 7.0850 avg 3.2002
+  clock    0x600004d  Core 17 T1 Effective Clock                             3.0998 MHz    min 0.9729 max 3.0336 avg 1.7953
+  clock    0x600004e  Core 18 T0 Effective Clock                             3.5979 MHz    min 1.1742 max 8.6210 avg 3.7272
+  clock    0x600004f  Core 18 T1 Effective Clock                             3.7103 MHz    min 0.9875 max 3.5716 avg 2.0504
+  clock    0x6000050  Core 19 T0 Effective Clock                             4.3735 MHz    min 1.1839 max 3.4296 avg 2.3597
+  clock    0x6000051  Core 19 T1 Effective Clock                             3.6496 MHz    min 0.9789 max 3.3826 avg 1.9095
+  clock    0x6000052  Core 20 T0 Effective Clock                             3.8753 MHz    min 1.0914 max 3.9404 avg 2.2748
+  clock    0x6000053  Core 20 T1 Effective Clock                             3.8875 MHz    min 1.0442 max 3.7724 avg 2.2087
+  clock    0x6000054  Core 21 T0 Effective Clock                             3.4461 MHz    min 1.1049 max 3.6331 avg 2.1099
+  clock    0x6000055  Core 21 T1 Effective Clock                             3.7737 MHz    min 1.4074 max 4.0120 avg 2.4553
+  clock    0x6000056  Core 22 T0 Effective Clock                             4.6904 MHz    min 1.6942 max 4.6253 avg 2.8544
+  clock    0x6000057  Core 22 T1 Effective Clock                             4.0009 MHz    min 1.5861 max 4.7069 avg 2.7188
+  clock    0x6000058  Core 23 T0 Effective Clock                             4.1794 MHz    min 1.2088 max 3.9954 avg 2.3291
+  clock    0x6000059  Core 23 T1 Effective Clock                             3.6218 MHz    min 1.0403 max 4.0476 avg 2.2548
+  clock    0x600005a  Core 24 T0 Effective Clock                             3.2185 MHz    min 1.1643 max 4.0493 avg 2.3673
+  clock    0x600005b  Core 24 T1 Effective Clock                             3.3299 MHz    min 0.9713 max 4.1643 avg 2.4025
+  clock    0x600005c  Core 25 T0 Effective Clock                             3.2979 MHz    min 1.2034 max 9.2480 avg 3.1807
+  clock    0x600005d  Core 25 T1 Effective Clock                             3.0664 MHz    min 0.9315 max 7.2206 avg 2.7489
+  clock    0x600005e  Core 26 T0 Effective Clock                             3.5680 MHz    min 1.2223 max 8.0281 avg 2.9038
+  clock    0x600005f  Core 26 T1 Effective Clock                             3.4338 MHz    min 1.0037 max 6.0118 avg 2.7621
+  clock    0x6000060  Core 27 T0 Effective Clock                             3.2503 MHz    min 1.2346 max 4.2507 avg 2.3544
+  clock    0x6000061  Core 27 T1 Effective Clock                             3.5441 MHz    min 0.8930 max 3.7938 avg 2.2294
+  clock    0x6000062  Core 28 T0 Effective Clock                             3.4933 MHz    min 1.2644 max 4.3888 avg 2.4732
+  clock    0x6000063  Core 28 T1 Effective Clock                             3.6193 MHz    min 1.2451 max 4.2720 avg 2.4310
+  clock    0x6000064  Core 29 T0 Effective Clock                             3.6129 MHz    min 1.2668 max 4.3057 avg 2.4309
+  clock    0x6000065  Core 29 T1 Effective Clock                             3.4323 MHz    min 1.2069 max 4.6286 avg 2.4638
+  clock    0x6000066  Core 30 T0 Effective Clock                             3.9145 MHz    min 1.3855 max 4.6772 avg 2.6032
+  clock    0x6000067  Core 30 T1 Effective Clock                             3.8150 MHz    min 1.0247 max 4.6910 avg 2.4807
+  clock    0x6000068  Core 31 T0 Effective Clock                             3.7523 MHz    min 1.3471 max 4.2791 avg 2.5664
+  clock    0x6000069  Core 31 T1 Effective Clock                             3.8325 MHz    min 1.4097 max 4.4948 avg 2.5980
+  clock    0x600006a  Average Effective Clock                              168.4373 MHz    min 149.3532 max 287.6729 avg 182.0894
+  usage    0x7000000  Core 0 T0 Usage                                       23.6646 %      min 19.2414 max 30.8709 avg 22.2854
+  usage    0x7000001  Core 0 T1 Usage                                       19.7726 %      min 15.7316 max 46.3034 avg 22.2024
+  usage    0x7000002  Core 1 T0 Usage                                        4.4355 %      min 0.3739 max 5.7477 avg 3.3953
+  usage    0x7000003  Core 1 T1 Usage                                        0.2500 %      min 0.0000 max 3.9948 avg 0.7648
+  usage    0x7000004  Core 2 T0 Usage                                       35.2219 %      min 30.7072 max 48.6952 avg 40.1328
+  usage    0x7000005  Core 2 T1 Usage                                       49.9814 %      min 34.9656 max 65.0692 avg 44.4033
+  usage    0x7000006  Core 3 T0 Usage                                        0.2615 %      min 0.0000 max 0.8419 avg 0.2080
+  usage    0x7000007  Core 3 T1 Usage                                        0.2568 %      min 0.0000 max 0.9736 avg 0.2177
+  usage    0x7000008  Core 4 T0 Usage                                        6.4630 %      min 0.0000 max 32.5440 avg 10.6769
+  usage    0x7000009  Core 4 T1 Usage                                        4.5377 %      min 0.0000 max 32.0125 avg 9.4384
+  usage    0x700000a  Core 5 T0 Usage                                       40.4644 %      min 33.9720 max 51.5182 avg 41.5831
+  usage    0x700000b  Core 5 T1 Usage                                       43.9176 %      min 32.3052 max 65.1238 avg 44.4886
+  usage    0x700000c  Core 6 T0 Usage                                        0.2660 %      min 0.0000 max 0.8438 avg 0.2101
+  usage    0x700000d  Core 6 T1 Usage                                        0.2583 %      min 0.0000 max 0.9224 avg 0.2145
+  usage    0x700000e  Core 7 T0 Usage                                        0.2689 %      min 0.0000 max 0.8379 avg 0.2088
+  usage    0x700000f  Core 7 T1 Usage                                        0.2471 %      min 0.0000 max 0.8809 avg 0.2111
+  usage    0x7000010  Core 8 T0 Usage                                        0.2768 %      min 0.0000 max 0.8145 avg 0.1461
+  usage    0x7000011  Core 8 T1 Usage                                        0.2707 %      min 0.0000 max 0.8061 avg 0.1438
+  usage    0x7000012  Core 9 T0 Usage                                        0.2704 %      min 0.0000 max 0.8178 avg 0.1868
+  usage    0x7000013  Core 9 T1 Usage                                        0.2775 %      min 0.0000 max 0.8033 avg 0.1435
+  usage    0x7000014  Core 10 T0 Usage                                       0.2859 %      min 0.0000 max 0.8085 avg 0.1480
+  usage    0x7000015  Core 10 T1 Usage                                       0.2657 %      min 0.0000 max 0.8085 avg 0.1454
+  usage    0x7000016  Core 11 T0 Usage                                       0.2727 %      min 0.0000 max 0.8111 avg 0.1479
+  usage    0x7000017  Core 11 T1 Usage                                       0.2665 %      min 0.0000 max 0.8120 avg 0.1443
+  usage    0x7000018  Core 12 T0 Usage                                       0.2849 %      min 0.0000 max 0.8159 avg 0.1492
+  usage    0x7000019  Core 12 T1 Usage                                       0.2828 %      min 0.0000 max 0.8327 avg 0.1495
+  usage    0x700001a  Core 13 T0 Usage                                       0.2894 %      min 0.0000 max 0.8124 avg 0.1479
+  usage    0x700001b  Core 13 T1 Usage                                       0.0000 %      min 0.0000 max 0.9768 avg 0.2254
+  usage    0x700001c  Core 14 T0 Usage                                       0.3009 %      min 0.0000 max 0.8267 avg 0.1522
+  usage    0x700001d  Core 14 T1 Usage                                       0.2983 %      min 0.0000 max 0.8245 avg 0.1522
+  usage    0x700001e  Core 15 T0 Usage                                       0.2862 %      min 0.0000 max 0.8347 avg 0.1526
+  usage    0x700001f  Core 15 T1 Usage                                       0.0000 %      min 0.0000 max 0.8314 avg 0.1514
+  usage    0x7000020  Core 16 T0 Usage                                       0.0000 %      min 0.0000 max 0.9774 avg 0.1419
+  usage    0x7000021  Core 16 T1 Usage                                       0.2867 %      min 0.0000 max 0.8226 avg 0.1482
+  usage    0x7000022  Core 17 T0 Usage                                       0.0000 %      min 0.0000 max 0.8304 avg 0.2009
+  usage    0x7000023  Core 17 T1 Usage                                       0.2796 %      min 0.0000 max 0.8155 avg 0.1458
+  usage    0x7000024  Core 18 T0 Usage                                       0.2983 %      min 0.0000 max 0.9075 avg 0.2777
+  usage    0x7000025  Core 18 T1 Usage                                       0.2986 %      min 0.0000 max 0.8285 avg 0.1521
+  usage    0x7000026  Core 19 T0 Usage                                       0.3126 %      min 0.0000 max 0.8487 avg 0.2194
+  usage    0x7000027  Core 19 T1 Usage                                       0.2886 %      min 0.0000 max 0.8265 avg 0.1487
+  usage    0x7000028  Core 20 T0 Usage                                       0.3111 %      min 0.0000 max 0.8391 avg 0.1557
+  usage    0x7000029  Core 20 T1 Usage                                       0.2938 %      min 0.0000 max 0.8482 avg 0.1556
+  usage    0x700002a  Core 21 T0 Usage                                       0.2900 %      min 0.0000 max 0.8378 avg 0.1720
+  usage    0x700002b  Core 21 T1 Usage                                       0.3059 %      min 0.0000 max 1.1995 avg 0.2052
+  usage    0x700002c  Core 22 T0 Usage                                       0.3122 %      min 0.0000 max 0.5882 avg 0.1732
+  usage    0x700002d  Core 22 T1 Usage                                       0.3085 %      min 0.0000 max 0.8444 avg 0.2176
+  usage    0x700002e  Core 23 T0 Usage                                       0.2991 %      min 0.0000 max 0.8397 avg 0.1754
+  usage    0x700002f  Core 23 T1 Usage                                       0.2900 %      min 0.0000 max 0.8444 avg 0.1747
+  usage    0x7000030  Core 24 T0 Usage                                       0.2835 %      min 0.0000 max 0.8196 avg 0.1736
+  usage    0x7000031  Core 24 T1 Usage                                       0.2933 %      min 0.0000 max 0.8244 avg 0.1729
+  usage    0x7000032  Core 25 T0 Usage                                       0.2945 %      min 0.0000 max 1.6669 avg 0.3366
+  usage    0x7000033  Core 25 T1 Usage                                       0.2869 %      min 0.0000 max 0.8590 avg 0.2369
+  usage    0x7000034  Core 26 T0 Usage                                       0.2934 %      min 0.0000 max 0.8587 avg 0.2411
+  usage    0x7000035  Core 26 T1 Usage                                       0.3022 %      min 0.0000 max 0.8986 avg 0.2424
+  usage    0x7000036  Core 27 T0 Usage                                       0.2961 %      min 0.0000 max 0.8253 avg 0.1745
+  usage    0x7000037  Core 27 T1 Usage                                       0.2961 %      min 0.0000 max 0.8258 avg 0.1729
+  usage    0x7000038  Core 28 T0 Usage                                       0.3060 %      min 0.0000 max 0.8340 avg 0.1788
+  usage    0x7000039  Core 28 T1 Usage                                       0.2999 %      min 0.0000 max 0.8272 avg 0.1765
+  usage    0x700003a  Core 29 T0 Usage                                       0.2965 %      min 0.0000 max 0.8342 avg 0.1762
+  usage    0x700003b  Core 29 T1 Usage                                       0.2989 %      min 0.0000 max 0.8250 avg 0.1742
+  usage    0x700003c  Core 30 T0 Usage                                       0.3089 %      min 0.0000 max 0.8400 avg 0.1804
+  usage    0x700003d  Core 30 T1 Usage                                       0.3072 %      min 0.0000 max 0.8416 avg 0.1801
+  usage    0x700003e  Core 31 T0 Usage                                       0.0000 %      min 0.0000 max 0.8389 avg 0.1798
+  usage    0x700003f  Core 31 T1 Usage                                       0.0000 %      min 0.0000 max 0.8358 avg 0.1968
+  usage    0x7000040  Max CPU/Thread Usage                                  49.9814 %      min 42.7584 max 65.1238 avg 49.5259
+  usage    0x7000041  Total CPU Usage                                        3.7896 %      min 3.1353 max 5.7164 avg 3.8935
+  usage    0x7000043  Core 0 T0 Utility                                     24.9180 %      min 20.2980 max 35.7570 avg 24.1049
+  usage    0x7000044  Core 0 T1 Utility                                     20.9960 %      min 17.3987 max 54.9441 avg 24.6727
+  usage    0x7000045  Core 1 T0 Utility                                      4.9067 %      min 0.0218 max 5.4148 avg 3.4165
+  usage    0x7000046  Core 1 T1 Utility                                      0.0429 %      min 0.0114 max 3.4582 avg 0.7199
+  usage    0x7000047  Core 2 T0 Utility                                     40.1028 %      min 35.3730 max 60.4737 avg 46.3724
+  usage    0x7000048  Core 2 T1 Utility                                     56.5333 %      min 41.3153 max 76.5083 avg 51.2555
+  usage    0x7000049  Core 3 T0 Utility                                      0.0514 %      min 0.0185 max 0.9757 avg 0.1168
+  usage    0x700004a  Core 3 T1 Utility                                      0.0477 %      min 0.0163 max 1.5593 avg 0.1774
+  usage    0x700004b  Core 4 T0 Utility                                      5.7565 %      min 0.0236 max 36.4810 avg 11.5091
+  usage    0x700004c  Core 4 T1 Utility                                      3.8693 %      min 0.0269 max 36.9174 avg 10.2661
+  usage    0x700004d  Core 5 T0 Utility                                     46.0920 %      min 39.3105 max 59.2822 avg 47.7670
+  usage    0x700004e  Core 5 T1 Utility                                     50.2933 %      min 36.9174 max 75.4601 avg 51.5003
+  usage    0x700004f  Core 6 T0 Utility                                      0.0546 %      min 0.0202 max 0.3755 avg 0.0685
+  usage    0x7000050  Core 6 T1 Utility                                      0.0485 %      min 0.0159 max 0.5100 avg 0.0917
+  usage    0x7000051  Core 7 T0 Utility                                      0.0555 %      min 0.0200 max 0.1511 avg 0.0485
+  usage    0x7000052  Core 7 T1 Utility                                      0.0456 %      min 0.0192 max 0.2419 avg 0.0623
+  usage    0x7000053  Core 8 T0 Utility                                      0.0628 %      min 0.0249 max 0.0783 avg 0.0444
+  usage    0x7000054  Core 8 T1 Utility                                      0.0612 %      min 0.0177 max 0.0748 avg 0.0404
+  usage    0x7000055  Core 9 T0 Utility                                      0.0671 %      min 0.0313 max 0.0817 avg 0.0491
+  usage    0x7000056  Core 9 T1 Utility                                      0.0602 %      min 0.0197 max 0.0694 avg 0.0394
+  usage    0x7000057  Core 10 T0 Utility                                     0.0618 %      min 0.0214 max 0.0858 avg 0.0466
+  usage    0x7000058  Core 10 T1 Utility                                     0.0638 %      min 0.0213 max 0.0845 avg 0.0434
+  usage    0x7000059  Core 11 T0 Utility                                     0.0632 %      min 0.0232 max 0.0739 avg 0.0430
+  usage    0x700005a  Core 11 T1 Utility                                     0.0594 %      min 0.0184 max 0.0803 avg 0.0421
+  usage    0x700005b  Core 12 T0 Utility                                     0.0690 %      min 0.0234 max 0.0875 avg 0.0486
+  usage    0x700005c  Core 12 T1 Utility                                     0.0649 %      min 0.0220 max 0.0905 avg 0.0471
+  usage    0x700005d  Core 13 T0 Utility                                     0.0679 %      min 0.0247 max 0.0864 avg 0.0463
+  usage    0x700005e  Core 13 T1 Utility                                     0.1103 %      min 0.0454 max 0.1274 avg 0.0754
+  usage    0x700005f  Core 14 T0 Utility                                     0.0782 %      min 0.0278 max 0.0869 avg 0.0515
+  usage    0x7000060  Core 14 T1 Utility                                     0.0754 %      min 0.0263 max 0.0925 avg 0.0508
+  usage    0x7000061  Core 15 T0 Utility                                     0.0736 %      min 0.0256 max 0.0923 avg 0.0519
+  usage    0x7000062  Core 15 T1 Utility                                     0.0712 %      min 0.0232 max 0.0944 avg 0.0491
+  usage    0x7000063  Core 16 T0 Utility                                     0.0809 %      min 0.0335 max 0.0872 avg 0.0568
+  usage    0x7000064  Core 16 T1 Utility                                     0.0640 %      min 0.0203 max 0.0684 avg 0.0424
+  usage    0x7000065  Core 17 T0 Utility                                     0.0721 %      min 0.0236 max 0.1669 avg 0.0743
+  usage    0x7000066  Core 17 T1 Utility                                     0.0613 %      min 0.0207 max 0.0644 avg 0.0405
+  usage    0x7000067  Core 18 T0 Utility                                     0.0739 %      min 0.0261 max 0.2021 avg 0.0845
+  usage    0x7000068  Core 18 T1 Utility                                     0.0735 %      min 0.0214 max 0.0759 avg 0.0457
+  usage    0x7000069  Core 19 T0 Utility                                     0.0897 %      min 0.0266 max 0.0759 avg 0.0535
+  usage    0x700006a  Core 19 T1 Utility                                     0.0736 %      min 0.0230 max 0.0722 avg 0.0428
+  usage    0x700006b  Core 20 T0 Utility                                     0.0796 %      min 0.0231 max 0.0825 avg 0.0502
+  usage    0x700006c  Core 20 T1 Utility                                     0.0758 %      min 0.0227 max 0.0803 avg 0.0489
+  usage    0x700006d  Core 21 T0 Utility                                     0.0678 %      min 0.0245 max 0.0783 avg 0.0473
+  usage    0x700006e  Core 21 T1 Utility                                     0.0776 %      min 0.0311 max 0.0840 avg 0.0537
+  usage    0x700006f  Core 22 T0 Utility                                     0.0922 %      min 0.0360 max 0.0965 avg 0.0623
+  usage    0x7000070  Core 22 T1 Utility                                     0.0803 %      min 0.0331 max 0.0987 avg 0.0588
+  usage    0x7000071  Core 23 T0 Utility                                     0.0839 %      min 0.0264 max 0.0849 avg 0.0517
+  usage    0x7000072  Core 23 T1 Utility                                     0.0713 %      min 0.0240 max 0.0849 avg 0.0498
+  usage    0x7000073  Core 24 T0 Utility                                     0.0641 %      min 0.0264 max 0.0866 avg 0.0529
+  usage    0x7000074  Core 24 T1 Utility                                     0.0665 %      min 0.0253 max 0.0945 avg 0.0536
+  usage    0x7000075  Core 25 T0 Utility                                     0.0672 %      min 0.0271 max 0.2191 avg 0.0728
+  usage    0x7000076  Core 25 T1 Utility                                     0.0618 %      min 0.0242 max 0.1745 avg 0.0623
+  usage    0x7000077  Core 26 T0 Utility                                     0.0726 %      min 0.0278 max 0.1895 avg 0.0657
+  usage    0x7000078  Core 26 T1 Utility                                     0.0673 %      min 0.0258 max 0.1382 avg 0.0618
+  usage    0x7000079  Core 27 T0 Utility                                     0.0666 %      min 0.0281 max 0.0909 avg 0.0523
+  usage    0x700007a  Core 27 T1 Utility                                     0.0706 %      min 0.0229 max 0.0811 avg 0.0497
+  usage    0x700007b  Core 28 T0 Utility                                     0.0691 %      min 0.0279 max 0.0931 avg 0.0544
+  usage    0x700007c  Core 28 T1 Utility                                     0.0728 %      min 0.0278 max 0.0906 avg 0.0533
+  usage    0x700007d  Core 29 T0 Utility                                     0.0722 %      min 0.0297 max 0.0929 avg 0.0539
+  usage    0x700007e  Core 29 T1 Utility                                     0.0695 %      min 0.0274 max 0.0985 avg 0.0541
+  usage    0x700007f  Core 30 T0 Utility                                     0.0777 %      min 0.0303 max 0.0988 avg 0.0572
+  usage    0x7000080  Core 30 T1 Utility                                     0.0756 %      min 0.0251 max 0.0984 avg 0.0542
+  usage    0x7000081  Core 31 T0 Utility                                     0.0757 %      min 0.0299 max 0.0910 avg 0.0562
+  usage    0x7000082  Core 31 T1 Utility                                     0.0751 %      min 0.0322 max 0.0945 avg 0.0569
+  usage    0x7000083  Total CPU Utility                                      4.0201 %      min 3.5592 max 6.6271 avg 4.2922
+  other    0x8000000  Core 0 Ratio                                          45.2500 x      min 24.7461 max 45.2500 avg 41.8327
+  other    0x8000001  Core 1 Ratio                                          24.7461 x      min 24.7461 max 45.2500 avg 36.7067
+  other    0x8000002  Core 2 Ratio                                          24.7461 x      min 45.2500 max 45.2500 avg 45.2500
+  other    0x8000003  Core 3 Ratio                                          24.7461 x      min 24.7461 max 45.2500 avg 26.4548
+  other    0x8000004  Core 4 Ratio                                          24.7461 x      min 24.7461 max 45.2500 avg 33.2894
+  other    0x8000005  Core 5 Ratio                                          45.2500 x      min 45.2500 max 45.2500 avg 45.2500
+  other    0x8000006  Core 6 Ratio                                          24.7461 x      min 24.7461 max 45.2500 avg 26.4548
+  other    0x8000007  Core 7 Ratio                                          24.7461 x      min 24.7461 max 45.2500 avg 26.4548
+  other    0x8000008  Core 8 Ratio                                          25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000009  Core 9 Ratio                                          25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000a  Core 10 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000b  Core 11 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000c  Core 12 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000d  Core 13 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000e  Core 14 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x800000f  Core 15 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000010  Core 16 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000011  Core 17 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000012  Core 18 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000013  Core 19 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000014  Core 20 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000015  Core 21 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000016  Core 22 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000017  Core 23 Ratio                                         25.0000 x      min 25.0000 max 25.0000 avg 25.0000
+  other    0x8000018  Core 24 Ratio                                         25.0000 x      min 25.0000 max 45.2500 avg 26.6875
+  other    0x8000019  Core 25 Ratio                                         25.0000 x      min 25.0000 max 45.2500 avg 26.6875
+  other    0x800001a  Core 26 Ratio                                         25.0000 x      min 25.0000 max 45.2500 avg 26.6875
+  other    0x800001b  Core 27 Ratio                                         25.0000 x      min 25.0000 max 45.2500 avg 26.6875
+  other    0x800001c  Core 28 Ratio                                         25.0000 x      min 24.7461 max 25.0000 avg 24.9788
+  other    0x800001d  Core 29 Ratio                                         25.0000 x      min 25.0000 max 45.2500 avg 26.6875
+  other    0x800001e  Core 30 Ratio                                         25.0000 x      min 24.7461 max 25.0000 avg 24.9788
+  other    0x800001f  Core 31 Ratio                                         25.0000 x      min 24.7461 max 25.0000 avg 24.9788
+
+== CPU [#0]: AMD Ryzen Threadripper 9970X: C-State Residency  [0xf0000302/0]
+  usage    0x7000006  Package C6 Residency                                   0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000c  Core 0 C0 Residency                                   32.4530 %      min 28.0269 max 60.3854 avg 34.7084
+  usage    0x700000e  Core 1 C0 Residency                                    5.6659 %      min 0.0466 max 6.0975 avg 4.3715
+  usage    0x7000010  Core 2 C0 Residency                                   69.7800 %      min 61.6167 max 83.9709 avg 69.4659
+  usage    0x7000012  Core 3 C0 Residency                                    0.1135 %      min 0.0402 max 2.4439 avg 0.2765
+  usage    0x7000014  Core 4 C0 Residency                                    7.3723 %      min 0.0637 max 47.6746 avg 15.6726
+  usage    0x7000016  Core 5 C0 Residency                                   68.4127 %      min 60.4594 max 81.9928 avg 69.4303
+  usage    0x7000018  Core 6 C0 Residency                                    0.1213 %      min 0.0421 max 0.9687 avg 0.1553
+  usage    0x700001a  Core 7 C0 Residency                                    0.1159 %      min 0.0441 max 0.4963 avg 0.1129
+  usage    0x700001c  Core 8 C0 Residency                                    0.1435 %      min 0.0477 max 0.1631 avg 0.0871
+  usage    0x700001e  Core 9 C0 Residency                                    0.1560 %      min 0.0621 max 0.1683 avg 0.0973
+  usage    0x7000020  Core 10 C0 Residency                                   0.1450 %      min 0.0486 max 0.1807 avg 0.0922
+  usage    0x7000022  Core 11 C0 Residency                                   0.1432 %      min 0.0497 max 0.1702 avg 0.0874
+  usage    0x7000024  Core 12 C0 Residency                                   0.1541 %      min 0.0490 max 0.1811 avg 0.0951
+  usage    0x7000026  Core 13 C0 Residency                                   0.2151 %      min 0.0896 max 0.2473 avg 0.1428
+  usage    0x7000028  Core 14 C0 Residency                                   0.1632 %      min 0.0556 max 0.1878 avg 0.1008
+  usage    0x700002a  Core 15 C0 Residency                                   0.1564 %      min 0.0509 max 0.1895 avg 0.1000
+  usage    0x700002c  Core 16 C0 Residency                                   0.1764 %      min 0.0648 max 0.1769 avg 0.1124
+  usage    0x700002e  Core 17 C0 Residency                                   0.1549 %      min 0.0494 max 0.2960 avg 0.1285
+  usage    0x7000030  Core 18 C0 Residency                                   0.1600 %      min 0.0535 max 0.3412 avg 0.1453
+  usage    0x7000032  Core 19 C0 Residency                                   0.1894 %      min 0.0540 max 0.1625 avg 0.1019
+  usage    0x7000034  Core 20 C0 Residency                                   0.1684 %      min 0.0503 max 0.1687 avg 0.0970
+  usage    0x7000036  Core 21 C0 Residency                                   0.1619 %      min 0.0636 max 0.1771 avg 0.1049
+  usage    0x7000038  Core 22 C0 Residency                                   0.2015 %      min 0.0869 max 0.2223 avg 0.1329
+  usage    0x700003a  Core 23 C0 Residency                                   0.1708 %      min 0.0510 max 0.1770 avg 0.0986
+  usage    0x700003c  Core 24 C0 Residency                                   0.1477 %      min 0.0595 max 0.2257 avg 0.1083
+  usage    0x700003e  Core 25 C0 Residency                                   0.1394 %      min 0.0562 max 0.5412 avg 0.1361
+  usage    0x7000040  Core 26 C0 Residency                                   0.1547 %      min 0.0579 max 0.3995 avg 0.1263
+  usage    0x7000042  Core 27 C0 Residency                                   0.1492 %      min 0.0553 max 0.1776 avg 0.1035
+  usage    0x7000044  Core 28 C0 Residency                                   0.1558 %      min 0.0569 max 0.1838 avg 0.1051
+  usage    0x7000046  Core 29 C0 Residency                                   0.1530 %      min 0.0594 max 0.1789 avg 0.1058
+  usage    0x7000048  Core 30 C0 Residency                                   0.1619 %      min 0.0600 max 0.1937 avg 0.1073
+  usage    0x700004a  Core 31 C0 Residency                                   0.1676 %      min 0.0650 max 0.1884 avg 0.1135
+  usage    0x700004c  Core 0 C1 Residency                                   67.5470 %      min 39.6146 max 71.9731 avg 65.2861
+  usage    0x700004d  Core 1 C1 Residency                                   71.5513 %      min 0.2717 max 94.1069 avg 54.1731
+  usage    0x700004e  Core 2 C1 Residency                                   30.2200 %      min 16.0291 max 38.3832 avg 30.5341
+  usage    0x700004f  Core 3 C1 Residency                                    0.7393 %      min 0.2088 max 13.8560 avg 1.5814
+  usage    0x7000050  Core 4 C1 Residency                                   17.2250 %      min 0.3599 max 72.2002 avg 32.3043
+  usage    0x7000051  Core 5 C1 Residency                                   31.5872 %      min 18.0073 max 39.5406 avg 30.5697
+  usage    0x7000052  Core 6 C1 Residency                                    0.7345 %      min 0.2122 max 8.4567 avg 1.1225
+  usage    0x7000053  Core 7 C1 Residency                                    0.7324 %      min 0.2088 max 4.4140 avg 0.7715
+  usage    0x7000054  Core 8 C1 Residency                                    0.7093 %      min 0.2059 max 0.7406 avg 0.4407
+  usage    0x7000055  Core 9 C1 Residency                                    0.8073 %      min 0.3564 max 0.9981 avg 0.6049
+  usage    0x7000056  Core 10 C1 Residency                                   0.7098 %      min 0.1970 max 0.7431 avg 0.4460
+  usage    0x7000057  Core 11 C1 Residency                                   0.7167 %      min 0.2015 max 0.7423 avg 0.4358
+  usage    0x7000058  Core 12 C1 Residency                                   0.7090 %      min 0.1947 max 0.8048 avg 0.4389
+  usage    0x7000059  Core 13 C1 Residency                                   0.7310 %      min 0.2824 max 0.8600 avg 0.5011
+  usage    0x700005a  Core 14 C1 Residency                                   0.6935 %      min 0.1926 max 0.8633 avg 0.4652
+  usage    0x700005b  Core 15 C1 Residency                                   0.7028 %      min 0.1938 max 0.8057 avg 0.4676
+  usage    0x700005c  Core 16 C1 Residency                                   0.7456 %      min 0.2444 max 0.9404 avg 0.5087
+  usage    0x700005d  Core 17 C1 Residency                                   0.7250 %      min 0.2000 max 0.9406 avg 0.4957
+  usage    0x700005e  Core 18 C1 Residency                                   0.7094 %      min 0.2561 max 4.4212 avg 0.8320
+  usage    0x700005f  Core 19 C1 Residency                                   0.7421 %      min 0.2147 max 0.8895 avg 0.5275
+  usage    0x7000060  Core 20 C1 Residency                                   0.7005 %      min 0.1942 max 0.8154 avg 0.4412
+  usage    0x7000061  Core 21 C1 Residency                                   0.9772 %      min 0.3779 max 1.0238 avg 0.6498
+  usage    0x7000062  Core 22 C1 Residency                                   1.1301 %      min 0.5138 max 1.4616 avg 0.9087
+  usage    0x7000063  Core 23 C1 Residency                                   0.6962 %      min 0.2512 max 0.8131 avg 0.4486
+  usage    0x7000064  Core 24 C1 Residency                                   0.7174 %      min 0.1998 max 1.8180 avg 0.5506
+  usage    0x7000065  Core 25 C1 Residency                                   0.7181 %      min 0.2100 max 3.2238 avg 0.6726
+  usage    0x7000066  Core 26 C1 Residency                                   0.7031 %      min 0.1924 max 2.7974 avg 0.6232
+  usage    0x7000067  Core 27 C1 Residency                                   0.7048 %      min 0.1967 max 0.9250 avg 0.4703
+  usage    0x7000068  Core 28 C1 Residency                                   0.7007 %      min 0.1906 max 0.8021 avg 0.4392
+  usage    0x7000069  Core 29 C1 Residency                                   0.7045 %      min 0.1932 max 0.8056 avg 0.4530
+  usage    0x700006a  Core 30 C1 Residency                                   0.6969 %      min 0.1927 max 0.7967 avg 0.4354
+  usage    0x700006b  Core 31 C1 Residency                                   0.7500 %      min 0.2065 max 0.8038 avg 0.4531
+  usage    0x70000ec  Core 0 C6 Residency                                    0.0000 %      min 0.0000 max 0.0667 avg 0.0056
+  usage    0x70000ed  Core 1 C6 Residency                                   22.7828 %      min 0.0000 max 99.6817 avg 41.4554
+  usage    0x70000ee  Core 2 C6 Residency                                    0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x70000ef  Core 3 C6 Residency                                   99.1472 %      min 83.7005 max 99.7474 avg 98.1420
+  usage    0x70000f0  Core 4 C6 Residency                                   75.4027 %      min 0.0000 max 99.5764 avg 52.0231
+  usage    0x70000f1  Core 5 C6 Residency                                    0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x70000f2  Core 6 C6 Residency                                   99.1442 %      min 90.5747 max 99.7458 avg 98.7222
+  usage    0x70000f3  Core 7 C6 Residency                                   99.1517 %      min 95.0897 max 99.7448 avg 99.1156
+  usage    0x70000f4  Core 8 C6 Residency                                   99.1472 %      min 99.0963 max 99.7406 avg 99.4721
+  usage    0x70000f5  Core 9 C6 Residency                                   99.0367 %      min 98.8335 max 99.5595 avg 99.2978
+  usage    0x70000f6  Core 10 C6 Residency                                  99.1452 %      min 99.0776 max 99.7449 avg 99.4619
+  usage    0x70000f7  Core 11 C6 Residency                                  99.1402 %      min 99.0875 max 99.7486 avg 99.4768
+  usage    0x70000f8  Core 12 C6 Residency                                  99.1369 %      min 99.0141 max 99.7445 avg 99.4661
+  usage    0x70000f9  Core 13 C6 Residency                                  99.0539 %      min 98.8926 max 99.6219 avg 99.3561
+  usage    0x70000fa  Core 14 C6 Residency                                  99.1433 %      min 98.9489 max 99.7426 avg 99.4340
+  usage    0x70000fb  Core 15 C6 Residency                                  99.1408 %      min 99.0048 max 99.7425 avg 99.4324
+  usage    0x70000fc  Core 16 C6 Residency                                  99.0779 %      min 98.8931 max 99.6758 avg 99.3789
+  usage    0x70000fd  Core 17 C6 Residency                                  99.1201 %      min 98.7956 max 99.7425 avg 99.3759
+  usage    0x70000fe  Core 18 C6 Residency                                  99.1306 %      min 95.3850 max 99.6873 avg 99.0227
+  usage    0x70000ff  Core 19 C6 Residency                                  99.0684 %      min 98.9480 max 99.7109 avg 99.3707
+  usage    0x7000100  Core 20 C6 Residency                                  99.1311 %      min 99.0160 max 99.7426 avg 99.4618
+  usage    0x7000101  Core 21 C6 Residency                                  98.8609 %      min 98.7990 max 99.5468 avg 99.2452
+  usage    0x7000102  Core 22 C6 Residency                                  98.6686 %      min 98.3162 max 99.3975 avg 98.9584
+  usage    0x7000103  Core 23 C6 Residency                                  99.1330 %      min 99.0099 max 99.6887 avg 99.4529
+  usage    0x7000104  Core 24 C6 Residency                                  99.1349 %      min 97.9564 max 99.7361 avg 99.3411
+  usage    0x7000105  Core 25 C6 Residency                                  99.1425 %      min 96.2351 max 99.7188 avg 99.1913
+  usage    0x7000106  Core 26 C6 Residency                                  99.1422 %      min 96.8031 max 99.7451 avg 99.2505
+  usage    0x7000107  Core 27 C6 Residency                                  99.1460 %      min 98.8994 max 99.7446 avg 99.4263
+  usage    0x7000108  Core 28 C6 Residency                                  99.1435 %      min 99.0141 max 99.7436 avg 99.4558
+  usage    0x7000109  Core 29 C6 Residency                                  99.1426 %      min 99.0154 max 99.7408 avg 99.4412
+  usage    0x700010a  Core 30 C6 Residency                                  99.1412 %      min 99.0096 max 99.7421 avg 99.4574
+  usage    0x700010b  Core 31 C6 Residency                                  99.0824 %      min 99.0078 max 99.7197 avg 99.4334
+
+== Memory Timings  [0xf0000301/1]
+  clock    0x6000000  Memory Clock                                        2800.0000 MHz    min 2800.0000 max 2800.0000 avg 2800.0000
+  other    0x8000000  Memory Clock Ratio                                    28.0000 x      min 28.0000 max 28.0000 avg 28.0000
+  other    0x8000001  Tcas                                                  28.0000 T      min 28.0000 max 28.0000 avg 28.0000
+  other    0x8000002  Trcd                                                  34.0000 T      min 34.0000 max 34.0000 avg 34.0000
+  other    0x8000003  Trp                                                   34.0000 T      min 34.0000 max 34.0000 avg 34.0000
+  other    0x8000004  Tras                                                  89.0000 T      min 89.0000 max 89.0000 avg 89.0000
+  other    0x8000005  Trc                                                  123.0000 T      min 123.0000 max 123.0000 avg 123.0000
+  other    0x8000006  Trfc                                                 824.0000 T      min 824.0000 max 824.0000 avg 824.0000
+  other    0x8000007  Command Rate                                           1.0000 T      min 1.0000 max 1.0000 avg 1.0000
+
+== CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced  [0xf0000501/0]
+  temp     0x1000000  CPU (Tctl/Tdie)                                       44.0000 °C     min 44.1250 max 46.7500 avg 45.1562
+  temp     0x1000003  CPU Die (average)                                     43.4729 °C     min 43.4444 max 44.9517 avg 43.7230
+  temp     0x1000008  CPU CCD1 (Tdie)                                       42.2500 °C     min 42.8750 max 46.5000 avg 43.9375
+  temp     0x1000009  CPU CCD2 (Tdie)                                       34.6250 °C     min 34.2500 max 34.8750 avg 34.5312
+  temp     0x100000a  CPU CCD3 (Tdie)                                       35.1250 °C     min 35.1250 max 35.5000 avg 35.1562
+  temp     0x100000b  CPU CCD4 (Tdie)                                       36.8750 °C     min 36.3750 max 36.8750 avg 36.5833
+  temp     0x1000080  Core0                                                 38.7308 °C     min 38.4014 max 40.9975 avg 39.0916
+  temp     0x1000081  Core1                                                 35.7571 °C     min 35.4761 max 36.1271 avg 35.8789
+  temp     0x1000082  Core2                                                 40.4437 °C     min 40.4189 max 43.9632 avg 41.4176
+  temp     0x1000083  Core3                                                 36.0637 °C     min 36.0026 max 36.7723 avg 36.3081
+  temp     0x1000084  Core4                                                 36.7240 °C     min 36.1160 max 39.8928 avg 37.4835
+  temp     0x1000085  Core5                                                 40.1584 °C     min 39.6959 max 41.3692 avg 40.3785
+  temp     0x1000086  Core6                                                 35.9163 °C     min 35.6682 max 36.5019 avg 36.0254
+  temp     0x1000087  Core7                                                 35.5299 °C     min 35.4561 max 36.2325 avg 35.7693
+  temp     0x1000088  Core8                                                 33.0406 °C     min 32.9623 max 33.1731 avg 33.0467
+  temp     0x1000089  Core9                                                 31.9885 °C     min 31.7350 max 31.9749 avg 31.8441
+  temp     0x100008a  Core10                                                32.8505 °C     min 32.7833 max 32.9855 avg 32.8629
+  temp     0x100008b  Core11                                                32.0782 °C     min 31.8366 max 32.0599 avg 31.9463
+  temp     0x100008c  Core12                                                32.9714 °C     min 32.9066 max 33.1042 avg 32.9825
+  temp     0x100008d  Core13                                                31.9827 °C     min 31.7290 max 31.9759 avg 31.8415
+  temp     0x100008e  Core14                                                33.1342 °C     min 33.0598 max 33.2803 avg 33.1399
+  temp     0x100008f  Core15                                                32.0503 °C     min 31.8025 max 32.0359 avg 31.9133
+  temp     0x1000090  Core16                                                33.4178 °C     min 33.2479 max 33.5168 avg 33.3892
+  temp     0x1000091  Core17                                                34.1998 °C     min 34.1600 max 34.3167 avg 34.2138
+  temp     0x1000092  Core18                                                33.5286 °C     min 33.3803 max 33.6157 avg 33.5061
+  temp     0x1000093  Core19                                                33.9465 °C     min 33.9101 max 34.0551 avg 33.9572
+  temp     0x1000094  Core20                                                33.3482 °C     min 33.1248 max 33.4482 avg 33.3075
+  temp     0x1000095  Core21                                                34.1864 °C     min 34.1453 max 34.3019 avg 34.2011
+  temp     0x1000096  Core22                                                33.1963 °C     min 33.0212 max 33.2988 avg 33.1668
+  temp     0x1000097  Core23                                                33.9764 °C     min 33.9293 max 34.0584 avg 33.9770
+  temp     0x1000098  Core24                                                34.8505 °C     min 34.7984 max 35.0240 avg 34.9053
+  temp     0x1000099  Core25                                                35.0166 °C     min 34.9848 max 35.1610 avg 35.0780
+  temp     0x100009a  Core26                                                34.6898 °C     min 34.6240 max 34.8167 avg 34.7303
+  temp     0x100009b  Core27                                                34.9779 °C     min 34.9511 max 35.1369 avg 35.0463
+  temp     0x100009c  Core28                                                34.7957 °C     min 34.7374 max 34.9602 avg 34.8556
+  temp     0x100009d  Core29                                                34.6891 °C     min 34.6562 max 34.8704 avg 34.7691
+  temp     0x100009e  Core30                                                34.6400 °C     min 34.5965 max 34.7855 avg 34.6935
+  temp     0x100009f  Core31                                                34.8068 °C     min 34.7620 max 34.9919 avg 34.8735
+  temp     0x1000180  L3 Cache (CCD1)                                       37.1843 °C     min 37.0209 max 37.8986 avg 37.3339
+  temp     0x1000181  L3 Cache (CCD2)                                       33.5766 °C     min 33.5200 max 33.7201 avg 33.5885
+  temp     0x1000182  L3 Cache (CCD3)                                       34.3192 °C     min 34.1440 max 34.4397 avg 34.2960
+  temp     0x1000183  L3 Cache (CCD4)                                       35.1258 °C     min 35.0759 max 35.2866 avg 35.1666
+  temp     0x1000198  CPU IOD Hotspot                                       43.5000 °C     min 43.2500 max 43.7500 avg 43.3958
+  temp     0x1000199  CPU IOD Average                                       39.2738 °C     min 39.0417 max 39.4643 avg 39.2599
+  temp     0x100019a  CPU VDDCR_CPU0 VRM (SVI3 TFN)                         39.0000 °C     min 39.0000 max 39.0000 avg 39.0000
+  temp     0x100019b  CPU VDDCR_CPU1 VRM (SVI3 TFN)                         37.0000 °C     min 37.0000 max 37.0000 avg 37.0000
+  temp     0x100019c  CPU VDDCR_SOC VRM (SVI3 TFN)                          40.0000 °C     min 40.0000 max 40.0000 avg 40.0000
+  temp     0x100019d  CPU VDDIO VRM (SVI3 TFN)                              39.0522 °C     min 39.0523 max 39.7930 avg 39.3037
+  volt     0x2000000  CPU VDDCR_VDD Voltage (SVI3 TFN)                       0.9736 V      min 0.9727 max 1.0143 avg 0.9775
+  volt     0x2000001  CPU VDDCR_SOC Voltage (SVI3 TFN)                       0.9214 V      min 0.9214 max 0.9214 avg 0.9214
+  current  0x4000000  CPU Core Current (SVI3 TFN)                            9.0552 A      min 8.9096 max 12.4058 avg 9.8952
+  current  0x4000001  SoC Current (SVI3 TFN)                                26.9446 A      min 26.7899 max 27.2189 avg 26.9317
+  current  0x4000002  CPU TDC                                                9.0545 A      min 8.9111 max 12.4035 avg 9.8953
+  current  0x4000003  CPU EDC                                               32.7286 A      min 30.2852 max 53.3700 avg 37.2675
+  current  0x4000004  IO Current (SVI3 TFN)                                 10.9190 A      min 10.5478 max 10.9255 avg 10.7298
+  power    0x5000000  CPU Package Power                                     57.1365 W      min 56.2936 max 60.7934 avg 57.7901
+  power    0x5000001  Core 0 Power                                           1.1528 W      min 0.9979 max 1.9689 avg 1.2347
+  power    0x5000002  Core 1 Power                                           0.2999 W      min 0.0166 max 0.3829 avg 0.2517
+  power    0x5000003  Core 2 Power                                           2.2300 W      min 2.1017 max 3.4638 avg 2.5373
+  power    0x5000004  Core 3 Power                                           0.0183 W      min 0.0163 max 0.1264 avg 0.0271
+  power    0x5000005  Core 4 Power                                           0.2629 W      min 0.0166 max 1.6345 avg 0.5843
+  power    0x5000006  Core 5 Power                                           2.5043 W      min 2.2518 max 2.8564 avg 2.5088
+  power    0x5000007  Core 6 Power                                           0.0183 W      min 0.0163 max 0.0646 avg 0.0219
+  power    0x5000008  Core 7 Power                                           0.0183 W      min 0.0163 max 0.0387 avg 0.0195
+  power    0x5000009  Core 8 Power                                           0.0013 W      min 0.0006 max 0.0019 avg 0.0010
+  power    0x500000a  Core 9 Power                                           0.0013 W      min 0.0006 max 0.0021 avg 0.0012
+  power    0x500000b  Core 10 Power                                          0.0013 W      min 0.0006 max 0.0020 avg 0.0010
+  power    0x500000c  Core 11 Power                                          0.0012 W      min 0.0005 max 0.0018 avg 0.0009
+  power    0x500000d  Core 12 Power                                          0.0013 W      min 0.0006 max 0.0020 avg 0.0011
+  power    0x500000e  Core 13 Power                                          0.0013 W      min 0.0005 max 0.0019 avg 0.0010
+  power    0x500000f  Core 14 Power                                          0.0014 W      min 0.0006 max 0.0021 avg 0.0011
+  power    0x5000010  Core 15 Power                                          0.0013 W      min 0.0005 max 0.0019 avg 0.0010
+  power    0x5000011  Core 16 Power                                          0.0013 W      min 0.0004 max 0.0023 avg 0.0010
+  power    0x5000012  Core 17 Power                                          0.0014 W      min 0.0005 max 0.0041 avg 0.0016
+  power    0x5000013  Core 18 Power                                          0.0013 W      min 0.0004 max 0.0083 avg 0.0021
+  power    0x5000014  Core 19 Power                                          0.0014 W      min 0.0005 max 0.0020 avg 0.0012
+  power    0x5000015  Core 20 Power                                          0.0013 W      min 0.0004 max 0.0019 avg 0.0010
+  power    0x5000016  Core 21 Power                                          0.0018 W      min 0.0007 max 0.0024 avg 0.0014
+  power    0x5000017  Core 22 Power                                          0.0019 W      min 0.0008 max 0.0028 avg 0.0017
+  power    0x5000018  Core 23 Power                                          0.0014 W      min 0.0006 max 0.0020 avg 0.0011
+  power    0x5000019  Core 24 Power                                          0.0016 W      min 0.0005 max 0.0041 avg 0.0014
+  power    0x500001a  Core 25 Power                                          0.0016 W      min 0.0004 max 0.0085 avg 0.0020
+  power    0x500001b  Core 26 Power                                          0.0016 W      min 0.0004 max 0.0077 avg 0.0018
+  power    0x500001c  Core 27 Power                                          0.0016 W      min 0.0004 max 0.0021 avg 0.0012
+  power    0x500001d  Core 28 Power                                          0.0016 W      min 0.0005 max 0.0022 avg 0.0011
+  power    0x500001e  Core 29 Power                                          0.0016 W      min 0.0005 max 0.0026 avg 0.0012
+  power    0x500001f  Core 30 Power                                          0.0016 W      min 0.0005 max 0.0022 avg 0.0011
+  power    0x5000020  Core 31 Power                                          0.0017 W      min 0.0006 max 0.0022 avg 0.0011
+  power    0x5000021  CPU Core Power (SVI3 TFN)                              9.3515 W      min 9.1206 max 12.4353 avg 10.0948
+  power    0x5000022  CPU SoC Power (SVI3 TFN)                              33.9233 W      min 33.2397 max 34.1576 avg 33.5692
+  power    0x5000023  Core+SoC Power (SVI3 TFN)                             43.2748 W      min 42.3615 max 46.4529 avg 43.6641
+  power    0x5000024  CPU PPT                                               57.2292 W      min 56.4095 max 60.8193 avg 57.8688
+  clock    0x6000000  Infinity Fabric Clock (FCLK)                        2000.0000 MHz    min 1999.9999 max 2000.0001 avg 2000.0000
+  clock    0x6000001  Memory Controller Clock (UCLK)                      1400.0000 MHz    min 1400.0000 max 1400.0001 avg 1400.0000
+  clock    0x6000004  L3 Cache (CCD1)                                     4543.7202 MHz    min 4540.3190 max 4758.6498 avg 4561.3420
+  clock    0x6000005  L3 Cache (CCD2)                                     2554.2247 MHz    min 2549.2265 max 2564.0228 avg 2558.3614
+  clock    0x6000006  L3 Cache (CCD3)                                     2581.9149 MHz    min 2559.1695 max 2635.4437 avg 2586.3394
+  clock    0x6000007  L3 Cache (CCD4)                                     2539.2962 MHz    min 2528.8348 max 2617.8985 avg 2545.4024
+  clock    0x6000025  Frequency Limit - Global                            4528.6736 MHz    min 4528.6679 max 4992.3420 avg 4567.3112
+  usage    0x7000000  CPU PPT Limit                                         22.8917 %      min 22.5638 max 24.3277 avg 23.1475
+  usage    0x7000001  CPU TDC0 Limit                                         5.0620 %      min 5.0118 max 6.9760 avg 5.5459
+  usage    0x7000002  CPU TDC1 Limit                                         0.1120 %      min 0.0732 max 0.1584 avg 0.1086
+  usage    0x7000003  CPU EDC0 Limit                                         9.5053 %      min 9.7384 max 15.4077 avg 11.7947
+  usage    0x7000004  CPU EDC1 Limit                                         4.4218 %      min 2.7356 max 7.5555 avg 4.0638
+  usage    0x700000b  Thermal Limit                                         51.1446 %      min 51.1111 max 52.8843 avg 51.4389
+  other    0x8000000  Thermal Throttling (HTC)                               0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Thermal Throttling (PROCHOT CPU)                       0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Thermal Throttling (PROCHOT EXT)                       0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000007  DRAM Read Bandwidth                                    1.2472 GB/s   min 1.1247 max 2.9826 avg 1.5341
+  other    0x8000008  DRAM Write Bandwidth                                   0.2474 GB/s   min 0.2244 max 0.7361 avg 0.3165
+  other    0x800000b  Average Active Core Count                              1.8792        min 1.6409 max 2.8025 avg 1.9682
+
+== ASUS Pro WS TRX50-SAGE WIFI A (Nuvoton NCT6701D)  [0xf7067010/0]
+  temp     0x1000000  Motherboard                                           35.0000 °C     min 35.0000 max 35.0000 avg 35.0000
+  temp     0x1000002  Temp2                                                 41.0000 °C     min 39.0000 max 44.0000 avg 42.0000
+  temp     0x1000006  CPU (Weighted Value)                                  35.0000 °C     min 35.0000 max 35.0000 avg 35.0000
+  temp     0x1000007  CPU Package                                           44.0000 °C     min 44.0000 max 46.0000 avg 44.7500
+  temp     0x1000008  CPU                                                   39.0000 °C     min 38.0000 max 39.0000 avg 38.9167
+  temp     0x1000009  Temp9                                                 28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100000b  TSI0 (CPU)                                            44.0000 °C     min 44.0000 max 46.0000 avg 44.7500
+  temp     0x100000e  Temp14                                                98.0000 °C     min 98.0000 max 99.0000 avg 98.2500
+  volt     0x2000000  Vcore                                                  0.9679 V      min 0.9679 max 0.9768 avg 0.9701
+  volt     0x2000001  +5V                                                    5.1200 V      min 5.1200 max 5.1200 avg 5.1200
+  volt     0x2000002  AVSB                                                   3.3920 V      min 3.3920 max 3.3920 avg 3.3920
+  volt     0x2000003  3VCC                                                   3.3120 V      min 3.2960 max 3.3120 avg 3.3040
+  volt     0x2000004  +12V                                                  11.9040 V      min 11.9040 max 11.9040 avg 11.9040
+  volt     0x2000005  CPU VDDIO                                              1.0745 V      min 1.0745 max 1.0745 avg 1.0745
+  volt     0x2000006  CPU Core1                                              0.7814 V      min 0.7548 max 0.9324 avg 0.7925
+  volt     0x2000007  3VSB                                                   3.3920 V      min 3.3920 max 3.3920 avg 3.3920
+  volt     0x2000008  VBAT                                                   3.2800 V      min 3.2800 max 3.2960 avg 3.2813
+  volt     0x2000009  VTT                                                    3.2960 V      min 3.2960 max 3.3120 avg 3.3027
+  volt     0x200000a  CHIPSET1 1.0V                                          1.0560 V      min 1.0560 max 1.0560 avg 1.0560
+  volt     0x200000b  VDD_11_S3 / MC                                         1.3498 V      min 1.3498 max 1.3498 avg 1.3498
+  volt     0x200000c  VIN2                                                   1.0480 V      min 1.0480 max 1.0560 avg 1.0527
+  volt     0x200000d  CPU VSOC                                               0.9146 V      min 0.9146 max 0.9146 avg 0.9146
+  volt     0x200000e  CHIPSET1 1.8V                                          1.8027 V      min 1.8027 max 1.8027 avg 1.8027
+  volt     0x200000f  VIN9                                                   0.8320 V      min 0.8320 max 0.8320 avg 0.8320
+  volt     0x2000010  VHIF                                                   3.3920 V      min 3.3920 max 3.3920 avg 3.3920
+  fan      0x3000000  Chassis 1                                           1336.0000 RPM    min 1344.0000 max 1359.0000 avg 1350.1667
+  fan      0x3000001  CPU                                                  519.0000 RPM    min 506.0000 max 520.0000 avg 513.9167
+  fan      0x3000002  Chassis 2                                            344.0000 RPM    min 338.0000 max 344.0000 avg 342.0833
+  fan      0x3000003  Chassis 3                                            406.0000 RPM    min 399.0000 max 406.0000 avg 403.3333
+  fan      0x3000004  Chassis 4                                           1480.0000 RPM    min 1442.0000 max 1542.0000 avg 1493.0833
+  fan      0x3000005  Water Pump+                                         3479.0000 RPM    min 3461.0000 max 3488.0000 avg 3478.2500
+
+== ASUS Pro WS TRX50-SAGE WIFI A (AMD Chipset)  [0xf2010006/0]
+  temp     0x1000000  Chipset 1 (xHCI)                                      60.0858 °C     min 59.1792 max 60.9924 avg 60.4635
+
+== ASUS Pro WS TRX50-SAGE WIFI A (Infineon XDPE19283B)  [0xfb19283b/8]
+  temp     0x1000001  VR Loop2                                              35.0000 °C     min 34.0000 max 36.0000 avg 34.7500
+  volt     0x2000001  VR VIN                                                12.0312 V      min 12.0000 max 12.0469 avg 12.0352
+  temp     0x1000000  VR Loop1                                              36.0000 °C     min 36.0000 max 36.0000 avg 36.0000
+  temp     0x1000001  VR Loop2                                              35.0000 °C     min 34.0000 max 36.0000 avg 34.6667
+  volt     0x2000000  VR VOUT                                                1.3516 V      min 1.3477 max 1.3516 avg 1.3490
+  volt     0x2000001  VR VIN                                                12.0469 V      min 12.0000 max 12.0625 avg 12.0326
+  current  0x4000000  Current (IOUT)                                         5.2500 A      min 5.2500 max 6.5625 avg 6.0417
+  current  0x4000001  Current (IIN)                                          0.5000 A      min 0.3750 max 0.6250 avg 0.5000
+  power    0x5000000  Power (POUT)                                           7.2500 W      min 7.0000 max 9.2500 avg 8.2500
+  power    0x5000001  Power (Input)                                          6.7500 W      min 7.0000 max 8.6250 avg 7.7188
+  other    0x8000000  VRM Efficiency                                       100.0000 %      min 91.8033 max 100.0000 avg 99.3169
+
+== ASUS EC: ASUS   [0xf0ec0502/0]
+  temp     0x1000000  VRM1                                                  37.0000 °C     min 37.0000 max 37.0000 avg 37.0000
+  temp     0x1000001  VRM2                                                  39.0000 °C     min 39.0000 max 39.0000 avg 39.0000
+  temp     0x1000006  T_Sensor                                              35.0000 °C     min 35.0000 max 35.0000 avg 35.0000
+  temp     0x1000012  VRM Vcore1 Temperature                                37.0000 °C     min 37.0000 max 37.0000 avg 37.0000
+  volt     0x2000010  VRM Vcore0 Voltage (VOUT)                              0.9760 V      min 0.9680 max 0.9760 avg 0.9737
+  volt     0x2000012  VRM Vcore1 Voltage (VOUT)                              0.7650 V      min 0.7570 max 0.7650 avg 0.7630
+  fan      0x300000a  VRM_E Heatsink Fan                                  3120.0000 RPM    min 3120.0000 max 3133.0000 avg 3128.1667
+  fan      0x300000b  VRM_W Heatsink Fan                                  3390.0000 RPM    min 3385.0000 max 3400.0000 avg 3392.9167
+  current  0x4000004  VRM Vcore0 Current (IOUT)                              6.0000 A      min 6.0000 max 15.0000 avg 7.9167
+  current  0x4000006  VRM Vcore1 Current (IOUT)                              3.0000 A      min 3.0000 max 3.0000 avg 3.0000
+  power    0x5000004  VRM Vcore0 Power (POUT)                                9.0000 W      min 6.0000 max 14.0000 avg 7.2500
+
+== DDR5 DIMM [#8]: Kingston KF556R28-32 (P0 CHANNEL E/DIMM 0)  [0xf3000005/8]
+  temp     0x1000000  SPD Hub Temperature                                   47.0000 °C     min 47.0000 max 47.0000 avg 47.0000
+  temp     0x1000001  TS0 Temperature                                       42.5000 °C     min 42.5000 max 42.7500 avg 42.6458
+  temp     0x1000002  TS1 Temperature                                       42.7500 °C     min 42.7500 max 43.0000 avg 42.7708
+  volt     0x2000001  VDD (SWA) Voltage                                      1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000003  VDDQ (SWB) Voltage                                     1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000005  VPP (SWC) Voltage                                      1.8150 V      min 1.8150 max 1.8150 avg 1.8150
+  volt     0x2000007  1.8V VOUT Voltage                                      1.8000 V      min 1.8000 max 1.8000 avg 1.8000
+  volt     0x2000009  1.0V VOUT Voltage                                      1.0050 V      min 1.0050 max 1.0050 avg 1.0050
+  volt     0x200000b  VIN Voltage                                           12.0400 V      min 12.0400 max 12.0400 avg 12.0400
+  power    0x5000003  Total Power                                            1.7500 W      min 1.6250 max 2.0000 avg 1.7917
+  other    0x8000000  PMIC High Temperature                                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  PMIC Over Voltage                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  PMIC Under Voltage                                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== DDR5 DIMM [#10]: Kingston KF556R28-32 (P0 CHANNEL G/DIMM 0)  [0xf3000005/10]
+  temp     0x1000000  SPD Hub Temperature                                   46.5000 °C     min 46.2500 max 46.5000 avg 46.3750
+  temp     0x1000001  TS0 Temperature                                       42.0000 °C     min 42.0000 max 42.0000 avg 42.0000
+  temp     0x1000002  TS1 Temperature                                       42.2500 °C     min 42.2500 max 42.2500 avg 42.2500
+  volt     0x2000001  VDD (SWA) Voltage                                      1.3500 V      min 1.3500 max 1.3650 avg 1.3513
+  volt     0x2000003  VDDQ (SWB) Voltage                                     1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000005  VPP (SWC) Voltage                                      1.8150 V      min 1.8150 max 1.8150 avg 1.8150
+  volt     0x2000007  1.8V VOUT Voltage                                      1.8000 V      min 1.8000 max 1.8000 avg 1.8000
+  volt     0x2000009  1.0V VOUT Voltage                                      1.0050 V      min 1.0050 max 1.0050 avg 1.0050
+  volt     0x200000b  VIN Voltage                                           12.0400 V      min 12.0400 max 12.0400 avg 12.0400
+  power    0x5000003  Total Power                                            1.6250 W      min 1.6250 max 2.0000 avg 1.8125
+  other    0x8000000  PMIC High Temperature                                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  PMIC Over Voltage                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  PMIC Under Voltage                                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== DDR5 DIMM [#16]: Kingston KF556R28-32 (P0 CHANNEL A/DIMM 0)  [0xf3000005/16]
+  temp     0x1000000  SPD Hub Temperature                                   46.5000 °C     min 46.5000 max 46.5000 avg 46.5000
+  temp     0x1000001  TS0 Temperature                                       42.0000 °C     min 42.0000 max 42.0000 avg 42.0000
+  temp     0x1000002  TS1 Temperature                                       42.5000 °C     min 42.2500 max 42.5000 avg 42.4583
+  volt     0x2000001  VDD (SWA) Voltage                                      1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000003  VDDQ (SWB) Voltage                                     1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000005  VPP (SWC) Voltage                                      1.8150 V      min 1.8000 max 1.8150 avg 1.8137
+  volt     0x2000007  1.8V VOUT Voltage                                      1.8000 V      min 1.8000 max 1.8000 avg 1.8000
+  volt     0x2000009  1.0V VOUT Voltage                                      1.0050 V      min 1.0050 max 1.0050 avg 1.0050
+  volt     0x200000b  VIN Voltage                                           12.0400 V      min 11.9700 max 12.0400 avg 12.0283
+  power    0x5000003  Total Power                                            1.6250 W      min 1.6250 max 1.8750 avg 1.7708
+  other    0x8000000  PMIC High Temperature                                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  PMIC Over Voltage                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  PMIC Under Voltage                                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== DDR5 DIMM [#18]: Kingston KF556R28-32 (P0 CHANNEL C/DIMM 0)  [0xf3000005/18]
+  temp     0x1000000  SPD Hub Temperature                                   43.7500 °C     min 43.7500 max 43.7500 avg 43.7500
+  temp     0x1000001  TS0 Temperature                                       41.0000 °C     min 41.0000 max 41.0000 avg 41.0000
+  temp     0x1000002  TS1 Temperature                                       40.2500 °C     min 40.2500 max 40.2500 avg 40.2500
+  volt     0x2000001  VDD (SWA) Voltage                                      1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000003  VDDQ (SWB) Voltage                                     1.3500 V      min 1.3500 max 1.3500 avg 1.3500
+  volt     0x2000005  VPP (SWC) Voltage                                      1.8150 V      min 1.8150 max 1.8150 avg 1.8150
+  volt     0x2000007  1.8V VOUT Voltage                                      1.8000 V      min 1.8000 max 1.8000 avg 1.8000
+  volt     0x2000009  1.0V VOUT Voltage                                      1.0050 V      min 1.0050 max 1.0050 avg 1.0050
+  volt     0x200000b  VIN Voltage                                           12.0400 V      min 11.9700 max 12.0400 avg 12.0283
+  power    0x5000003  Total Power                                            1.8750 W      min 1.6250 max 1.8750 avg 1.8021
+  other    0x8000000  PMIC High Temperature                                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  PMIC Over Voltage                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  PMIC Under Voltage                                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== USB Type-C PD (Realtek RTS545x)  [0xf0005452/0]
+  volt     0x2000000  PortA Voltage                                          0.0000 V      min 0.0000 max 0.0000 avg 0.0000
+  current  0x4000000  PortA Current                                          0.0000 A      min 0.0000 max 0.0000 avg 0.0000
+  power    0x5000000  PortA Power                                            0.0000 W      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000000  PortA PD Charging                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  PortA QC Charging                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== S.M.A.R.T.: CT4000P3SSD8 (serial redacted)  [0xf0000100/0]
+  temp     0x1000000  Drive Temperature                                     30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000001  Drive Temperature 2                                   30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000002  Drive Temperature 3                                   33.0000 °C     min 33.0000 max 35.0000 avg 34.8333
+  usage    0x7000000  Drive Remaining Life                                  91.0000 %      min 91.0000 max 91.0000 avg 91.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  11505.0000 GB     min 11505.0000 max 11505.0000 avg 11505.0000
+  other    0x8000004  Total Host Reads                                   31699.0000 GB     min 31699.0000 max 31699.0000 avg 31699.0000
+
+== S.M.A.R.T.: CT4000P3SSD8 (serial redacted) [G:]  [0xf0000100/1]
+  temp     0x1000000  Drive Temperature                                     31.0000 °C     min 31.0000 max 31.0000 avg 31.0000
+  temp     0x1000001  Drive Temperature 2                                   31.0000 °C     min 31.0000 max 31.0000 avg 31.0000
+  temp     0x1000002  Drive Temperature 3                                   45.0000 °C     min 44.0000 max 45.0000 avg 44.8333
+  usage    0x7000000  Drive Remaining Life                                  89.0000 %      min 89.0000 max 89.0000 avg 89.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  20663.0000 GB     min 20663.0000 max 20663.0000 avg 20663.0000
+  other    0x8000004  Total Host Reads                                   72862.0000 GB     min 72862.0000 max 72862.0000 avg 72862.0000
+
+== S.M.A.R.T.: CT4000P3SSD8 (serial redacted) [H:]  [0xf0000100/2]
+  temp     0x1000000  Drive Temperature                                     30.0000 °C     min 28.0000 max 30.0000 avg 29.5000
+  temp     0x1000001  Drive Temperature 2                                   30.0000 °C     min 28.0000 max 30.0000 avg 29.5000
+  temp     0x1000002  Drive Temperature 3                                   42.0000 °C     min 34.0000 max 42.0000 avg 37.2500
+  usage    0x7000000  Drive Remaining Life                                  93.0000 %      min 93.0000 max 93.0000 avg 93.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  17046.0000 GB     min 17046.0000 max 17046.0000 avg 17046.0000
+  other    0x8000004  Total Host Reads                                   72996.0000 GB     min 72996.0000 max 72996.0000 avg 72996.0000
+
+== S.M.A.R.T.: SOLIDIGM SSDPFKNU020TZ (serial redacted) [F:]  [0xf0000100/3]
+  temp     0x1000000  Drive Temperature                                     26.0000 °C     min 25.0000 max 26.0000 avg 25.6667
+  usage    0x7000000  Drive Remaining Life                                 100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                   6344.0000 GB     min 6344.0000 max 6344.0000 avg 6344.0000
+  other    0x8000004  Total Host Reads                                   15309.0000 GB     min 15309.0000 max 15309.0000 avg 15309.0000
+
+== S.M.A.R.T.: WD_BLACK SN850X 8000GB (serial redacted) [E:]  [0xf0000100/4]
+  temp     0x1000000  Drive Temperature                                     34.0000 °C     min 34.0000 max 34.0000 avg 34.0000
+  temp     0x1000001  Drive Temperature 2                                   39.0000 °C     min 39.0000 max 41.0000 avg 39.9167
+  temp     0x1000002  Drive Temperature 3                                   34.0000 °C     min 34.0000 max 34.0000 avg 34.0000
+  temp     0x1000003  Drive Temperature 4                                   34.0000 °C     min 33.0000 max 34.0000 avg 33.3333
+  usage    0x7000000  Drive Remaining Life                                 100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  20325.0000 GB     min 20325.0000 max 20325.0000 avg 20325.0000
+  other    0x8000004  Total Host Reads                                   41502.0000 GB     min 41502.0000 max 41502.0000 avg 41502.0000
+
+== S.M.A.R.T.: WD_BLACK SN850X 4000GB (serial redacted) [C:]  [0xf0000100/5]
+  temp     0x1000000  Drive Temperature                                     36.0000 °C     min 36.0000 max 37.0000 avg 36.9167
+  usage    0x7000000  Drive Remaining Life                                 100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  72524.0000 GB     min 72524.0000 max 72524.0000 avg 72524.0000
+  other    0x8000004  Total Host Reads                                   35731.0000 GB     min 35731.0000 max 35731.0000 avg 35731.0000
+
+== S.M.A.R.T.: WD_BLACK SN850X 8000GB (serial redacted) [D:]  [0xf0000100/6]
+  temp     0x1000000  Drive Temperature                                     39.0000 °C     min 37.0000 max 43.0000 avg 40.1667
+  temp     0x1000001  Drive Temperature 2                                   48.0000 °C     min 46.0000 max 53.0000 avg 49.7500
+  temp     0x1000002  Drive Temperature 3                                   35.0000 °C     min 35.0000 max 35.0000 avg 35.0000
+  temp     0x1000003  Drive Temperature 4                                   35.0000 °C     min 34.0000 max 35.0000 avg 34.8333
+  usage    0x7000000  Drive Remaining Life                                 100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  usage    0x7000001  Drive Available Spare                                100.0000 %      min 100.0000 max 100.0000 avg 100.0000
+  other    0x8000000  Drive Failure                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Drive Warning                                          0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Total Host Writes                                  13812.0000 GB     min 13812.0000 max 13812.0000 avg 13812.0000
+  other    0x8000004  Total Host Reads                                   32491.0000 GB     min 32491.0000 max 32491.0000 avg 32491.0000
+
+== Drive: CT4000P3SSD8 (serial redacted)  [0xf0000101/0]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Read Total                                             2.0000 MB     min 2.0000 max 2.0000 avg 2.0000
+  other    0x8000003  Write Total                                            0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+
+== Drive: CT4000P3SSD8 (serial redacted) [G:]  [0xf0000101/1]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 0.1150 avg 0.0096
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 0.1150 avg 0.0096
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0030 avg 0.0003
+  other    0x8000002  Read Total                                             0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000003  Write Total                                            0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+
+== Drive: CT4000P3SSD8 (serial redacted) [H:]  [0xf0000101/2]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 3.0790 avg 0.2566
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 3.0790 avg 0.2566
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0030 avg 0.0003
+  other    0x8000002  Read Total                                             0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000003  Write Total                                            0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+
+== Drive: SOLIDIGM SSDPFKNU020TZ (serial redacted) [F:]  [0xf0000101/3]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 3.7810 avg 0.6161
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 3.7810 avg 0.6161
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0630 avg 0.0176
+  other    0x8000002  Read Total                                           444.0000 MB     min 444.0000 max 444.0000 avg 444.0000
+  other    0x8000003  Write Total                                          204.0000 MB     min 204.0000 max 204.0000 avg 204.0000
+
+== Drive: WD_BLACK SN850X 8000GB (serial redacted) [E:]  [0xf0000101/4]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 3.4950 avg 1.2691
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 3.4950 avg 1.2691
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0890 avg 0.0241
+  other    0x8000002  Read Total                                          1285.0000 MB     min 1285.0000 max 1285.0000 avg 1285.0000
+  other    0x8000003  Write Total                                           92.0000 MB     min 91.0000 max 92.0000 avg 91.8333
+
+== Drive: WD_BLACK SN850X 4000GB (serial redacted) [C:]  [0xf0000101/5]
+  usage    0x7000000  Read Activity                                          1.5800 %      min 0.0000 max 1.7010 avg 0.4577
+  usage    0x7000001  Write Activity                                         6.3210 %      min 0.0520 max 10.0170 avg 5.8136
+  usage    0x7000002  Total Activity                                         7.9020 %      min 0.0770 max 10.4260 avg 6.2718
+  other    0x8000000  Read Rate                                              0.0020 MB/s   min 0.0000 max 1.0610 avg 0.1210
+  other    0x8000001  Write Rate                                             0.0980 MB/s   min 0.0200 max 9.7120 avg 0.9220
+  other    0x8000002  Read Total                                         20020.0000 MB     min 20019.0000 max 20020.0000 avg 20019.0833
+  other    0x8000003  Write Total                                         8188.0000 MB     min 8186.0000 max 8188.0000 avg 8186.5833
+
+== Drive: WD_BLACK SN850X 8000GB (serial redacted) [D:]  [0xf0000101/6]
+  usage    0x7000000  Read Activity                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  Write Activity                                         0.0000 %      min 0.0000 max 4.9800 avg 0.4319
+  usage    0x7000002  Total Activity                                         0.0000 %      min 0.0000 max 4.9800 avg 0.4319
+  other    0x8000000  Read Rate                                              0.0000 MB/s   min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Write Rate                                             0.0000 MB/s   min 0.0000 max 0.0160 avg 0.0023
+  other    0x8000002  Read Total                                             0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000003  Write Total                                            0.0000 MB     min 0.0000 max 0.0000 avg 0.0000
+
+== dGPU [#0]: NVIDIA GeForce RTX 5060 Ti: PNY GeForce RTX 5060 Ti Dual Fan OC  [0xe0002000/0]
+  temp     0x1000000  GPU Temperature  (user: GPU Temp 5060Ti)              46.4609 °C     min 46.2656 max 46.8438 avg 46.6634
+  temp     0x1000004  GPU Memory Junction Temperature                       54.0000 °C     min 54.0000 max 54.0000 avg 54.0000
+  temp     0x1000005  GPU Hot Spot Temperature                              52.2500 °C     min 51.1562 max 51.8750 avg 51.4062
+  temp     0x1000010  GPU Memory A0 Temperature                             54.0000 °C     min 54.0000 max 54.0000 avg 54.0000
+  temp     0x1000011  GPU Memory A0 Temperature Back                        52.0000 °C     min 52.0000 max 52.0000 avg 52.0000
+  temp     0x1000012  GPU Memory A1 Temperature                             54.0000 °C     min 52.0000 max 54.0000 avg 53.8333
+  temp     0x1000013  GPU Memory A1 Temperature Back                        52.0000 °C     min 52.0000 max 52.0000 avg 52.0000
+  temp     0x1000014  GPU Memory B0 Temperature                             52.0000 °C     min 52.0000 max 52.0000 avg 52.0000
+  temp     0x1000015  GPU Memory B0 Temperature Back                        50.0000 °C     min 50.0000 max 52.0000 avg 50.6667
+  temp     0x1000016  GPU Memory B1 Temperature                             54.0000 °C     min 52.0000 max 54.0000 avg 53.5000
+  temp     0x1000017  GPU Memory B1 Temperature Back                        52.0000 °C     min 52.0000 max 52.0000 avg 52.0000
+  volt     0x2000000  GPU Core Voltage                                       0.8650 V      min 0.8500 max 0.8800 avg 0.8600
+  volt     0x2000002  GPU PCIe +12V Input Voltage                           12.0860 V      min 12.0821 max 12.0924 avg 12.0864
+  volt     0x2000003  GPU 12VHPWR Voltage                                   12.0477 V      min 12.0423 max 12.0536 avg 12.0469
+  fan      0x3000000  GPU Fan1                                            1015.0000 RPM    min 1015.0000 max 1021.0000 avg 1017.6667
+  power    0x5000000  GPU Power  (user: GPU Pwr 5060Ti)                     35.3920 W      min 34.3070 max 35.7680 avg 34.9253
+  power    0x5000002  GPU PCIe +12V Input Power                             13.5847 W      min 13.8582 max 14.1138 avg 13.9980
+  power    0x5000003  GPU 12VHPWR Power                                     19.3366 W      min 19.9741 max 21.6093 avg 20.8019
+  power    0x5000004  GPU Unknown Rail (D6) Power (sum)                     20.3796 W      min 20.9662 max 22.0671 avg 21.5491
+  power    0x5000005  GPU Core (NVVDD) Input Power (sum)                    12.6349 W      min 13.0015 max 13.6835 avg 13.3629
+  power    0x5000006  GPU Unknown Rail (D4) Power (sum)                      7.7450 W      min 7.9650 max 8.3830 avg 8.1860
+  power    0x5000008  GPU Misc0 Input Power (sum)                           12.4900 W      min 12.8450 max 13.5270 avg 13.2024
+  power    0x500001b  GPU Core (NVVDD) Output Power                         12.3469 W      min 16.8653 max 23.1763 avg 20.7329
+  power    0x500001c  GPU Core (NVVDD) Output Power                          9.9641 W      min 9.1541 max 11.6337 avg 10.0952
+  power    0x5000040  GPU Power Limit (rated)                              180.0000 W      min 180.0000 max 180.0000 avg 180.0000
+  power    0x5000041  GPU Power Limit (max)                                198.0000 W      min 198.0000 max 198.0000 avg 198.0000
+  clock    0x6000000  GPU Clock                                           2220.0000 MHz    min 2145.0000 max 2317.0000 avg 2222.1667
+  clock    0x6000004  GPU Memory Clock                                    1750.1250 MHz    min 875.1250 max 1750.1250 avg 1531.3750
+  clock    0x6000005  GPU Video Clock                                     1875.0000 MHz    min 1792.0000 max 1942.0000 avg 1863.5000
+  clock    0x6000006  GPU Effective Clock                                 2250.8040 MHz    min 2148.5420 max 2298.8760 avg 2194.9005
+  clock    0x6000007  GPU Crossbar Clock                                  2040.0000 MHz    min 1965.0000 max 2130.0000 avg 2041.0833
+  clock    0x6000008  GPU System Domain Clock                             1965.0000 MHz    min 1882.0000 max 2040.0000 avg 1957.8333
+  clock    0x6000010  GPU Clock (measured)                                1848.2700 MHz    min 1627.5080 max 2935.1750 avg 2409.8914
+  clock    0x6000012  GPU Memory Clock (measured)                         1748.3631 MHz    min 874.3431 max 1748.7821 avg 1602.8097
+  clock    0x6000014  GPU Crossbar Clock (measured)                       2176.0980 MHz    min 1581.4020 max 2599.1250 avg 2123.5731
+  usage    0x7000000  GPU Core Load                                         22.0000 %      min 24.0000 max 27.0000 avg 24.6667
+  usage    0x7000001  GPU Memory Controller Load                             6.0000 %      min 5.0000 max 6.0000 avg 5.9167
+  usage    0x7000002  GPU Video Engine Load                                  0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000003  GPU Bus Load                                          42.0000 %      min 43.0000 max 50.0000 avg 47.2500
+  usage    0x7000008  GPU Memory Usage                                      11.3221 %      min 11.3221 max 11.7039 avg 11.5978
+  usage    0x7000009  GPU D3D Usage                                         30.0013 %      min 28.3743 max 32.4634 avg 29.9606
+  usage    0x700000a  GPU Video Decode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000014  GPU Video Encode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001e  GPU Computing (Compute_0) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001f  GPU Computing (Cuda) Usage                             0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000020  GPU Computing (Compute_1) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000028  GPU VR Usage                                           0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000032  GPU Graphics Usage                                     0.0000 %      min 0.0000 max 0.0023 avg 0.0000
+  other    0x8000000  GPU Fan1                                              30.0000 %      min 30.0000 max 30.0000 avg 30.0000
+  other    0x800000a  Performance Limit - Power                              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000b  Performance Limit - Thermal                            0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000c  Performance Limit - Reliability Voltage                1.0000 Yes/No min 1.0000 max 1.0000 avg 100.0000
+  other    0x800000d  Performance Limit - Max Operating Voltage              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000e  Performance Limit - Utilization                        0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000f  Performance Limit - SLI GPUBoost Sync                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000040  Total GPU Power [% of TDP]                            20.8380 %      min 18.7840 max 20.0270 avg 19.3456
+  other    0x8000041  Total GPU Power (normalized) [% of TDP]               21.2290 %      min 18.6950 max 21.8360 avg 20.8733
+  other    0x8000080  Receiver Errors                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000081  Replay Count                                           0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000082  Replay Rollover Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000083  Bad DLLP Count                                         0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000084  Bad TLP Count                                          0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000085  LCRC Error Count                                       0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000086  NAKs Sent Count                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000087  NAKs Received Count                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000088  Recovery Count                                        48.0000        min 48.0000 max 48.0000 avg 48.0000
+  other    0x8000089  Correctable Error Count                                0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008a  Non-Fatal Error Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008b  Fatal Error Count                                      0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008c  Unsupported Request Count                              0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008d  PCIe Lane 0 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008e  PCIe Lane 1 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008f  PCIe Lane 2 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000090  PCIe Lane 3 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000091  PCIe Lane 4 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000092  PCIe Lane 5 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000093  PCIe Lane 6 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000094  PCIe Lane 7 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000095  PCIe Lane 8 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000096  PCIe Lane 9 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000097  PCIe Lane 10 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000098  PCIe Lane 11 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000099  PCIe Lane 12 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009a  PCIe Lane 13 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009b  PCIe Lane 14 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009c  PCIe Lane 15 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x80000fb  GPU Memory Available                               14464.2500 MB     min 14401.9688 max 14464.2500 avg 14419.2891
+  other    0x80000fc  GPU Memory Allocated                                1846.7500 MB     min 1846.7500 max 1909.0312 avg 1891.7109
+  other    0x80000fd  GPU D3D Memory Dedicated                            1598.7383 MB     min 1598.7383 max 1661.1602 avg 1646.9447
+  other    0x80000fe  GPU D3D Memory Dynamic                               151.4180 MB     min 150.9453 max 152.1328 avg 151.6911
+  other    0x80000ff  PCIe Link Speed                                       32.0000 GT/s   min 32.0000 max 32.0000 avg 32.0000
+
+== dGPU [#1]: NVIDIA RTX Pro 6000 Blackwell Workstation Edition  [0xe0002000/20]
+  temp     0x1000000  GPU Temperature  (user: GPU Temp 6000 Slot 1)         31.9961 °C     min 31.9062 max 31.9961 avg 31.9450
+  temp     0x1000004  GPU Memory Junction Temperature                       34.0000 °C     min 34.0000 max 34.0000 avg 34.0000
+  temp     0x1000005  GPU Hot Spot Temperature                              34.0625 °C     min 33.9062 max 34.0625 avg 33.9740
+  temp     0x1000010  GPU Memory A0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000011  GPU Memory A0 Temperature Back                        32.0000 °C     min 30.0000 max 32.0000 avg 31.5000
+  temp     0x1000012  GPU Memory A1 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 29.6667
+  temp     0x1000013  GPU Memory A1 Temperature Back                        34.0000 °C     min 34.0000 max 34.0000 avg 34.0000
+  temp     0x1000014  GPU Memory B0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000015  GPU Memory B0 Temperature Back                        30.0000 °C     min 30.0000 max 32.0000 avg 30.6667
+  temp     0x1000016  GPU Memory B1 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000017  GPU Memory B1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000018  GPU Memory C0 Temperature                             30.0000 °C     min 30.0000 max 32.0000 avg 30.3333
+  temp     0x1000019  GPU Memory C0 Temperature Back                        32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x100001a  GPU Memory C1 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x100001b  GPU Memory C1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100001c  GPU Memory D0 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 29.6667
+  temp     0x100001d  GPU Memory D0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100001e  GPU Memory D1 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100001f  GPU Memory D1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000020  GPU Memory E0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000021  GPU Memory E0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000022  GPU Memory E1 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000023  GPU Memory E1 Temperature Back                        32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000024  GPU Memory F0 Temperature                             30.0000 °C     min 30.0000 max 32.0000 avg 30.1667
+  temp     0x1000025  GPU Memory F0 Temperature Back                        32.0000 °C     min 30.0000 max 32.0000 avg 31.5000
+  temp     0x1000026  GPU Memory F1 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 29.1667
+  temp     0x1000027  GPU Memory F1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000028  GPU Memory G0 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 29.8333
+  temp     0x1000029  GPU Memory G0 Temperature Back                        34.0000 °C     min 34.0000 max 34.0000 avg 34.0000
+  temp     0x100002a  GPU Memory G1 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002b  GPU Memory G1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002c  GPU Memory H0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002d  GPU Memory H0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002e  GPU Memory H1 Temperature                             30.0000 °C     min 30.0000 max 32.0000 avg 31.1667
+  temp     0x100002f  GPU Memory H1 Temperature Back                        32.0000 °C     min 30.0000 max 32.0000 avg 31.5000
+  volt     0x2000000  GPU Core Voltage                                       0.8050 V      min 0.8050 max 0.8050 avg 0.8050
+  volt     0x2000002  GPU PCIe +12V Input Voltage                           11.8989 V      min 11.8842 max 11.8977 avg 11.8907
+  volt     0x2000003  GPU 12VHPWR Voltage                                   11.9408 V      min 11.9356 max 11.9399 avg 11.9380
+  fan      0x3000000  GPU Fan1                                            1200.0000 RPM    min 1199.0000 max 1201.0000 avg 1199.7500
+  fan      0x3000001  GPU Fan2                                            1200.0000 RPM    min 1199.0000 max 1201.0000 avg 1200.0000
+  power    0x5000000  GPU Power  (user: GPU Pwr 6000 Slot 1)                 7.7150 W      min 7.3770 max 8.3300 avg 7.9038
+  power    0x5000002  GPU PCIe +12V Input Power                              4.6168 W      min 4.5423 max 4.6604 avg 4.6096
+  power    0x5000003  GPU 12VHPWR Power                                      4.9077 W      min 3.0794 max 6.3983 avg 4.5643
+  power    0x5000004  GPU Unknown Rail (D6) Power (sum)                      4.9140 W      min 3.0810 max 6.4100 avg 4.5706
+  power    0x5000005  GPU Core (NVVDD) Input Power (sum)                    15.5740 W      min 12.0510 max 19.2740 avg 14.8097
+  power    0x5000008  GPU Misc0 Input Power (sum)                            4.6150 W      min 4.5390 max 4.6560 avg 4.6090
+  power    0x500001b  GPU Core (NVVDD) Output Power                         13.4274 W      min 10.3901 max 16.6168 avg 12.7680
+  power    0x500001c  GPU Core (NVVDD) Output Power                         16.7110 W      min 16.5291 max 16.6482 avg 16.5917
+  power    0x5000040  GPU Power Limit (rated)                              600.0000 W      min 600.0000 max 600.0000 avg 600.0000
+  power    0x5000041  GPU Power Limit (max)                                600.0000 W      min 600.0000 max 600.0000 avg 600.0000
+  clock    0x6000000  GPU Clock                                            180.0000 MHz    min 180.0000 max 180.0000 avg 180.0000
+  clock    0x6000004  GPU Memory Clock                                      50.6250 MHz    min 50.6250 max 50.6250 avg 50.6250
+  clock    0x6000005  GPU Video Clock                                      600.0000 MHz    min 600.0000 max 600.0000 avg 600.0000
+  clock    0x6000006  GPU Effective Clock                                   22.4990 MHz    min 22.4990 max 22.4990 avg 22.4990
+  clock    0x6000007  GPU Crossbar Clock                                   885.0000 MHz    min 877.0000 max 885.0000 avg 882.3333
+  clock    0x6000008  GPU System Domain Clock                              660.0000 MHz    min 660.0000 max 660.0000 avg 660.0000
+  clock    0x6000010  GPU Clock (measured)                                  22.5010 MHz    min 22.4950 max 22.5030 avg 22.5003
+  clock    0x6000012  GPU Memory Clock (measured)                           14.8816 MHz    min 13.7884 max 41.2845 avg 23.0604
+  clock    0x6000014  GPU Crossbar Clock (measured)                        364.9080 MHz    min 266.5230 max 778.9860 avg 471.2458
+  usage    0x7000000  GPU Core Load                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  GPU Memory Controller Load                             0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000002  GPU Video Engine Load                                  0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000003  GPU Bus Load                                          13.0000 %      min 1.0000 max 14.0000 avg 8.7500
+  usage    0x7000008  GPU Memory Usage                                       1.3546 %      min 1.3546 max 1.3546 avg 1.3546
+  usage    0x7000009  GPU D3D Usage                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000a  GPU Video Decode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000b  GPU Video Decode 1 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000c  GPU Video Decode 2 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000d  GPU Video Decode 3 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000014  GPU Video Encode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000015  GPU Video Encode 1 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000016  GPU Video Encode 2 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000017  GPU Video Encode 3 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001e  GPU Computing (Compute_0) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001f  GPU Computing (Cuda) Usage                             0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000020  GPU Computing (Compute_1) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000028  GPU VR Usage                                           0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000032  GPU Graphics Usage                                     0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000000  GPU Fan1                                              30.0000 %      min 30.0000 max 30.0000 avg 30.0000
+  other    0x8000001  GPU Fan2                                              30.0000 %      min 30.0000 max 30.0000 avg 30.0000
+  other    0x800000a  Performance Limit - Power                              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000b  Performance Limit - Thermal                            0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000c  Performance Limit - Reliability Voltage                1.0000 Yes/No min 1.0000 max 1.0000 avg 100.0000
+  other    0x800000d  Performance Limit - Max Operating Voltage              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000e  Performance Limit - Utilization                        0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000f  Performance Limit - SLI GPUBoost Sync                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000040  Total GPU Power [% of TDP]                             1.3030 %      min 1.1320 max 1.8370 avg 1.5397
+  other    0x8000041  Total GPU Power (normalized) [% of TDP]                2.0250 %      min 1.9690 max 2.1890 avg 2.1011
+  other    0x8000080  Receiver Errors                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000081  Replay Count                                           0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000082  Replay Rollover Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000083  Bad DLLP Count                                         0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000084  Bad TLP Count                                          0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000085  LCRC Error Count                                       0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000086  NAKs Sent Count                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000087  NAKs Received Count                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000088  Recovery Count                                        37.0000        min 37.0000 max 37.0000 avg 37.0000
+  other    0x8000089  Correctable Error Count                                0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008a  Non-Fatal Error Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008b  Fatal Error Count                                      0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008c  Unsupported Request Count                              0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008d  PCIe Lane 0 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008e  PCIe Lane 1 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008f  PCIe Lane 2 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000090  PCIe Lane 3 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000091  PCIe Lane 4 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000092  PCIe Lane 5 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000093  PCIe Lane 6 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000094  PCIe Lane 7 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000095  PCIe Lane 8 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000096  PCIe Lane 9 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000097  PCIe Lane 10 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000098  PCIe Lane 11 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000099  PCIe Lane 12 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009a  PCIe Lane 13 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009b  PCIe Lane 14 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009c  PCIe Lane 15 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x80000fb  GPU Memory Available                               96561.0000 MB     min 96561.0000 max 96561.0000 avg 96561.0000
+  other    0x80000fc  GPU Memory Allocated                                1326.0000 MB     min 1326.0000 max 1326.0000 avg 1326.0000
+  other    0x80000fd  GPU D3D Memory Dedicated                               4.2773 MB     min 4.2773 max 4.2773 avg 4.2773
+  other    0x80000fe  GPU D3D Memory Dynamic                                 0.2500 MB     min 0.2500 max 0.2500 avg 0.2500
+  other    0x80000ff  PCIe Link Speed                                        2.5000 GT/s   min 2.5000 max 2.5000 avg 2.5000
+
+== dGPU [#2]: NVIDIA RTX Pro 6000 Blackwell Workstation Edition  [0xe0002000/40]
+  temp     0x1000000  GPU Temperature  (user: GPU Temp 6000 Slot 3)         30.4102 °C     min 30.3477 max 30.4102 avg 30.3919
+  temp     0x1000004  GPU Memory Junction Temperature                       32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000005  GPU Hot Spot Temperature                              33.3125 °C     min 33.2188 max 33.4375 avg 33.3099
+  temp     0x1000010  GPU Memory A0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000011  GPU Memory A0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000012  GPU Memory A1 Temperature                             28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x1000013  GPU Memory A1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000014  GPU Memory B0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000015  GPU Memory B0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000016  GPU Memory B1 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000017  GPU Memory B1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000018  GPU Memory C0 Temperature                             28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x1000019  GPU Memory C0 Temperature Back                        28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100001a  GPU Memory C1 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 28.5000
+  temp     0x100001b  GPU Memory C1 Temperature Back                        30.0000 °C     min 28.0000 max 30.0000 avg 29.8333
+  temp     0x100001c  GPU Memory D0 Temperature                             28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100001d  GPU Memory D0 Temperature Back                        28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100001e  GPU Memory D1 Temperature                             28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100001f  GPU Memory D1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000020  GPU Memory E0 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000021  GPU Memory E0 Temperature Back                        30.0000 °C     min 28.0000 max 30.0000 avg 28.6667
+  temp     0x1000022  GPU Memory E1 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 28.1667
+  temp     0x1000023  GPU Memory E1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000024  GPU Memory F0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000025  GPU Memory F0 Temperature Back                        28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x1000026  GPU Memory F1 Temperature                             30.0000 °C     min 28.0000 max 30.0000 avg 29.8333
+  temp     0x1000027  GPU Memory F1 Temperature Back                        32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x1000028  GPU Memory G0 Temperature                             30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x1000029  GPU Memory G0 Temperature Back                        28.0000 °C     min 28.0000 max 28.0000 avg 28.0000
+  temp     0x100002a  GPU Memory G1 Temperature                             28.0000 °C     min 28.0000 max 30.0000 avg 28.1667
+  temp     0x100002b  GPU Memory G1 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002c  GPU Memory H0 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x100002d  GPU Memory H0 Temperature Back                        30.0000 °C     min 30.0000 max 30.0000 avg 30.0000
+  temp     0x100002e  GPU Memory H1 Temperature                             32.0000 °C     min 32.0000 max 32.0000 avg 32.0000
+  temp     0x100002f  GPU Memory H1 Temperature Back                        28.0000 °C     min 28.0000 max 30.0000 avg 28.3333
+  volt     0x2000000  GPU Core Voltage                                       0.8050 V      min 0.8050 max 0.8050 avg 0.8050
+  volt     0x2000002  GPU PCIe +12V Input Voltage                           12.0099 V      min 12.0053 max 12.0155 avg 12.0109
+  volt     0x2000003  GPU 12VHPWR Voltage                                   12.0441 V      min 12.0428 max 12.0450 avg 12.0441
+  fan      0x3000000  GPU Fan1                                            1200.0000 RPM    min 1200.0000 max 1201.0000 avg 1200.3333
+  fan      0x3000001  GPU Fan2                                            1201.0000 RPM    min 1200.0000 max 1201.0000 avg 1200.2500
+  power    0x5000000  GPU Power  (user: GPU Pwr 6000 Slot 3)                15.7310 W      min 15.8060 max 16.1650 avg 16.0093
+  power    0x5000002  GPU PCIe +12V Input Power                              4.9601 W      min 4.7901 max 5.0203 avg 4.9045
+  power    0x5000003  GPU 12VHPWR Power                                     14.5252 W      min 10.2495 max 11.4895 avg 10.6149
+  power    0x5000004  GPU Unknown Rail (D6) Power (sum)                     14.5290 W      min 10.2590 max 11.4900 avg 10.6210
+  power    0x5000005  GPU Core (NVVDD) Input Power (sum)                    18.2550 W      min 10.0680 max 13.2070 avg 11.0938
+  power    0x5000008  GPU Misc0 Input Power (sum)                            4.9600 W      min 4.7880 max 5.0260 avg 4.9081
+  power    0x500001b  GPU Core (NVVDD) Output Power                         15.7378 W      min 8.6803 max 11.3859 avg 9.5645
+  power    0x500001c  GPU Core (NVVDD) Output Power                         15.8126 W      min 15.7627 max 15.8963 avg 15.8226
+  power    0x5000040  GPU Power Limit (rated)                              600.0000 W      min 600.0000 max 600.0000 avg 600.0000
+  power    0x5000041  GPU Power Limit (max)                                600.0000 W      min 600.0000 max 600.0000 avg 600.0000
+  clock    0x6000000  GPU Clock                                            180.0000 MHz    min 180.0000 max 180.0000 avg 180.0000
+  clock    0x6000004  GPU Memory Clock                                      50.6250 MHz    min 50.6250 max 50.6250 avg 50.6250
+  clock    0x6000005  GPU Video Clock                                      600.0000 MHz    min 592.0000 max 600.0000 avg 599.3333
+  clock    0x6000006  GPU Effective Clock                                   22.4990 MHz    min 22.4990 max 22.4990 avg 22.4990
+  clock    0x6000007  GPU Crossbar Clock                                   885.0000 MHz    min 885.0000 max 885.0000 avg 885.0000
+  clock    0x6000008  GPU System Domain Clock                              660.0000 MHz    min 660.0000 max 660.0000 avg 660.0000
+  clock    0x6000010  GPU Clock (measured)                                  22.4920 MHz    min 22.4950 max 22.5070 avg 22.5011
+  clock    0x6000012  GPU Memory Clock (measured)                           30.1065 MHz    min 15.9621 max 37.6450 avg 29.1132
+  clock    0x6000014  GPU Crossbar Clock (measured)                        579.6240 MHz    min 341.3000 max 742.0160 avg 576.8508
+  usage    0x7000000  GPU Core Load                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000001  GPU Memory Controller Load                             0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000002  GPU Video Engine Load                                  0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000003  GPU Bus Load                                          12.0000 %      min 1.0000 max 14.0000 avg 9.8333
+  usage    0x7000008  GPU Memory Usage                                       1.4076 %      min 1.4076 max 1.4076 avg 1.4076
+  usage    0x7000009  GPU D3D Usage                                          0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000a  GPU Video Decode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000b  GPU Video Decode 1 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000c  GPU Video Decode 2 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700000d  GPU Video Decode 3 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000014  GPU Video Encode 0 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000015  GPU Video Encode 1 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000016  GPU Video Encode 2 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000017  GPU Video Encode 3 Usage                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001e  GPU Computing (Compute_0) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x700001f  GPU Computing (Cuda) Usage                             0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000020  GPU Computing (Compute_1) Usage                        0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000028  GPU VR Usage                                           0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  usage    0x7000032  GPU Graphics Usage                                     0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000000  GPU Fan1                                              30.0000 %      min 30.0000 max 30.0000 avg 30.0000
+  other    0x8000001  GPU Fan2                                              30.0000 %      min 30.0000 max 30.0000 avg 30.0000
+  other    0x800000a  Performance Limit - Power                              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000b  Performance Limit - Thermal                            0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000c  Performance Limit - Reliability Voltage                1.0000 Yes/No min 1.0000 max 1.0000 avg 100.0000
+  other    0x800000d  Performance Limit - Max Operating Voltage              0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000e  Performance Limit - Utilization                        0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000f  Performance Limit - SLI GPUBoost Sync                  0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000040  Total GPU Power [% of TDP]                             2.7600 %      min 2.5610 max 3.4300 avg 2.9431
+  other    0x8000041  Total GPU Power (normalized) [% of TDP]                2.6600 %      min 2.6350 max 2.7910 avg 2.6978
+  other    0x8000080  Receiver Errors                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000081  Replay Count                                           0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000082  Replay Rollover Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000083  Bad DLLP Count                                         0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000084  Bad TLP Count                                          0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000085  LCRC Error Count                                       0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000086  NAKs Sent Count                                        0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000087  NAKs Received Count                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000088  Recovery Count                                        38.0000        min 38.0000 max 38.0000 avg 38.0000
+  other    0x8000089  Correctable Error Count                                0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008a  Non-Fatal Error Count                                  0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008b  Fatal Error Count                                      0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008c  Unsupported Request Count                              0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008d  PCIe Lane 0 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008e  PCIe Lane 1 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800008f  PCIe Lane 2 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000090  PCIe Lane 3 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000091  PCIe Lane 4 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000092  PCIe Lane 5 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000093  PCIe Lane 6 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000094  PCIe Lane 7 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000095  PCIe Lane 8 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000096  PCIe Lane 9 Errors                                     0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000097  PCIe Lane 10 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000098  PCIe Lane 11 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000099  PCIe Lane 12 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009a  PCIe Lane 13 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009b  PCIe Lane 14 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x800009c  PCIe Lane 15 Errors                                    0.0000        min 0.0000 max 0.0000 avg 0.0000
+  other    0x80000fb  GPU Memory Available                               96509.1484 MB     min 96509.1484 max 96509.1484 avg 96509.1484
+  other    0x80000fc  GPU Memory Allocated                                1377.8516 MB     min 1377.8516 max 1377.8516 avg 1377.8516
+  other    0x80000fd  GPU D3D Memory Dedicated                              56.7148 MB     min 56.7148 max 56.7148 avg 56.7148
+  other    0x80000fe  GPU D3D Memory Dynamic                                 0.3555 MB     min 0.3555 max 0.3555 avg 0.3555
+  other    0x80000ff  PCIe Link Speed                                        2.5000 GT/s   min 2.5000 max 2.5000 avg 2.5000
+
+== Battery: -BMS- Smart-Battery  [0xf000ba00/0]
+  volt     0x2000000  Battery Voltage                                        2.2100 V      min 2.2100 max 2.2100 avg 2.2100
+  other    0x8000004  Estimated Remaining Time                               3.0000 mins   min 3.0000 max 3.0000 avg 3.0000
+
+== Thermal Grizzly WireView Pro II  [0xf5000570/1]
+  temp     0x1000000  Temperature In                                        25.5000 °C     min 25.5000 max 25.5000 avg 25.5000
+  temp     0x1000001  Temperature Out                                       26.3000 °C     min 26.3000 max 26.3000 avg 26.3000
+  volt     0x2000000  Pin 1 Voltage                                         12.0250 V      min 12.0250 max 12.0310 avg 12.0305
+  volt     0x2000001  Pin 2 Voltage                                         12.0260 V      min 12.0260 max 12.0320 avg 12.0295
+  volt     0x2000002  Pin 3 Voltage                                         12.0310 V      min 12.0310 max 12.0310 avg 12.0310
+  volt     0x2000003  Pin 4 Voltage                                         12.0230 V      min 12.0230 max 12.0290 avg 12.0265
+  volt     0x2000004  Pin 5 Voltage                                         12.0310 V      min 12.0250 max 12.0310 avg 12.0290
+  volt     0x2000005  Pin 6 Voltage                                         12.0250 V      min 12.0250 max 12.0250 avg 12.0250
+  volt     0x2000006  Average Pin Voltage                                   12.0260 V      min 12.0250 max 12.0290 avg 12.0277
+  current  0x4000000  Pin 1 Current                                          0.2220 A      min 0.2120 max 0.2420 avg 0.2245
+  current  0x4000001  Pin 2 Current                                          0.2470 A      min 0.2470 max 0.2770 avg 0.2595
+  current  0x4000002  Pin 3 Current                                          0.2220 A      min 0.2120 max 0.2320 avg 0.2220
+  current  0x4000003  Pin 4 Current                                          0.2450 A      min 0.2350 max 0.2650 avg 0.2450
+  current  0x4000004  Pin 5 Current                                          0.2770 A      min 0.2560 max 0.2770 avg 0.2702
+  current  0x4000005  Pin 6 Current                                          0.2540 A      min 0.2440 max 0.2640 avg 0.2532
+  current  0x4000006  Total Current                                          1.4670 A      min 1.4060 max 1.5470 avg 1.4743
+  power    0x5000000  Pin 1 Power                                            2.6690 W      min 2.5490 max 2.9110 avg 2.7003
+  power    0x5000001  Pin 2 Power                                            2.9700 W      min 2.9700 max 3.3320 avg 3.1209
+  power    0x5000002  Pin 3 Power                                            2.6700 W      min 2.5500 max 2.7910 avg 2.6704
+  power    0x5000003  Pin 4 Power                                            2.9450 W      min 2.8260 max 3.1870 avg 2.9459
+  power    0x5000004  Pin 5 Power                                            3.3320 W      min 3.0790 max 3.3320 avg 3.2492
+  power    0x5000005  Pin 6 Power                                            3.0540 W      min 2.9340 max 3.1740 avg 3.0440
+  power    0x5000006  Total Power                                           17.6400 W      min 16.9100 max 18.6070 avg 17.7308
+  usage    0x7000000  Fan Duty                                               0.0000 %      min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000000  Temperature Limit Exceeded (Chip)                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000001  Temperature Limit Exceeded (Sensor)                    0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000002  Over Current Limit Exceeded (Total)                    0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000003  Over Current Limit Exceeded (Wire)                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000004  Power Limit Exceeded                                   0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000005  Current Imbalance                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000006  Temperature Limit Exceeded (Chip)                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000007  Temperature Limit Exceeded (Sensor)                    0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000008  Over Current Limit Exceeded (Total)                    0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x8000009  Over Current Limit Exceeded (Wire)                     0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000a  Power Limit Exceeded                                   0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+  other    0x800000b  Current Imbalance                                      0.0000 Yes/No min 0.0000 max 0.0000 avg 0.0000
+
+== PresentMon  [0xf0000ff0/0]
+  other    0x8000000  Framerate Presented (avg)                            100.0598 FPS    min 96.8367 max 100.0094 avg 98.9590
+  other    0x8000001  Framerate Presented (99%)                            143.7910 FPS    min 109.0742 max 458.7143 avg 197.6789
+  other    0x8000002  Framerate Presented (1%)                              75.7874 FPS    min 39.6982 max 86.1738 avg 65.6377
+  other    0x8000003  Framerate Presented (0.1%)                            73.8904 FPS    min 36.4908 max 71.2541 avg 49.8185
+  other    0x8000004  Framerate Presented (1% low)                          73.6855 FPS    min 36.1661 max 70.7859 avg 48.6891
+  other    0x8000005  Framerate Presented (0.1% low)                        73.6855 FPS    min 36.1661 max 70.7859 avg 48.6891
+  other    0x800000a  Framerate Displayed (avg)                             96.8754 FPS    min 94.7920 max 98.9600 avg 97.0607
+  other    0x800000b  Framerate Displayed (99%)                            100.6254 FPS    min 100.1613 max 104.1109 avg 100.9339
+  other    0x800000c  Framerate Displayed (1%)                              48.1367 FPS    min 40.9817 max 94.0201 avg 63.0425
+  other    0x800000d  Framerate Displayed (0.1%)                            34.3859 FPS    min 33.9458 max 52.4592 avg 44.3659
+  other    0x800000e  Framerate Displayed (1% low)                          33.3281 FPS    min 33.2680 max 50.0058 avg 43.1405
+  other    0x800000f  Framerate Displayed (0.1% low)                        33.3281 FPS    min 33.2680 max 50.0058 avg 43.1405
+  other    0x8000014  Frame Time Presented (avg)                             9.9940 ms     min 9.9992 max 10.3266 avg 10.1169
+  other    0x8000015  Frame Time Presented (99%)                            13.5415 ms     min 11.6910 max 25.2449 avg 17.2217
+  other    0x8000016  Frame Time Presented (1%)                              6.4499 ms     min 2.0742 max 8.9249 avg 6.0394
+  other    0x8000017  Frame Time Presented (0.1%)                            3.1022 ms     min 1.6275 max 8.2493 avg 4.4327
+  other    0x8000018  Frame Time Displayed (1% high)                        20.5964 ms     min 14.1276 max 28.9535 avg 23.6451
+  other    0x8000019  Frame Time Displayed (0.1% high)                      20.5964 ms     min 14.1276 max 28.9535 avg 23.6451
+  other    0x800001e  GPU Busy (avg)                                         1.8974 ms     min 1.1859 max 2.0375 avg 1.6542
+  other    0x800001f  GPU Wait (avg)                                         0.4102 ms     min 0.0751 max 2.5689 avg 0.4880
+  other    0x8000028  CPU Busy (avg)                                         9.8350 ms     min 9.8129 max 10.1513 avg 9.9801
+  other    0x8000029  CPU Wait (avg)                                         0.1590 ms     min 0.0442 max 0.3429 avg 0.1367
+  other    0x8000032  Animation Error (avg)                                  0.8007 ms     min 0.5065 max 1.3378 avg 0.9054
+
+== Network: Aquantia/Marvell AQC113 FastLinQ Edge 10Gbit Network Adapter  [0xf000ea00/0]
+  other    0x8000000  Total DL                                             224.8267 MB     min 224.7711 max 224.8186 avg 224.7983
+  other    0x8000001  Total UP                                              24.5113 MB     min 24.0575 max 24.5023 avg 24.4011
+  other    0x8000002  Current DL rate                                        4.1641 KB/s   min 0.5051 max 6.8647 avg 2.2732
+  other    0x8000003  Current UP rate                                        4.6201 KB/s   min 0.2583 max 188.7454 avg 20.7667
+
+== Windows Hardware Errors (WHEA)  [0xf0000ea0/0]
+  other    0x8000000  Total Errors                                           0.0000        min 0.0000 max 0.0000 avg 0.0000

@@ -29,18 +29,21 @@ Raw values read on Linux, 2026-10-22; HWiNFO 8.54 values from `reference/` captu
 | in3 | 3.296 V | 3VCC | 3.296 V | ×1 | exact |
 | in4 | 0.992 V | +12V | 11.904 V | ×12 | exact |
 | in5 | 0.968 V | CPU VDDIO | 1.074 V | ×1.11 | ratio 1.109 |
-| in6 | 0.672 V | CPU Core1 | 0.746–1.252 V | ×1.11 | **unconfirmed** (raw × 1.11 = HWiNFO min) |
+| in6 | 0.672 V | CPU Core1 | 0.746–1.252 V | ×1.11 | **confirmed on Windows** (BIOS pin SIO_VIN4; tracks EC VRM Vcore1 under load) — Linux run pending |
 | in7 | 3.392 V | 3VSB | 3.392 V | ×1 | exact |
 | in8 | 3.296 V | VBAT | 3.296 V | ×1 | exact |
 | in9 | 3.296 V | VTT | 3.296 V | ×1 | exact |
 | in10 | 1.056 V | CHIPSET1 1.0V | 1.056 V | ×1 | exact |
 | in11 | 1.216 V | VDD_11_S3 / MC | 1.350 V | ×1.11 | ratio 1.110 |
 | in12 | 1.048 V | VIN2 | 1.048–1.056 V | ×1 | in range |
-| in13 | 0.824 V | CPU VSOC | 0.915 V | ×1.11 | **unconfirmed** (ratio 1.110, but SoC can move) |
+| in13 | 0.824 V | CPU VSOC | 0.915 V | ×1.11 | **likely** (BIOS pin SIO_VIN3; ×1.11 matches SVI3 VDDCR_SOC; fixed under load — BIOS change to confirm) |
 | in14 | 1.624 V | CHIPSET1 1.8V | 1.803 V | ×1.11 | ratio 1.110 |
-| in15 | 0.784 V | VIN9 | 0.800–0.944 V | ×1 | **unconfirmed** (just below HWiNFO's min) |
+| in15 | 0.784 V | VIN9 | 0.800–0.944 V | ×1 | unlabeled pin (BIOS doesn't name it; flat under load) |
 | in16 | 3.392 V | VHIF | 3.392 V | ×1 | exact |
 | in17 | 0.304 V | — | not shown by HWiNFO | — | hidden |
 
 To confirm: run a CPU load in Linux and check in6 tracks per-CCD core voltage; change SoC voltage in the BIOS and
 check in13 (×1.11) follows; compare VIN9 under the same load in both OSes.
+
+Without HWiNFO, the BIOS image names the rails and their Nuvoton pins, and a load test separates the core rails.
+See [hwinfo-research.md](hwinfo-research.md).
