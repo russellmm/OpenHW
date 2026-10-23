@@ -14,6 +14,39 @@ public sealed class BoardProfileTests
         Group = $"{chip} (hwmon0)", Unit = "V", Details = "libsensors",
     };
 
+    private static HardwareItem Input(string kind, int n, HardwareKind type, string label) => new()
+    {
+        Id = $"hwmon:nct6799:0:{kind}:{n}", Name = label, Kind = type, Backend = "hwmon",
+        Group = "nct6799 (hwmon0)", Unit = type == HardwareKind.Tach ? "RPM" : "°C", Details = "libsensors",
+    };
+
+    [Fact]
+    public void NamesTemperaturesAndFansLikeHwinfoAndHidesOpenPins()
+    {
+        var temps = new[] { (1, "SYSTIN"), (3, "AUXTIN0"), (5, "AUXTIN2"), (9, "Virtual_TEMP"), (12, "PCH_CHIP_TEMP"), (13, "TSI0_TEMP") }
+            .Select(t => Input("temp", t.Item1, HardwareKind.Temperature, t.Item2));
+        var fans = Enumerable.Range(1, 6).Select(n => Input("fan", n, HardwareKind.Tach, $"fan{n}"));
+        var (items, scales) = BoardProfiles.Apply([.. temps, .. fans], Vendor, Board);
+
+        Assert.Equal(["Motherboard", "Temp2", "CPU (Weighted Value)", "TSI0 (CPU)",
+                      "Chassis 1", "CPU", "Chassis 2", "Chassis 3", "Chassis 4", "Water Pump+"], items.Select(i => i.Name));
+        Assert.Empty(scales); // only voltages are scaled
+        var weighted = items.Single(i => i.OriginalName == "Virtual_TEMP");
+        Assert.False(weighted.MappingConfirmed);
+        Assert.Contains("averaged", weighted.Details);
+    }
+
+    [Fact]
+    public void AnInputsAlarmRowIsNotRenamed()
+    {
+        var alarm = new HardwareItem
+        {
+            Id = "hwmon:nct6799:0:temp:1:alarm", Name = "SYSTIN · alarm", Kind = HardwareKind.Status, Backend = "hwmon", Unit = "flag",
+        };
+        var (items, _) = BoardProfiles.Apply([alarm], Vendor, Board);
+        Assert.Equal("SYSTIN · alarm", Assert.Single(items).Name);
+    }
+
     [Fact]
     public void NamesAndScalesKnownBoardRails()
     {

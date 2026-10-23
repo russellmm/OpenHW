@@ -83,5 +83,39 @@ Only **in0 and in6** respond to load; every other input stays within 1–2 ADC s
 - The `asusec` hwmon chip (not `asus_ec_sensors`, which `linux-capture.sh` filters for) reports only temperatures
   and fans — Linux has no second Vcore source to cross-check against.
 
+### Temperatures and fans (2026-10-23)
+
+Matched on behaviour: the same idle → 1 thread → 8 threads → all threads → idle run on Linux (busy loops) as the
+Windows loadgen run, every Nuvoton input logged once a second, plus a 90 s full-load watch for the slow ones.
+
+| Input | Linux label | Linux behaviour | HWiNFO name | HWiNFO behaviour | Status |
+|---|---|---|---|---|---|
+| temp1 | SYSTIN | 38 °C flat | Motherboard | 35 °C flat | confirmed |
+| temp2 | CPUTIN | 39.5 → 48 °C, lags minutes | — | not listed | kept, chip name |
+| temp3 | AUXTIN0 | 37.5 °C, **drops** to 32 °C under load | Temp2 | 44 °C, **drops** to 19–23 °C under load | confirmed (same odd behaviour) |
+| temp4–6 | AUXTIN1–3 | 23 / 14 / −9 °C flat | — | not listed | hidden (open pins) |
+| temp7 | AUXTIN4 | 28 °C flat | Temp9 | 28 °C flat | confirmed |
+| temp8 | PECI/TSI Agent 0 Calibration | 39 → 56 °C, ~11 °C below Tctl | CPU | 39 → 48/60 °C, ~12 °C below | **likely** |
+| temp9 | Virtual_TEMP | 45 → 47 °C over 90 s full load, slow back | CPU (Weighted Value) | 35 °C flat | **likely** (heavily averaged) |
+| temp10 | AUXTIN5 | 97 °C flat | Temp14 | 98 °C flat | confirmed (open pin, shown as HWiNFO does) |
+| temp11–12 | PCH_CHIP_* | 0 °C | — | not listed | hidden |
+| temp13 | TSI0_TEMP | equals k10temp Tctl | TSI0 (CPU) | equals CPU Package | confirmed |
+
+HWiNFO's "CPU Package" read the same as TSI0 throughout; Linux has no separate register for it, and TSI0 and
+CPU (Tctl/Tdie) show the same value.
+
+Fans are in HWiNFO's register order. CPU (fan2: 519 vs 517 RPM) and Water Pump+ (fan6: 3,524 vs 3,479 RPM) aren't
+under software control and match within 2 %; Chassis 1–4 (fan1, fan3–5) run different curves in each OS but keep
+the same order.
+
+| Input | HWiNFO name | Linux RPM | HWiNFO RPM |
+|---|---|---|---|
+| fan1 | Chassis 1 | 1,439 | 1,350 |
+| fan2 | CPU | 519 | 517 |
+| fan3 | Chassis 2 | 574 | 340 |
+| fan4 | Chassis 3 | 667 | 400 |
+| fan5 | Chassis 4 | 2,209 | 1,497 |
+| fan6 | Water Pump+ | 3,524 | 3,479 |
+
 Without HWiNFO, the BIOS image names the rails and their Nuvoton pins, and a load test separates the core rails.
 See [hwinfo-research.md](hwinfo-research.md).
