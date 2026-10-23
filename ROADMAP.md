@@ -96,6 +96,10 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 ## Window and tray
 
 - [x] Choose which sensors get tray icons, with per-icon colours.
+- [x] Tray icon menus start with the sensor's reading, min/max/average and explanation; sensor tooltips explain
+      every reading.
+- [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,
+      or an OpenHW GNOME Shell extension with real hover tooltips. Deferred by the owner.
 - [ ] More settings modelled on `reference/` (units, shown columns, row shading, highlight).
 - [ ] Column resizing; remember window size, expanded groups and hidden sensors.
 - [ ] CSV logging.
