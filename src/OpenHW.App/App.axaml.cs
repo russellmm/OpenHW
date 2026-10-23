@@ -30,6 +30,7 @@ public sealed class App : Application
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
             _window = new MainWindow(_hub);
+            _window.ReadSetChanged += () => ThreadPool.QueueUserWorkItem(_ => Poll());
             _window.Show();
 
             lifetime.Exit += (_, _) =>
@@ -90,7 +91,9 @@ public sealed class App : Application
     private void UpdateTray()
     {
         if (_cpuTempIcon is null) return;
-        var temp = _hub.CpuTemperatureId() is { } id ? _hub.Get(id).Current : null;
+        var id = _hub.CpuTemperatureId();
+        _hub.SetPinned(id is null ? [] : [id]); // the tray keeps its sensor live even inside a collapsed group
+        var temp = id is null ? null : _hub.Get(id).Current;
         _cpuTempIcon.Update(
             TrayIconRenderer.Render(temp is { } t ? Math.Round(t).ToString("0") : "--", TrayBackground),
             _hub.Machine.CpuModel,

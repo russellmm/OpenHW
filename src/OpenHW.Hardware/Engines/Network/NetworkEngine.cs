@@ -16,6 +16,8 @@ public sealed class NetworkEngine(string root = "/sys/class/net") : ISensorEngin
     public string Name => "openhw-net";
     public bool Available => Directory.Exists(root);
 
+    private static readonly string[] Keys = ["rx-rate", "tx-rate", "rx-total", "tx-total"];
+
     public static string GroupKey(string iface) => "net:" + iface;
 
     public IReadOnlyList<HardwareItem> Discover()
@@ -33,11 +35,16 @@ public sealed class NetworkEngine(string root = "/sys/class/net") : ISensorEngin
         }).ToList();
     }
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
         var now = _clock.Elapsed;
         foreach (var iface in _interfaces)
         {
+            if (requested is not null && !Keys.Any(k => requested.Contains(Id(iface, k))))
+            {
+                _previous.Remove(iface); // a resumed interface restarts its rate from a fresh baseline
+                continue;
+            }
             var rx = ReadBytes(iface, "rx_bytes");
             var tx = ReadBytes(iface, "tx_bytes");
             if (rx is null || tx is null) continue;

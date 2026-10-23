@@ -24,10 +24,10 @@ public sealed class HwmonEngine : ISensorEngine
         return _usingLibSensors ? library : _sysfs.Discover().Where(i => i.Kind != HardwareKind.Control).ToList();
     }
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
-        if (_usingLibSensors) _libSensors.ReadInto(readings);
-        else _sysfs.ReadInto(readings);
+        if (_usingLibSensors) _libSensors.ReadInto(readings, requested);
+        else _sysfs.ReadInto(readings, requested);
     }
 
     public void Dispose()

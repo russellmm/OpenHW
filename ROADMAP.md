@@ -31,13 +31,12 @@ hwmon ~74 ms wall / ~4 ms CPU, everything else under 2 ms combined. Two reads do
 NVML PCIe throughput (~42 ms per GPU — NVML samples each counter for 20 ms) and NVMe hwmon temperatures (5–19 ms
 per drive — each read is an admin command to the drive, which can also wake it from a low-power state).
 
-- [ ] **Collapsed groups stop reading.** When a group (or a collapsible row such as Core Clocks) is collapsed,
-      skip its hardware reads on later polls, unless one of its sensors is shown as a tray icon (or, later,
-      drives a fan curve). Biggest savings: collapsed GPU groups (PCIe throughput) and drives (fewer NVMe
-      wake-ups). Engines take a "requested ids" set, as openfan-linux's backends already do (`ReadInto(readings,
-      requested)`). Min/Max/Average pause while collapsed; show that (e.g. dimmed values) rather than mixing
-      in a gap silently. Persist collapsed state so the saving survives restarts.
-- [ ] Read PCIe throughput on a slower cadence than the rest of the GPU rows (or only while visible).
+- [x] **Collapsed groups stop reading.** Rows not on screen (collapsed groups and per-core lists, plus limits and
+      alarm bits the window never shows) are not read; their Min/Max/Average freeze and show dimmed until
+      expanded. Tray sensors stay live. Collapse state persists in `~/.config/openhw/view.json`.
+      Measured per poll: all open 71 ms wall / 32 ms CPU; GPU + drive groups collapsed 3.7 ms / 2 ms.
+- [x] PCIe throughput sampled every 10 s instead of every poll.
+- [ ] Pause reads while the window is hidden (tray only), optionally — HWiNFO keeps statistics running.
 
 ## Window and tray
 

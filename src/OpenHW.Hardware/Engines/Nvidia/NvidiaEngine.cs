@@ -20,11 +20,11 @@ public sealed class NvidiaEngine : ISensorEngine
         return gpus.Concat(_extras.Discover()).ToList();
     }
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
         if (!_nvml.Available) return;
-        _nvml.ReadInto(readings);
-        _extras.ReadInto(readings);
+        _nvml.ReadInto(readings, requested);
+        _extras.ReadInto(readings, requested);
     }
 
     /// <summary>Display name for a GPU extras row, by id suffix after "extra:".</summary>

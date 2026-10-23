@@ -90,7 +90,11 @@ public sealed class SensorRow : Row
     /// <summary>"Highlight changing values": the Current cell turns blue while it differs from the last sample.</summary>
     public IBrush CurrentBackground { get => _currentBackground; private set => Set(ref _currentBackground, value); }
 
-    public void Update(SensorStatistics.Snapshot snapshot)
+    /// <summary>Frozen (collapsed, not read) rows are drawn dimmed, so stale values never pass for live ones.</summary>
+    public double ValueOpacity { get => _valueOpacity; private set => Set(ref _valueOpacity, value); }
+    private double _valueOpacity = 1;
+
+    public void Update(SensorStatistics.Snapshot snapshot, bool paused)
     {
         var unit = View.Unit;
         double? Scaled(double? v) => v is { } x ? SensorPresentation.Scale(Item, x) : null;
@@ -100,7 +104,8 @@ public sealed class SensorRow : Row
         Minimum = SensorPresentation.Format(Scaled(snapshot.Minimum), unit);
         Maximum = SensorPresentation.Format(Scaled(snapshot.Maximum), unit);
         Average = SensorPresentation.FormatAverage(Scaled(snapshot.Average), unit);
-        CurrentBackground = _changed ? Palette.Changed : Brushes.Transparent;
+        CurrentBackground = _changed && !paused ? Palette.Changed : Brushes.Transparent;
+        ValueOpacity = paused ? 0.45 : 1;
     }
 }
 

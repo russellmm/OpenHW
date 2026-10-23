@@ -18,10 +18,10 @@ public sealed class NvmeEngine : ISensorEngine
 
     public IReadOnlyList<HardwareItem> Discover() => _health.Discover().Concat(_activity.Discover()).ToList();
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
-        _health.ReadInto(readings);
-        _activity.ReadInto(readings);
+        _health.ReadInto(readings, requested);
+        _activity.ReadInto(readings, requested);
     }
 
     public void Dispose()

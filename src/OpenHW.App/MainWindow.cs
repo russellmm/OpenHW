@@ -30,8 +30,9 @@ public sealed class MainWindow : Window
     private readonly SensorHub _hub;
     private readonly AvaloniaList<Row> _rows = [];
     private readonly List<GroupRow> _groups = [];
-    private readonly HashSet<string> _collapsedGroups = [];
-    private readonly HashSet<string> _expandedSensors = [];
+    private readonly ViewState _view = ViewState.Load();
+    private readonly HashSet<string> _collapsedGroups;
+    private readonly HashSet<string> _expandedSensors;
     private readonly Stopwatch _elapsed = Stopwatch.StartNew();
     private readonly TextBlock _elapsedText = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
     private readonly ListBox _list;
@@ -39,6 +40,8 @@ public sealed class MainWindow : Window
     public MainWindow(SensorHub hub)
     {
         _hub = hub;
+        _collapsedGroups = _view.CollapsedGroups;
+        _expandedSensors = _view.ExpandedSensors;
         Title = "OpenHW Sensors Status";
         Width = 820;
         Height = 1000;
@@ -89,6 +92,12 @@ public sealed class MainWindow : Window
         RebuildTree();
     }
 
+    /// <summary>
+    /// Raised when rows were shown or hidden, after the hub has been told which sensors to read. Newly shown rows
+    /// hold frozen values until the next poll, so the app polls right away.
+    /// </summary>
+    public event Action? ReadSetChanged;
+
     /// <summary>Re-reads the inventory into groups and rows, keeping each group's and subgroup's expansion.</summary>
     public void RebuildTree()
     {
@@ -116,7 +125,17 @@ public sealed class MainWindow : Window
         _rows.Clear();
         _rows.AddRange(rows);
         Reshade();
+        UpdateReadSet();
         RefreshValues();
+    }
+
+    // Only rows on screen (not inside a collapsed group or per-core list) are read. Sensors the window never
+    // shows — configured limits, alarm bits — are not read either.
+    private void UpdateReadSet()
+    {
+        var shown = _rows.OfType<SensorRow>().Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        _hub.SetPaused(_hub.Inventory.Select(i => i.Id).Where(id => !shown.Contains(id)));
+        ReadSetChanged?.Invoke();
     }
 
     /// <summary>Pushes the hub's latest statistics into every row (collapsed ones too, so expanding is instant).</summary>
@@ -125,8 +144,8 @@ public sealed class MainWindow : Window
         foreach (var group in _groups)
             foreach (var sensor in group.Sensors)
             {
-                sensor.Update(_hub.Get(sensor.Id));
-                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id));
+                sensor.Update(_hub.Get(sensor.Id), _hub.IsPaused(sensor.Id));
+                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id), _hub.IsPaused(child.Id));
             }
         _elapsedText.Text = _elapsed.Elapsed.ToString(@"h\:mm\:ss");
     }
@@ -173,6 +192,8 @@ public sealed class MainWindow : Window
                 return;
         }
         Reshade();
+        UpdateReadSet();
+        _view.Save();
     }
 
     private void SetAllExpanded(bool expanded)
@@ -181,6 +202,7 @@ public sealed class MainWindow : Window
             if (expanded) _collapsedGroups.Remove(group.Group.Key);
             else _collapsedGroups.Add(group.Group.Key);
         RebuildTree();
+        _view.Save();
     }
 
     // HWiNFO restarts the black/grey alternation under every group heading.
@@ -267,6 +289,7 @@ public sealed class MainWindow : Window
             if (withValues)
             {
                 cell.Child = Text(columns[i]);
+                cell.Child.Bind(OpacityProperty, new Binding(nameof(SensorRow.ValueOpacity)));
                 ((TextBlock)cell.Child).HorizontalAlignment = HorizontalAlignment.Right;
                 ((TextBlock)cell.Child).Margin = new Thickness(0, 0, 6, 0);
                 if (i == 0) cell.Bind(Border.BackgroundProperty, new Binding(nameof(SensorRow.CurrentBackground)));

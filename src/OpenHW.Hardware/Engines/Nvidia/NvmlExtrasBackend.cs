@@ -20,6 +20,11 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
 
     private static readonly double[] GtPerSecond = [0, 2.5, 5, 8, 16, 32, 64]; // PCIe generation → GT/s per lane
 
+    /// <summary>How often PCIe throughput is actually sampled.</summary>
+    public static readonly TimeSpan PcieThroughputPeriod = TimeSpan.FromSeconds(10);
+
+    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    private readonly Dictionary<string, (double? Rx, double? Tx, TimeSpan At)> _throughput = [];
     private readonly bool _initialized;
     private readonly Dictionary<string, nint> _handles = [];
     private IReadOnlyList<(string Uuid, string Group)> _gpus = [];
@@ -77,11 +82,14 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
         _ => Limiters.FirstOrDefault(l => l.Key == key).Name,
     };
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
+        var now = _clock.Elapsed;
         foreach (var (uuid, handle) in _handles)
         {
             var prefix = $"nvml:{uuid}:extra:";
+            if (requested is not null && !requested.Any(id => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+
             readings[prefix + "video-clock"] = Native.nvmlDeviceGetClockInfo(handle, Native.ClockVideo, out var mhz) == Native.Success ? mhz : null;
             readings[prefix + "encoder-load"] = Native.nvmlDeviceGetEncoderUtilization(handle, out var enc, out _) == Native.Success ? enc : null;
             readings[prefix + "decoder-load"] = Native.nvmlDeviceGetDecoderUtilization(handle, out var dec, out _) == Native.Success ? dec : null;
@@ -94,9 +102,20 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
             readings[prefix + "pcie-speed"] = Native.nvmlDeviceGetCurrPcieLinkGeneration(handle, out var gen) == Native.Success && gen < GtPerSecond.Length
                 ? GtPerSecond[gen] : null;
             readings[prefix + "pcie-width"] = Native.nvmlDeviceGetCurrPcieLinkWidth(handle, out var width) == Native.Success ? width : null;
-            // NVML samples throughput over its own 20 ms window and reports KB/s.
-            readings[prefix + "pcie-rx"] = Native.nvmlDeviceGetPcieThroughput(handle, 1, out var rx) == Native.Success ? rx / 1000.0 : null;
-            readings[prefix + "pcie-tx"] = Native.nvmlDeviceGetPcieThroughput(handle, 0, out var tx) == Native.Success ? tx / 1000.0 : null;
+            // Throughput is the one slow NVML query (~20 ms per direction, ~42 ms per GPU), so it is refreshed
+            // every PcieThroughputPeriod and the last value is repeated in between.
+            if (requested is null || requested.Contains(prefix + "pcie-rx") || requested.Contains(prefix + "pcie-tx"))
+            {
+                if (!_throughput.TryGetValue(uuid, out var last) || now - last.At >= PcieThroughputPeriod)
+                {
+                    // NVML reports KB/s.
+                    double? rx = Native.nvmlDeviceGetPcieThroughput(handle, 1, out var r) == Native.Success ? r / 1000.0 : null;
+                    double? tx = Native.nvmlDeviceGetPcieThroughput(handle, 0, out var t) == Native.Success ? t / 1000.0 : null;
+                    _throughput[uuid] = last = (rx, tx, now);
+                }
+                readings[prefix + "pcie-rx"] = last.Rx;
+                readings[prefix + "pcie-tx"] = last.Tx;
+            }
         }
     }
 

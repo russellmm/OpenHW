@@ -91,13 +91,25 @@ public sealed partial class SystemEngine : ISensorEngine
         return items;
     }
 
-    public void ReadInto(IDictionary<string, double?> readings)
+    public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
-        ReadMemory(readings);
-        ReadClocks(readings);
-        ReadUsage(readings);
-        ReadPressure(readings);
-        ReadCStates(readings);
+        // Sections are read whole (aggregate rows need every core); a section is skipped only when none of its
+        // rows is requested. Delta-based sections drop their baseline then, so resuming never reports a
+        // long-paused interval as one sample.
+        bool Wants(params string[] prefixes) => requested is null ||
+            requested.Any(id => prefixes.Any(p => id.StartsWith(FullId(p), StringComparison.Ordinal)));
+
+        if (Wants("mem:", "swap:")) ReadMemory(readings);
+        if (Wants("psi:", "loadavg:")) ReadPressure(readings);
+        if (Wants("cpu:clock")) ReadClocks(readings);
+        if (Wants("cpu:usage")) ReadUsage(readings);
+        else _previousTimes.Clear();
+        if (Wants("cstate:")) ReadCStates(readings);
+        else
+        {
+            _previousIdleUs.Clear();
+            _previousWall = null;
+        }
     }
 
     // /proc/pressure/*: share of the last 10 s in which some (or all) runnable tasks were stalled on the resource.

@@ -17,8 +17,15 @@ public interface ISensorEngine : IDisposable
     /// <summary>Re-enumerate sensors. Separate from live sampling; the hub rescans every five seconds.</summary>
     IReadOnlyList<HardwareItem> Discover();
 
-    /// <summary>Read current values for all discovered items into <paramref name="readings"/>, keyed by item Id.</summary>
-    void ReadInto(IDictionary<string, double?> readings);
+    /// <summary>
+    /// Read current values into <paramref name="readings"/>, keyed by item Id. When <paramref name="requested"/> is
+    /// given, only those ids are needed: engines skip whatever hardware access they can for the rest (collapsed
+    /// groups in the window), and may leave unrequested ids out of <paramref name="readings"/>.
+    /// </summary>
+    void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested);
+
+    /// <summary>Read everything.</summary>
+    void ReadInto(IDictionary<string, double?> readings) => ReadInto(readings, null);
 
     /// <summary>Aggregate row id → child row ids shown nested under it (per-core rows); most engines have none.</summary>
     IReadOnlyDictionary<string, IReadOnlyList<string>> Children => new Dictionary<string, IReadOnlyList<string>>();

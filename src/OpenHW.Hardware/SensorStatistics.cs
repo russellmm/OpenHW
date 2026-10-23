@@ -7,9 +7,11 @@ public sealed class SensorStatistics
     private readonly Dictionary<string, Snapshot> _values = new(StringComparer.OrdinalIgnoreCase);
     public Snapshot Get(string id) => _values.GetValueOrDefault(id);
     public void Reset() => _values.Clear();
-    public void Record(IReadOnlyDictionary<string, double?> readings)
+    /// <param name="frozen">Ids that were deliberately not read this poll (collapsed in the window): their
+    /// statistics are kept exactly as they were instead of being cleared or updated.</param>
+    public void Record(IReadOnlyDictionary<string, double?> readings, IReadOnlySet<string>? frozen = null)
     {
-        foreach (var id in _values.Keys.Where(id => !readings.ContainsKey(id)).ToArray()) _values.Remove(id);
+        foreach (var id in _values.Keys.Where(id => !readings.ContainsKey(id) && frozen?.Contains(id) != true).ToArray()) _values.Remove(id);
         foreach (var (id, value) in readings)
         {
             var previous = Get(id);
