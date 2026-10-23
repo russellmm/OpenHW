@@ -42,12 +42,15 @@ public sealed class MainWindow : Window
     private ComboBox? _powerMode;
     private Button? _removeCap;
     private TextBlock? _powerError;
+    private Button? _cpuFrequency;
+    private readonly Action? _showCpuFrequency;
     private bool _showingPower; // RefreshPower is setting the selection: not a user choice
 
-    public MainWindow(SensorHub hub, PowerModeController? power = null)
+    public MainWindow(SensorHub hub, PowerModeController? power = null, Action? showCpuFrequency = null)
     {
         _hub = hub;
         _power = power;
+        _showCpuFrequency = showCpuFrequency;
         _collapsedGroups = _view.CollapsedGroups;
         _expandedSensors = _view.ExpandedSensors;
         Title = "OpenHW Sensors Status";
@@ -361,15 +364,20 @@ public sealed class MainWindow : Window
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _elapsedText, reset, close } };
         if (BuildPowerControls() is { } power) right.Children.Insert(0, power);
-        var bar = new DockPanel { Height = 54, Background = Palette.Window, Margin = new Thickness(4, 0) };
-        DockPanel.SetDock(right, Dock.Right);
-        bar.Children.Add(right);
+        // The version takes whatever width is left and trims, so the power controls never draw over it.
         var version = new TextBlock
         {
-            Text = VersionText(), Foreground = Palette.Footnote, FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0),
+            Text = VersionText(), Foreground = Palette.Footnote, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0),
         };
-        bar.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse, version } });
+        ToolTip.SetTip(version, version.Text);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse } };
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 54, Background = Palette.Window, Margin = new Thickness(4, 0) };
+        Grid.SetColumn(version, 1);
+        Grid.SetColumn(right, 2);
+        bar.Children.Add(left);
+        bar.Children.Add(version);
+        bar.Children.Add(right);
         return bar;
     }
 
@@ -391,17 +399,25 @@ public sealed class MainWindow : Window
             Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1),
             Foreground = new SolidColorBrush(Color.Parse("#F0B429")),
         };
-        _removeCap.Click += (_, _) => _ = _power.RemoveCapAsync();
+        _removeCap.Click += (_, _) => _ = _power.RestoreCapsAsync();
         _powerError = new TextBlock
         {
             IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextWrapping = TextWrapping.Wrap,
         };
+        _cpuFrequency = new Button
+        {
+            IsVisible = _showCpuFrequency is not null && _power.Cores.Count > 0, VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(8, 4), Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge,
+            BorderThickness = new Thickness(1), Foreground = Palette.Text,
+        };
+        ToolTip.SetTip(_cpuFrequency, "CPU frequency caps: all cores or per core.");
+        _cpuFrequency.Click += (_, _) => _showCpuFrequency?.Invoke();
         RefreshPower();
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 8, 0),
-            Children = { _powerError, _removeCap, _powerMode },
+            Children = { _powerError, _removeCap, _cpuFrequency, _powerMode },
         };
     }
 
@@ -427,9 +443,13 @@ public sealed class MainWindow : Window
         }
 
         var cpu = _power.Cpu;
-        _removeCap.IsVisible = cpu.Capped;
-        _removeCap.Content = $"CPU capped at {PowerModeController.Ghz(cpu.LowestMaxKHz)}";
-        ToolTip.SetTip(_removeCap, $"Click to restore the full {PowerModeController.Ghz(cpu.HardwareMaxKHz)} (needs openhw-helper).");
+        var unexpected = _power.UnexpectedCapKHz;
+        _removeCap.IsVisible = unexpected is not null;
+        _removeCap.Content = $"Capped at {PowerModeController.Ghz(unexpected ?? 0)}";
+        ToolTip.SetTip(_removeCap, $"Something other than OpenHW's caps holds the CPU below {PowerModeController.Ghz(cpu.HardwareMaxKHz)}. " +
+                                   "Click to put every core back to its OpenHW cap or the hardware maximum (needs openhw-helper).");
+        var caps = cpu.Policies.Select(p => _power.CapOf(p.Id)).OfType<long>().ToArray();
+        if (_cpuFrequency is not null) _cpuFrequency.Content = caps.Length == 0 ? "CPU frequency" : $"CPU cap {PowerModeController.Ghz(caps.Min())}";
         _powerError.Text = _power.LastError ?? "";
         _powerError.IsVisible = _power.LastError is not null;
     }

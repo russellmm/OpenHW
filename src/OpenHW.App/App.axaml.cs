@@ -18,6 +18,7 @@ public sealed class App : Application
     private readonly SensorHub _hub = new();
     private readonly PowerModeController _power = new(new CpuFrequencyLimits());
     private MainWindow? _window;
+    private CpuFrequencyWindow? _cpuFrequency;
     private StatusNotifierItem? _cpuTempIcon;
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
@@ -32,7 +33,7 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
-            _window = new MainWindow(_hub, _power);
+            _window = new MainWindow(_hub, _power, ShowCpuFrequency);
             _window.Show();
 
             lifetime.Exit += (_, _) =>
@@ -69,11 +70,12 @@ public sealed class App : Application
             TrayMenuItem.Separator,
         };
         menu.AddRange(modes);
-        menu.Add(new TrayMenuItem("", () => _ = _power.RemoveCapAsync())
+        menu.Add(new TrayMenuItem("", () => _ = _power.RestoreCapsAsync())
         {
-            DynamicLabel = () => $"Remove CPU cap ({PowerModeController.Ghz(_power.Cpu.LowestMaxKHz)} → {PowerModeController.Ghz(_power.Cpu.HardwareMaxKHz)})",
-            Visible = () => _power.Cpu.Capped,
+            DynamicLabel = () => $"Remove unexpected CPU cap ({PowerModeController.Ghz(_power.UnexpectedCapKHz ?? 0)})",
+            Visible = () => _power.UnexpectedCapKHz is not null,
         });
+        menu.Add(new TrayMenuItem("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)));
         menu.Add(TrayMenuItem.Separator);
         menu.Add(new TrayMenuItem("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())));
 
@@ -99,10 +101,9 @@ public sealed class App : Application
             // Another tool (or the power menu while OpenHW was closed) can change the ceilings; re-check every 10 s.
             if (++_polls % 5 == 0)
             {
-                var before = _power.Cpu;
+                var before = (_power.UnexpectedCapKHz, _power.Cpu.LowestMaxKHz);
                 _power.Refresh();
-                if (before.Capped != _power.Cpu.Capped || before.LowestMaxKHz != _power.Cpu.LowestMaxKHz)
-                    Dispatcher.UIThread.Post(PowerChanged);
+                if (before != (_power.UnexpectedCapKHz, _power.Cpu.LowestMaxKHz)) Dispatcher.UIThread.Post(PowerChanged);
             }
         }
         finally
@@ -131,7 +132,15 @@ public sealed class App : Application
     private void PowerChanged()
     {
         _window?.RefreshPower();
+        _cpuFrequency?.RefreshFromController();
         _cpuTempIcon?.RefreshMenu();
+    }
+
+    private void ShowCpuFrequency()
+    {
+        _cpuFrequency ??= new CpuFrequencyWindow(_power);
+        _cpuFrequency.Show();
+        _cpuFrequency.Activate();
     }
 
     private void ShowWindow()

@@ -15,10 +15,10 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
       limit plus optional "keep after reboot" boot service. Source: `CpuPowerControl`, `HsmpLimitConfig`,
       `CbsSetupReader` (BIOS default), helper `cpupower` / `cpuboot`.
 - [x] **Power modes** — switch power-profiles-daemon's profile from the footer and tray, and lift the base-clock
-      cap left after power-saver (helper `cpufreqrestore`). See README "Power modes".
-- [ ] **CPU maximum frequency** — cpufreq `scaling_max_freq` ceilings per policy (never boost, governor, EPP
-      or minimum). Source: `CpuFrequencyControl`, `CpuFrequencyMonitor`, helper `cpufreq` / `cpufreqbatch`.
-      Builds on `CpuFrequencyLimits`; a deliberate cap should be remembered so the power-mode fix doesn't undo it.
+      cap left after power-saver (helper `cpufreqrestore`). See README "Power modes and CPU frequency caps".
+- [x] **CPU maximum frequency** — all-core and per-core `scaling_max_freq` caps (helper `cpufreqmax`), with
+      readback and rollback; caps set here survive power-saver. Live until reboot.
+- [ ] **Keep CPU caps after reboot** (optional) — re-apply the saved caps at boot or at OpenHW start.
 - [ ] **Confirm where the 4.0 GHz clamp comes from**: set Power saver, reboot, switch to Performance with OpenHW
       closed, and check `scaling_max_freq`. If it stays at 4.0 GHz, it's the boot sequence — report it upstream.
 - [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect.

@@ -15,14 +15,15 @@ public static class HelperSocket
 }
 
 /// <summary>
-/// One line-based request → one reply. Every command is fixed, every argument is validated against what the
-/// system enumerates, and nothing a client sends becomes a path, device, value or opcode. The one write,
-/// <c>cpufreqrestore</c>, takes no arguments: it puts each cpufreq ceiling back to the hardware maximum.
-/// Replies are "ok …" or "err …".
+/// One line-based request → one reply. Every command is fixed and every argument is validated against what the
+/// system enumerates: nothing a client sends becomes a path, device or opcode. The writes only set cpufreq ceilings
+/// (<c>scaling_max_freq</c>): <c>cpufreqmax &lt;all|id,id,…&gt; &lt;kHz|max&gt;</c>, where every id must be an existing
+/// policy and every kHz value lie within that policy's minimum and hardware maximum, and <c>cpufreqrestore</c>,
+/// which raises every capped policy to its hardware maximum. Replies are "ok …" or "err …".
 /// </summary>
 public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null)
 {
-    public const string Version = "2";
+    public const string Version = "3";
 
     public string HandleLine(string line)
     {
@@ -42,10 +43,25 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
 
+            case "cpufreqmax" when parts.Length == 3:
+            {
+                if (cpufreq is null) return "err cpufreq unavailable";
+                if (parts[1] != "all" && !PolicyList().IsMatch(parts[1])) return "err expected all or policy ids";
+                if (parts[2] != "max" && !KiloHertz().IsMatch(parts[2])) return "err expected kHz or max";
+                long? khz = parts[2] == "max" ? null : long.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
+                var ids = parts[1] == "all"
+                    ? cpufreq.Read().Policies.Select(p => p.Id)
+                    : parts[1].Split(',').Select(t => int.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).Distinct();
+                try { return "ok " + cpufreq.SetMaximum(ids.ToDictionary(id => id, _ => khz)); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+            }
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
 
             default:
                 return "err unknown command";
@@ -53,6 +69,8 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
     }
 
     [GeneratedRegex(@"^nvme[0-9]{1,8}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeController();
+    [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
+    [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();
     [GeneratedRegex(@"^[0-9a-f]{64}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeIdentity();
 }
 
@@ -82,7 +100,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
 public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null) : IAsyncDisposable
 {
-    private const int MaxLineBytes = 256; // longest valid request is ~80 bytes
+    private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
     private readonly Socket _listener = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
     private readonly CancellationTokenSource _cts = new();

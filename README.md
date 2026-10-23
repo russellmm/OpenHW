@@ -53,26 +53,35 @@ NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (bel
 rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
 (effective clocks, per-core power) — they will go through the same helper.
 
-## Power modes
+## Power modes and CPU frequency caps
 
 The window footer and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
-the same setting as GNOME's power menu; no root needed). Power saver turns CPU boost off and the kernel holds every
-cpufreq ceiling (`scaling_max_freq`) at the base clock. Leaving it normally restores the previous ceiling, but if
-the stored ceiling was the base clock (seen on the 9970X after a session that started in power-saver), Performance
-silently stays at 4.0 GHz. So whenever a profile change — from OpenHW, GNOME or `powerprofilesctl` — turns boost
-back on and the CPU is still capped, OpenHW asks the helper to restore each ceiling to `cpuinfo_max_freq`. A cap
-present for any other reason (another tool, or already there when OpenHW started) is shown as **CPU capped at …**
-in the footer and the tray menu, and lifted only when clicked. Code: `src/OpenHW.App/Power/`,
-`src/OpenHW.Hardware/CpuFrequency/`.
+the same setting as GNOME's power menu; no root needed).
+
+**CPU frequency** (footer button, or *CPU Frequency…* in the tray) caps every core at once or each physical core
+separately; a core's cap goes to both of its SMT threads' cpufreq policies (`scaling_max_freq`). The window shows each
+core's CCD, live clock and current cap ("(OpenHW)" for caps set here, "(other)" for caps from another tool). Caps
+are written by the helper, checked against each policy's minimum and hardware maximum, read back, and rolled back
+if the kernel doesn't keep them. They last until reboot; OpenHW remembers the ones it set for the current boot in
+`~/.config/openhw/cpufreq-caps.json`.
+
+Power saver turns CPU boost off and the kernel holds every ceiling at the base clock (4.0 GHz on the 9970X).
+Leaving it normally restores the previous ceiling, but a ceiling stored while boost was off — e.g. a "hardware
+maximum" written in power-saver, which is the base clock then — survives, and Performance silently stays at base
+clock. So whenever a profile change (from OpenHW, GNOME or `powerprofilesctl`) turns boost back on, OpenHW puts
+every core back to its OpenHW cap or, without one, the hardware maximum. A ceiling lower than that found any other
+way is shown as **Capped at …** in the footer and the tray menu, and fixed only when clicked. Code:
+`src/OpenHW.App/Power/`, `src/OpenHW.Hardware/CpuFrequency/`.
 
 ## Root helper
 
 `openhw-helper` (`src/OpenHW.Helper`) is a small daemon for what Linux reserves for root. It listens on
 `/run/openhw/helper.sock` (`0660 root:openhw`) and answers only fixed commands: `ping`,
-`nvmesmart <controller> <identity>` (both arguments must match a drive the system enumerates), and
-`cpufreqrestore` — no arguments: raises every cpufreq policy whose `scaling_max_freq` is below its
-`cpuinfo_max_freq` back to that maximum (see [Power modes](#power-modes)). No client input becomes a path or a
-value. It caps request lines at 256 bytes, reads each drive at most once per 10 s, and runs under a hardened
+`nvmesmart <controller> <identity>` (both arguments must match a drive the system enumerates),
+`cpufreqmax <all|id,id,…> <kHz|max>` (every id must be an existing cpufreq policy and every value lie within that
+policy's minimum and hardware maximum; `max` is each policy's `cpuinfo_max_freq`) and `cpufreqrestore` (every capped
+policy to its hardware maximum) — see [Power modes and CPU frequency caps](#power-modes-and-cpu-frequency-caps). No
+client input becomes a path. It caps request lines at 1024 bytes, reads each drive at most once per 10 s, and runs under a hardened
 systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem except `/sys/devices/system/cpu`, no
 network, NVMe devices only). Re-run the install below after updating OpenHW when the helper changes.
 
@@ -103,5 +112,5 @@ a display — useful for checking changes headlessly.
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
 highlight, expand/collapse all, reset), one CPU-temperature tray icon, power-mode switching that keeps boost
-working, and the root helper for NVMe SMART and the CPU frequency ceiling restore.
+working, all-core and per-core CPU frequency caps, and the root helper for NVMe SMART and cpufreq ceilings.
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

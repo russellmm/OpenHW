@@ -1,35 +1,62 @@
+using System.Globalization;
 using OpenHW.Hardware;
 
 namespace OpenHW.App.Power;
 
 /// <summary>
-/// Power modes that actually take effect. power-profiles-daemon's power-saver turns CPU boost off, and the kernel
-/// then holds every cpufreq ceiling at the base clock. Switching back normally restores the previous ceiling, but
-/// when the stored ceiling is itself the base clock (seen after a session that started in power-saver),
-/// "performance" silently runs at base clock. Whenever a profile change (from OpenHW, GNOME's menu or
-/// powerprofilesctl) turns boost back on and the CPU is still capped, this asks openhw-helper to put the ceilings
-/// back to the hardware maximum. A cap found any other way (another tool, or one already there when OpenHW
-/// started) is only reported, with <see cref="RemoveCapAsync"/> to lift it on request.
+/// Power modes and CPU frequency caps that actually take effect. power-profiles-daemon's power-saver turns CPU boost
+/// off, and the kernel then holds every cpufreq ceiling at the base clock. Switching back normally restores the
+/// previous ceiling, but a ceiling stored while boost was off (the base clock) survives that, and "performance" then
+/// silently runs at base clock. Whenever a profile change (from OpenHW, GNOME's menu or powerprofilesctl) turns boost
+/// back on, this puts every ceiling back to what it should be: the cap set through OpenHW this boot (see
+/// <see cref="CpuCaps"/>), or the hardware maximum. A ceiling lower than that found any other way (another tool, or
+/// already there when OpenHW started) is only reported, with <see cref="RestoreCapsAsync"/> to fix it on request.
 /// </summary>
 public sealed class PowerModeController(CpuFrequencyLimits limits) : IDisposable
 {
     private static readonly TimeSpan BoostSettle = TimeSpan.FromSeconds(2);
 
     private readonly object _gate = new();
+    private readonly CpuCaps _caps = CpuCaps.Load();
     private PowerProfiles? _profiles;
-    private bool _lastBoostOff;
+    private bool _boostWasOff; // boost has been seen off since the last off→on fix: sticky, so no read can race it away
 
     public IReadOnlyList<string> Profiles { get; private set; } = [];
     public string? ActiveProfile { get; private set; }
     public CpuFrequencyState Cpu { get; private set; } = new([]);
+    public IReadOnlyList<CpuCore> Cores { get; } = limits.ReadCores();
 
-    /// <summary>Why the last switch or cap removal failed; null after a success.</summary>
+    /// <summary>Why the last switch or cap change failed; null after a success.</summary>
     public string? LastError { get; private set; }
 
     /// <summary>Any of the above changed. Raised on a background thread.</summary>
     public event Action? Changed;
 
     public bool Available => _profiles is not null && Profiles.Count > 0;
+
+    /// <summary>The cap set through OpenHW for this policy this boot, if any.</summary>
+    public long? CapOf(int policy)
+    {
+        lock (_gate) return _caps.Policies.TryGetValue(policy, out var khz) ? khz : null;
+    }
+
+    /// <summary>
+    /// The lowest ceiling that sits below what it should be, while boost is on — the base-clock clamp, or a cap from
+    /// another tool. Null when every policy is where OpenHW expects it.
+    /// </summary>
+    public long? UnexpectedCapKHz
+    {
+        get
+        {
+            var cpu = Cpu;
+            if (cpu.BoostOff) return null;
+            var low = cpu.Policies.Where(p => p.MaxKHz < Desired(p)).ToArray();
+            return low.Length == 0 ? null : low.Min(p => p.MaxKHz);
+        }
+    }
+
+    // OpenHW's cap for the policy, or the hardware maximum; never above what the hardware offers right now.
+    private long Desired(CpuFrequencyPolicy policy) => Math.Min(CapOf(policy.Id) ?? policy.HardwareMaxKHz, policy.HardwareMaxKHz);
 
     public async Task StartAsync()
     {
@@ -56,7 +83,7 @@ public sealed class PowerModeController(CpuFrequencyLimits limits) : IDisposable
         lock (_gate)
         {
             Cpu = cpu;
-            _lastBoostOff = cpu.BoostOff;
+            _boostWasOff |= cpu.BoostOff;
         }
     }
 
@@ -74,55 +101,100 @@ public sealed class PowerModeController(CpuFrequencyLimits limits) : IDisposable
         }
     }
 
-    public async Task RemoveCapAsync()
+    /// <summary>
+    /// Sets caps through openhw-helper (null = remove the cap: hardware maximum) and remembers them for this boot.
+    /// Returns an error message, or null on success.
+    /// </summary>
+    public async Task<string?> SetCapsAsync(IReadOnlyDictionary<int, long?> targets)
     {
-        await RestoreAsync();
+        var error = await WriteAsync(targets);
+        if (error is null)
+        {
+            lock (_gate)
+            {
+                foreach (var (id, khz) in targets)
+                {
+                    // A cap at the boost maximum is no cap; one stored while boost is off still counts.
+                    var policy = Cpu.Get(id);
+                    if (khz is { } value && (policy is null || value < policy.HardwareMaxKHz || policy.Boost == false)) _caps.Policies[id] = value;
+                    else _caps.Policies.Remove(id);
+                }
+                _caps.Save();
+            }
+        }
+        LastError = error;
+        Refresh();
+        Changed?.Invoke();
+        return error;
+    }
+
+    /// <summary>Puts every ceiling that sits below OpenHW's cap (or the hardware maximum) back there.</summary>
+    public async Task RestoreCapsAsync()
+    {
+        LastError = await WriteAsync(Mismatched(Cpu));
+        Refresh();
         Changed?.Invoke();
     }
 
+    private Dictionary<int, long?> Mismatched(CpuFrequencyState cpu) =>
+        cpu.Policies.Where(p => p.MaxKHz != Desired(p)).ToDictionary(p => p.Id, p => CapOf(p.Id) is { } cap && cap < p.HardwareMaxKHz ? cap : (long?)null);
+
     private async Task OnProfileChangedAsync(string active)
     {
-        bool wasBoostOff;
-        lock (_gate)
-        {
-            ActiveProfile = active;
-            wasBoostOff = _lastBoostOff;
-        }
+        lock (_gate) ActiveProfile = active;
         LastError = null;
         Changed?.Invoke();
 
-        // The daemon flips boost while it applies the profile; give it a moment to land before deciding.
+        // The daemon can announce the new profile before it flips boost: wait until boost matches the profile
+        // (off for power-saver, on otherwise), or for the profile to turn out not to change it.
+        var boostOff = active == "power-saver";
         var cpu = limits.Read();
         var waited = TimeSpan.Zero;
-        while (wasBoostOff && cpu.BoostOff && waited < BoostSettle)
+        while (cpu.BoostOff != boostOff && waited < BoostSettle)
         {
             await Task.Delay(100);
             waited += TimeSpan.FromMilliseconds(100);
             cpu = limits.Read();
         }
+        bool fixNow;
         lock (_gate)
         {
             Cpu = cpu;
-            _lastBoostOff = cpu.BoostOff;
+            _boostWasOff |= cpu.BoostOff;
+            fixNow = _boostWasOff && !cpu.BoostOff;
+            if (fixNow) _boostWasOff = false;
         }
-        if (wasBoostOff && !cpu.BoostOff && cpu.Capped) await RestoreAsync();
+        if (fixNow && Mismatched(cpu) is { Count: > 0 } fix)
+        {
+            LastError = await WriteAsync(fix);
+            Refresh();
+        }
         Changed?.Invoke();
     }
 
-    private async Task RestoreAsync()
+    // One helper command per distinct value; ids are cpufreq policy numbers.
+    private static async Task<string?> WriteAsync(IReadOnlyDictionary<int, long?> targets)
     {
+        if (targets.Count == 0) return null;
         try
         {
-            await Task.Run(() => HelperClient.Request("cpufreqrestore", receiveTimeoutMs: 5000));
-            LastError = null;
+            await Task.Run(() =>
+            {
+                foreach (var group in targets.GroupBy(t => t.Value))
+                {
+                    var ids = string.Join(',', group.Select(t => t.Key.ToString(CultureInfo.InvariantCulture)));
+                    var value = group.Key is { } khz ? khz.ToString(CultureInfo.InvariantCulture) : "max";
+                    HelperClient.Request($"cpufreqmax {ids} {value}", receiveTimeoutMs: 5000);
+                }
+            });
+            return null;
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException)
         {
-            LastError = ex.Message.Contains("unknown command", StringComparison.Ordinal)
-                ? "openhw-helper is too old to lift the CPU frequency cap: run sudo packaging/install-helper.sh"
-                : $"Could not lift the CPU frequency cap ({ex.Message})";
+            return ex.Message.Contains("unknown command", StringComparison.Ordinal)
+                ? "openhw-helper is too old for CPU frequency caps: run sudo packaging/install-helper.sh"
+                : $"CPU frequency cap failed ({ex.Message.Replace("openhw-helper: err ", "")})";
         }
-        Refresh();
     }
 
     public static string Label(string profile) => profile switch
