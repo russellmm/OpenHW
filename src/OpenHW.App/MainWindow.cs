@@ -17,6 +17,9 @@ using OpenHW.App.SensorWindow;
 
 namespace OpenHW.App;
 
+/// <summary>App-level actions the window's menu and footer shortcuts call.</summary>
+public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLimits, Action Exit);
+
 /// <summary>
 /// HWiNFO-style "Sensors Status" window: one virtualized list of group headings, sensor rows and spacers with
 /// Current / Minimum / Maximum / Average columns. The tree is flattened into <see cref="_rows"/>; expanding or
@@ -43,14 +46,17 @@ public sealed class MainWindow : Window
     private Button? _removeCap;
     private TextBlock? _powerError;
     private Button? _cpuFrequency;
-    private readonly Action? _showCpuFrequency;
+    private readonly WindowCommands? _commands;
+    private MenuItem? _powerMenu;
+    private readonly List<MenuItem> _profileItems = [];
+    private MenuItem? _fixCapItem;
     private bool _showingPower; // RefreshPower is setting the selection: not a user choice
 
-    public MainWindow(SensorHub hub, PowerModeController? power = null, Action? showCpuFrequency = null)
+    public MainWindow(SensorHub hub, PowerModeController? power = null, WindowCommands? commands = null)
     {
         _hub = hub;
         _power = power;
-        _showCpuFrequency = showCpuFrequency;
+        _commands = commands;
         _collapsedGroups = _view.CollapsedGroups;
         _expandedSensors = _view.ExpandedSensors;
         Title = "OpenHW Sensors Status";
@@ -94,11 +100,13 @@ public sealed class MainWindow : Window
             }
         };
 
+        var menu = BuildMenu();
         var footer = BuildFooter();
         var header = BuildHeader();
+        DockPanel.SetDock(menu, Dock.Top);
         DockPanel.SetDock(footer, Dock.Bottom);
         DockPanel.SetDock(header, Dock.Top);
-        Content = new DockPanel { Children = { footer, header, _list } };
+        Content = new DockPanel { Children = { menu, footer, header, _list } };
 
         RebuildTree();
     }
@@ -350,16 +358,74 @@ public sealed class MainWindow : Window
         return grid;
     }
 
+    // ── menu ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// File / View / Power / Help. Everything the footer offers is here too; the footer keeps one-click shortcuts.
+    /// New features (settings, more windows) go in a menu first.
+    /// </summary>
+    private Menu BuildMenu()
+    {
+        static MenuItem Item(string header, Action onClick, string? gesture = null)
+        {
+            var item = new MenuItem { Header = header };
+            if (gesture is not null) item.InputGesture = KeyGesture.Parse(gesture);
+            item.Click += (_, _) => onClick();
+            return item;
+        }
+
+        var file = new MenuItem { Header = "_File" };
+        file.Items.Add(Item("_Hide Window", Hide, "Ctrl+W"));
+        if (_commands is { } c)
+        {
+            file.Items.Add(new Separator());
+            file.Items.Add(Item("E_xit OpenHW", c.Exit, "Ctrl+Q"));
+        }
+
+        var view = new MenuItem { Header = "_View" };
+        view.Items.Add(Item("_Expand All", () => SetAllExpanded(true), "Ctrl+E"));
+        view.Items.Add(Item("_Collapse All", () => SetAllExpanded(false), "Ctrl+Shift+E"));
+        view.Items.Add(new Separator());
+        view.Items.Add(Item("_Reset Min/Max/Average", ResetStatistics, "Ctrl+R"));
+
+        var menu = new Menu { Background = Palette.ColumnHeader, Items = { file, view } };
+        if (_power is not null && _commands is { } commands)
+        {
+            _powerMenu = new MenuItem { Header = "_Power" };
+            _fixCapItem = Item("Remove Unexpected CPU Cap", () => _ = _power.RestoreCapsAsync());
+            _fixCapItem.IsVisible = false;
+            _powerMenu.Items.Add(new Separator());
+            _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
+            _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L"));
+            _powerMenu.Items.Add(_fixCapItem);
+            menu.Items.Add(_powerMenu);
+        }
+
+        var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Item("_About OpenHW", () => new AboutWindow().ShowDialog(this)));
+        menu.Items.Add(help);
+
+        // Menu gestures are only labels in Avalonia; the window binds the keys.
+        foreach (var item in menu.Items.OfType<MenuItem>().SelectMany(m => m.Items.OfType<MenuItem>()).Where(i => i.InputGesture is not null))
+        {
+            var target = item;
+            KeyBindings.Add(new KeyBinding { Gesture = target.InputGesture!, Command = new RelayCommand(() => target.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent))) });
+        }
+        return menu;
+    }
+
+    private void ResetStatistics()
+    {
+        _hub.ResetStatistics();
+        _elapsed.Restart();
+        RefreshValues();
+    }
+
     private Control BuildFooter()
     {
         var expand = FooterButton("Expand all", FooterIcons.Expand, () => SetAllExpanded(true));
         var collapse = FooterButton("Collapse all", FooterIcons.Collapse, () => SetAllExpanded(false));
-        var reset = FooterButton("Reset Min/Max/Average", FooterIcons.Clock, () =>
-        {
-            _hub.ResetStatistics();
-            _elapsed.Restart();
-            RefreshValues();
-        });
+        var reset = FooterButton("Reset Min/Max/Average", FooterIcons.Clock, ResetStatistics);
         var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, Hide);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _elapsedText, reset, close } };
@@ -405,19 +471,19 @@ public sealed class MainWindow : Window
             IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextWrapping = TextWrapping.Wrap,
         };
-        _cpuFrequency = new Button
+        var shortcuts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        if (_commands is { } commands)
         {
-            IsVisible = _showCpuFrequency is not null && _power.Cores.Count > 0, VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(8, 4), Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge,
-            BorderThickness = new Thickness(1), Foreground = Palette.Text,
-        };
-        ToolTip.SetTip(_cpuFrequency, "CPU frequency caps: all cores or per core.");
-        _cpuFrequency.Click += (_, _) => _showCpuFrequency?.Invoke();
+            _cpuFrequency = FooterButton("CPU frequency caps (Ctrl+F)", FooterIcons.Gauge, commands.ShowCpuFrequency);
+            _cpuFrequency.IsVisible = _power.Cores.Count > 0;
+            shortcuts.Children.Add(_cpuFrequency);
+            shortcuts.Children.Add(FooterButton("Power limits: CPU and GPUs (Ctrl+L)", FooterIcons.Bolt, commands.ShowPowerLimits));
+        }
         RefreshPower();
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 8, 0),
-            Children = { _powerError, _removeCap, _cpuFrequency, _powerMode },
+            Children = { _powerError, _removeCap, _powerMode, shortcuts },
         };
     }
 
@@ -449,9 +515,31 @@ public sealed class MainWindow : Window
         ToolTip.SetTip(_removeCap, $"Something other than OpenHW's caps holds the CPU below {PowerModeController.Ghz(cpu.HardwareMaxKHz)}. " +
                                    "Click to put every core back to its OpenHW cap or the hardware maximum (needs openhw-helper).");
         var caps = cpu.Policies.Select(p => _power.CapOf(p.Id)).OfType<long>().ToArray();
-        if (_cpuFrequency is not null) _cpuFrequency.Content = caps.Length == 0 ? "CPU frequency" : $"CPU cap {PowerModeController.Ghz(caps.Min())}";
+        if (_cpuFrequency is not null)
+            ToolTip.SetTip(_cpuFrequency, "CPU frequency caps (Ctrl+F)" + (caps.Length == 0 ? "" : $": OpenHW caps set, lowest {PowerModeController.Ghz(caps.Min())}"));
+        if (_fixCapItem is not null) _fixCapItem.IsVisible = unexpected is not null;
+        RefreshPowerMenu();
         _powerError.Text = _power.LastError ?? "";
         _powerError.IsVisible = _power.LastError is not null;
+    }
+
+    // Radio items for the daemon's profiles, ahead of the separator; rebuilt only when the list changes.
+    private void RefreshPowerMenu()
+    {
+        if (_powerMenu is null || _power is null) return;
+        if (_profileItems.Count != _power.Profiles.Count)
+        {
+            foreach (var old in _profileItems) _powerMenu.Items.Remove(old);
+            _profileItems.Clear();
+            foreach (var (profile, i) in _power.Profiles.Select((p, i) => (p, i)))
+            {
+                var item = new MenuItem { Header = PowerModeController.Label(profile), ToggleType = MenuItemToggleType.Radio, GroupName = "power-profile" };
+                item.Click += (_, _) => _ = _power.SetProfileAsync(profile);
+                _profileItems.Add(item);
+                _powerMenu.Items.Insert(i, item);
+            }
+        }
+        foreach (var (item, profile) in _profileItems.Zip(_power.Profiles)) item.IsChecked = profile == _power.ActiveProfile;
     }
 
     /// <summary>"OpenHW 0.1.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>

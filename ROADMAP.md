@@ -9,11 +9,12 @@ the GUI unprivileged.
 Each write is a fixed helper command with strict argument validation, a readback check, and a clear error
 when firmware clamps or rejects the value. Nothing a client sends may become a path or raw register.
 
-- [ ] **GPU power limit** — NVML `nvmlDeviceSetPowerManagementLimit` within the card's min/max constraints;
-      persisted and re-applied at startup. Source: openfan-linux `NvmlBackend.SetPowerLimit`, helper `power`.
-- [ ] **CPU socket power limit (PPT)** — `amd_hsmp_hwmon` `power1_cap` (HSMP SET_SOCKET_POWER_LIMIT), live
-      limit plus optional "keep after reboot" boot service. Source: `CpuPowerControl`, `HsmpLimitConfig`,
-      `CbsSetupReader` (BIOS default), helper `cpupower` / `cpuboot`.
+- [x] **GPU power limit** — NVML, within each card's constraints, read back (helper `gpupower`). Live until reboot.
+- [x] **CPU socket power limit (PPT)** — `amd_hsmp_hwmon` `power1_cap`, 50 W to the SMU's reported max, read back
+      (helper `cpuppt`); shows the active frequency limit and its source. Live until reboot.
+- [ ] **Keep power limits after reboot** (optional) — today `nvidia-power-limit.service` and `hsmp-control-apply`
+      own the boot values; OpenHW could edit their config instead of adding a third boot path.
+- [ ] **Settings window** (File or Tools menu) — tray sensors, colours, start at login, single instance.
 - [x] **Power modes** — switch power-profiles-daemon's profile from the footer and tray, and lift the base-clock
       cap left after power-saver (helper `cpufreqrestore`). See README "Power modes and CPU frequency caps".
 - [x] **CPU maximum frequency** — all-core and per-core `scaling_max_freq` caps (helper `cpufreqmax`), with
@@ -43,8 +44,10 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
 - [ ] Show the chip as HWiNFO names it (Nuvoton **NCT6701D**; the Linux driver reports `nct6799`).
 - [ ] Profiles for more boards (same method; contributions need a HWiNFO capture + raw Linux values).
 - [ ] **CPU "Enhanced" telemetry** (HWiNFO reads AMD SMU/SVI3, not the Super I/O):
-  - AMD HSMP metrics table through `openhw-helper` (root, `/dev/hsmp`): likely FCLK/UCLK, socket power, DRAM
-    bandwidth, per-core C0 residency, limit/throttle status — check what Threadripper 9000 actually reports.
+  - AMD HSMP metrics: the kernel already exposes many without root on the HSMP platform device
+    (`/sys/devices/platform/AMDI0097:00/`): `fclk_input`, `mclk_input`, `cclk_freq_limit_input`, `clk_fmax`/`clk_fmin`,
+    `c0_residency_input`, `ddr_max_bw`/`ddr_utilised_bw_input`, `prochot_status`, `pwr_current_active_freq_limit`
+    and its `_source` (used by Power Limits) — add them as sensors. The full table (`metrics_bin`) is root-only.
   - SVI3 rail telemetry (VDDCR_VDD / VDDCR_SOC voltage, current, power, TDC/EDC, VRM temperatures): research
     `ryzen_smu` (out-of-tree module, PM table) support for Threadripper 9000 before committing to it.
   - Per-core and L3 temperatures, IOD hotspot/average, per-core power, L3 clocks.

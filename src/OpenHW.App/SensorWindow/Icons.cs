@@ -56,4 +56,8 @@ public static class FooterIcons
         (Geometry.Parse("M1,8 A7,7 0 1 1 15,8 A7,7 0 1 1 1,8 Z M8,3.5 V8 H11.5"), null, White);
     public static readonly (Geometry, IBrush?, IBrush?) Close =
         (Geometry.Parse("M2,2 L14,14 M14,2 L2,14"), null, Blue);
+    public static readonly (Geometry, IBrush?, IBrush?) Gauge =
+        (Geometry.Parse("M1.5,12 A6.5,6.5 0 1 1 14.5,12 M8,11 L11.5,5.5"), null, White);
+    public static readonly (Geometry, IBrush?, IBrush?) Bolt =
+        (Geometry.Parse("M9.5,0.5 L2.5,9 H7 L5.5,15.5 L13.5,6.5 H9 Z"), new SolidColorBrush(Color.Parse("#F0B429")), null);
 }

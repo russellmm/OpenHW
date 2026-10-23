@@ -3,9 +3,9 @@ using OpenHW.Hardware;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
 
-// openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, and putting the
-// cpufreq ceilings back to the hardware maximum after power-saver (RAPL and MSR reads later). It serves fixed,
-// validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path or value.
+// openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, cpufreq ceilings,
+// GPU power limits (NVML) and the CPU socket power limit (HSMP); RAPL and MSR reads later. It serves fixed,
+// validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path.
 
 if (Native.geteuid() != 0)
 {
@@ -15,7 +15,8 @@ if (Native.geteuid() != 0)
 
 using var smart = new CachedSmartReader(new NativeNvmeSmartReader(), TimeSpan.FromSeconds(10));
 var socketPath = HelperSocket.Path;
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits());
+using var gpuPower = new GpuPowerLimits();
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits());
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
 Console.WriteLine($"openhw-helper {HelperSession.Version} listening on {socketPath}" +

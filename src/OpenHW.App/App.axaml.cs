@@ -19,6 +19,8 @@ public sealed class App : Application
     private readonly PowerModeController _power = new(new CpuFrequencyLimits());
     private MainWindow? _window;
     private CpuFrequencyWindow? _cpuFrequency;
+    private PowerLimitsWindow? _powerLimits;
+    private readonly GpuPowerLimits _gpuPower = new();
     private StatusNotifierItem? _cpuTempIcon;
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
@@ -33,7 +35,7 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
-            _window = new MainWindow(_hub, _power, ShowCpuFrequency);
+            _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, () => lifetime.Shutdown()));
             _window.Show();
 
             lifetime.Exit += (_, _) =>
@@ -41,6 +43,7 @@ public sealed class App : Application
                 _poll?.Dispose();
                 _cpuTempIcon?.Dispose();
                 _power.Dispose();
+                _gpuPower.Dispose();
                 _hub.Dispose();
             };
 
@@ -76,6 +79,7 @@ public sealed class App : Application
             Visible = () => _power.UnexpectedCapKHz is not null,
         });
         menu.Add(new TrayMenuItem("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)));
+        menu.Add(new TrayMenuItem("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)));
         menu.Add(TrayMenuItem.Separator);
         menu.Add(new TrayMenuItem("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())));
 
@@ -134,6 +138,13 @@ public sealed class App : Application
         _window?.RefreshPower();
         _cpuFrequency?.RefreshFromController();
         _cpuTempIcon?.RefreshMenu();
+    }
+
+    private void ShowPowerLimits()
+    {
+        _powerLimits ??= new PowerLimitsWindow(_gpuPower, new CpuPowerLimits());
+        _powerLimits.Show();
+        _powerLimits.Activate();
     }
 
     private void ShowCpuFrequency()

@@ -98,7 +98,7 @@ public sealed class CpuFrequencyLimits(string cpuRoot = "/sys/devices/system/cpu
                 if (state.Get(id) is not { } policy) throw new ArgumentException($"policy{id} does not exist");
                 var khz = requested ?? policy.HardwareMaxKHz;
                 if (khz < policy.MinKHz || khz > policy.HardwareMaxKHz)
-                    throw new ArgumentException($"policy{id}: {khz / 1000.0:0.###} MHz is outside {policy.MinKHz / 1000.0:0.###}–{policy.HardwareMaxKHz / 1000.0:0.###} MHz");
+                    throw new ArgumentException($"policy{id}: {khz / 1000.0:0.###} MHz is outside {policy.MinKHz / 1000.0:0.###} to {policy.HardwareMaxKHz / 1000.0:0.###} MHz");
                 if (khz != policy.MaxKHz) changes.Add((id, policy.MaxKHz, khz));
             }
 

@@ -16,14 +16,16 @@ public static class HelperSocket
 
 /// <summary>
 /// One line-based request → one reply. Every command is fixed and every argument is validated against what the
-/// system enumerates: nothing a client sends becomes a path, device or opcode. The writes only set cpufreq ceilings
-/// (<c>scaling_max_freq</c>): <c>cpufreqmax &lt;all|id,id,…&gt; &lt;kHz|max&gt;</c>, where every id must be an existing
-/// policy and every kHz value lie within that policy's minimum and hardware maximum, and <c>cpufreqrestore</c>,
-/// which raises every capped policy to its hardware maximum. Replies are "ok …" or "err …".
+/// system enumerates: nothing a client sends becomes a path, device or opcode. The writes:
+/// <c>cpufreqmax &lt;all|id,id,…&gt; &lt;kHz|max&gt;</c> (cpufreq ceilings; every id an existing policy, every value
+/// within its minimum and hardware maximum), <c>cpufreqrestore</c> (every capped policy to its hardware maximum),
+/// <c>gpupower &lt;uuid&gt; &lt;mW|default&gt;</c> (an enumerated card, within NVML's constraints for it) and
+/// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value). Each is read back.
+/// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null)
 {
-    public const string Version = "3";
+    public const string Version = "4";
 
     public string HandleLine(string line)
     {
@@ -57,6 +59,21 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
             }
 
+            case "gpupower" when parts.Length == 3:
+                if (gpuPower is null) return "err GPU power limits unavailable";
+                if (!GpuUuid().IsMatch(parts[1])) return "err invalid GPU";
+                if (parts[2] != "default" && !MilliWatts().IsMatch(parts[2])) return "err expected mW or default";
+                try { return "ok " + gpuPower.Set(parts[1], parts[2] == "default" ? null : long.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture)); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+
+            case "cpuppt" when parts.Length == 2:
+                if (cpuPower is null) return "err CPU power limit unavailable";
+                if (parts[1] != "boot" && !MilliWatts().IsMatch(parts[1])) return "err expected mW or boot";
+                try { return "ok " + cpuPower.Set(parts[1] == "boot" ? null : long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture)); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -71,6 +88,8 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
     [GeneratedRegex(@"^nvme[0-9]{1,8}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeController();
     [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
     [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();
+    [GeneratedRegex(@"^[1-9][0-9]{3,6}$", RegexOptions.CultureInvariant)] private static partial Regex MilliWatts();
+    [GeneratedRegex(@"^GPU-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.CultureInvariant)] private static partial Regex GpuUuid();
     [GeneratedRegex(@"^[0-9a-f]{64}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeIdentity();
 }
 
@@ -98,7 +117,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -150,7 +169,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower);
         try
         {
             using (client)

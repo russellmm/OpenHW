@@ -53,6 +53,24 @@ NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (bel
 rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
 (effective clocks, per-core power) — they will go through the same helper.
 
+## Menu and shortcuts
+
+The main window has a menu bar — **File** (Hide Window Ctrl+W, Exit Ctrl+Q), **View** (Expand All Ctrl+E,
+Collapse All Ctrl+Shift+E, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
+Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry first; the footer keeps icon shortcuts
+for the common ones (expand/collapse, power mode, CPU frequency, power limits, reset, close), and the tray menu
+mirrors the Power menu.
+
+## Power limits
+
+**Power Limits…** sets the CPU socket power limit (PPT) and each NVIDIA card's power limit, and shows, for the CPU,
+what is limiting the cores right now (HSMP's active frequency limit and its source — e.g. "OPN Max", or "PPT" when
+the power limit is what bites). Ranges come from the hardware: NVML's min/max per card, and for the CPU 50 W up to
+the SMU's reported maximum (`power1_cap_max`); every write is read back, so a value firmware clamps shows as an
+error, not as a limit that isn't real. **Default** puts a card back to NVML's default limit; **Boot value** puts
+the CPU back to `/etc/hsmp-control/ppt_mw`. Limits last until reboot — at boot, `nvidia-power-limit.service` and
+`hsmp-control-apply.service` (when installed) set their configured values again.
+
 ## Power modes and CPU frequency caps
 
 The window footer and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
@@ -80,10 +98,12 @@ way is shown as **Capped at …** in the footer and the tray menu, and fixed onl
 `nvmesmart <controller> <identity>` (both arguments must match a drive the system enumerates),
 `cpufreqmax <all|id,id,…> <kHz|max>` (every id must be an existing cpufreq policy and every value lie within that
 policy's minimum and hardware maximum; `max` is each policy's `cpuinfo_max_freq`) and `cpufreqrestore` (every capped
-policy to its hardware maximum) — see [Power modes and CPU frequency caps](#power-modes-and-cpu-frequency-caps). No
-client input becomes a path. It caps request lines at 1024 bytes, reads each drive at most once per 10 s, and runs under a hardened
-systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem except `/sys/devices/system/cpu`, no
-network, NVMe devices only). Re-run the install below after updating OpenHW when the helper changes.
+policy to its hardware maximum) — see [Power modes and CPU frequency caps](#power-modes-and-cpu-frequency-caps) —
+`gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints) and `cpuppt <mW|boot>` (see
+[Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
+at most once per 10 s, and runs under a hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`; read-only
+filesystem except `/sys/devices/system/cpu` and `/sys/devices/platform` for the HSMP power cap; no network; devices
+limited to NVMe (read) and the NVIDIA control/card nodes NVML needs). Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
 lingering is enabled for your account — `ls /var/lib/systemd/linger` — since the user manager keeps its boot-time
@@ -112,5 +132,6 @@ a display — useful for checking changes headlessly.
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
 highlight, expand/collapse all, reset), one CPU-temperature tray icon, power-mode switching that keeps boost
-working, all-core and per-core CPU frequency caps, and the root helper for NVMe SMART and cpufreq ceilings.
+working, all-core and per-core CPU frequency caps, CPU and GPU power limits, a menu bar, and the root helper for NVMe SMART,
+cpufreq ceilings and power limits.
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

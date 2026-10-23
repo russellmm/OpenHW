@@ -71,6 +71,13 @@ internal static class NvmlNative
     public static extern int nvmlDeviceGetPowerManagementLimitConstraints(nint device, out uint minMW, out uint maxMW);
 
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int nvmlDeviceGetPowerManagementDefaultLimit(nint device, out uint defaultMW);
+
+    /// <summary>Root only: NVML refuses power-limit writes from ordinary users.</summary>
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int nvmlDeviceSetPowerManagementLimit(nint device, uint milliWatts);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int nvmlDeviceGetClockInfo(nint device, uint clockType, out uint MHz);
 
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]

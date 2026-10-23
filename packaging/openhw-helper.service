@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHW privileged helper (NVMe SMART, CPU frequency ceiling restore)
+Description=OpenHW privileged helper (NVMe SMART, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
 
 [Service]
@@ -10,12 +10,14 @@ RuntimeDirectory=openhw
 Restart=on-failure
 RestartSec=2
 
-# It needs the NVMe admin ioctl (CAP_SYS_ADMIN), to hand its socket to the group, and one writable sysfs tree:
-# cpufreq's scaling_max_freq (root-owned 0644, so no DAC override), to undo the base-clock clamp power-saver leaves.
+# It needs the NVMe admin ioctl (CAP_SYS_ADMIN), to hand its socket to the group, and two writable sysfs trees, both
+# root-owned 0644 (so no DAC override): cpufreq's scaling_max_freq, and amd_hsmp_hwmon's power1_cap under the HSMP
+# platform device. GPU power limits go through NVML, which opens the NVIDIA control and card devices.
 CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/sys/devices/system/cpu
+ReadWritePaths=-/sys/devices/platform
 ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true
@@ -25,6 +27,8 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 DevicePolicy=closed
 DeviceAllow=char-nvme r
+DeviceAllow=char-nvidia rw
+DeviceAllow=char-nvidiactl rw
 LockPersonality=true
 RestrictRealtime=true
 
