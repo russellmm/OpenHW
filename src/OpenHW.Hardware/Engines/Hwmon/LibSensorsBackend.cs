@@ -80,7 +80,7 @@ internal sealed class LibSensorsBackend(SourceSettings? sources = null, ILibSens
             Unit = status ? "flag" : channel.Unit, Source = "libsensors", CanSet = false,
             Details = $"libsensors · {channel.Subfeature}" + (limit ? " · configured ceiling, not power draw" : "") +
                 (temperatureLimit ? " · configured alarm threshold, not a measured minimum/maximum or a guaranteed safe operating temperature" : "") +
-                (kind == HardwareKind.Voltage && label == channel.Feature ? " · unverified motherboard rail mapping" : ""),
+                (kind == HardwareKind.Voltage && label == channel.Feature ? BoardProfiles.UnmappedRailNote : ""),
         };
     }
     public void Dispose() => _reader.Dispose();

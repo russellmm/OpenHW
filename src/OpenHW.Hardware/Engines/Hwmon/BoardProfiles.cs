@@ -23,6 +23,9 @@ public sealed record BoardProfile(string VendorPrefix, string Board, string Chip
 /// </summary>
 public static class BoardProfiles
 {
+    /// <summary>What LibSensorsBackend appends to voltages it has no label for.</summary>
+    public const string UnmappedRailNote = " · unverified motherboard rail mapping";
+
     // ×1.11: the divider ASUS uses on the low-voltage VIN pins of this board (four rails agree within 0.1 %).
     private const double LowRailDivider = 1.11;
 
@@ -78,8 +81,9 @@ public static class BoardProfiles
             {
                 Id = item.Id, Kind = item.Kind, Name = rail.Name, Backend = item.Backend, Group = item.Group,
                 MinPercent = item.MinPercent, CanSet = item.CanSet, Unit = item.Unit, Source = item.Source,
-                Details = $"{item.Details} · board profile: in{parts[4]}" + (rail.Scale != 1 ? $" × {rail.Scale}" : "") +
-                          (rail.Confirmed ? "" : " (unconfirmed)"),
+                // The profile replaces libsensors' generic "unverified motherboard rail mapping" note.
+                Details = item.Details.Replace(UnmappedRailNote, ""),
+                OriginalName = item.Name, Scale = rail.Scale, MappingConfirmed = rail.Confirmed,
             });
         }
         return (kept, scales);

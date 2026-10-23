@@ -239,6 +239,7 @@ public sealed class MainWindow : Window
     private Control BuildSensorTemplate()
     {
         var grid = RowGrid();
+        grid.Bind(ToolTip.TipProperty, new Binding(nameof(SensorRow.Tooltip)));
         var chevron = ChevronButton();
         chevron.Bind(IsVisibleProperty, new Binding(nameof(SensorRow.ShowChevron)));
         var icon = new Path { Width = 16, Height = 16, StrokeThickness = 1.5, Stretch = Stretch.None,

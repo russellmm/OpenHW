@@ -57,7 +57,11 @@ public sealed class SensorRow : Row
         Depth = depth;
         Children = view.Children.Count == 0 ? [] : new List<SensorRow>(view.Children.Count);
         (Icon, IconBrush, IconStroke) = Icons.For(view.Kind);
+        Tooltip = SensorPresentation.Tooltip(item);
     }
+
+    /// <summary>Hover text: source, original hardware input name, scaling and mapping confidence.</summary>
+    public string Tooltip { get; }
 
     public SensorView View { get; }
     public HardwareItem Item { get; }

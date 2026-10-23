@@ -178,6 +178,41 @@ public static partial class SensorPresentation
         };
     }
 
+    /// <summary>
+    /// Row tooltip: the sensor's name, a warning first when its mapping is not trustworthy, the hardware input it
+    /// came from (and any scaling), the source details, and its stable id.
+    /// </summary>
+    public static string Tooltip(HardwareItem item)
+    {
+        var name = DisplayName(item);
+        var lines = new List<string> { name };
+        if (!item.MappingConfirmed)
+            lines.Add("Unconfirmed mapping: this name and scale were inferred by comparing readings with HWiNFO " +
+                      "and have not been verified on this board yet.");
+        else if (item.Details.Contains(BoardProfiles.UnmappedRailNote, StringComparison.Ordinal))
+            lines.Add("Unmapped input: no board profile names this pin, so it shows the raw voltage at the chip.");
+        else if (item.OriginalName.Length == 0 && IsSuperIo(item) && item.Kind is HardwareKind.Temperature or HardwareKind.Tach)
+            lines.Add("Unmapped input: this is the chip's own name for the input; which board sensor or fan header " +
+                      "it is has not been mapped yet.");
+
+        if (item.OriginalName.Length > 0)
+            lines.Add($"Board input: {item.OriginalName} on {ChipName(item)}" +
+                      (item.Scale != 1 ? $", raw reading × {item.Scale.ToString("0.###", CultureInfo.InvariantCulture)}" : ""));
+        else if (!string.Equals(item.Name, name, StringComparison.Ordinal))
+            lines.Add($"Reported as: {item.Name}");
+
+        var details = item.Details.Replace(BoardProfiles.UnmappedRailNote, "");
+        if (details.Length > 0) lines.Add(details);
+        else if (item.Source.Length > 0) lines.Add($"Source: {item.Source}");
+        lines.Add($"Sensor ID: {item.Id}");
+        return string.Join("\n", lines);
+    }
+
+    private static bool IsSuperIo(HardwareItem item) =>
+        item.Backend == "hwmon" && (Chip(item).StartsWith("nct", StringComparison.Ordinal) || Chip(item).StartsWith("it8", StringComparison.Ordinal));
+
+    private static string ChipName(HardwareItem item) => item.Group.Length > 0 ? item.Group : Chip(item);
+
     public static string DisplayUnit(HardwareItem item) => item.Unit switch
     {
         "" => item.Kind switch

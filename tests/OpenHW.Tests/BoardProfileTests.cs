@@ -43,7 +43,9 @@ public sealed class BoardProfileTests
         var (items, _) = BoardProfiles.Apply([Volt(13), Volt(17)], Vendor, Board);
         var soc = Assert.Single(items);
         Assert.Equal("CPU VSOC", soc.Name);
-        Assert.Contains("unconfirmed", soc.Details);
+        Assert.Equal("in13", soc.OriginalName);
+        Assert.Equal(1.11, soc.Scale);
+        Assert.False(soc.MappingConfirmed);
     }
 
     [Fact]

@@ -30,6 +30,15 @@ public sealed class HardwareItem
     public string Unit { get; init; } = "";
     public string Source { get; init; } = "";
     public string Details { get; init; } = "";
+
+    /// <summary>The name the hardware reported before a board profile renamed it (e.g. "in6"); empty if not renamed.</summary>
+    public string OriginalName { get; init; } = "";
+
+    /// <summary>Factor applied to raw readings (board divider); 1 when readings are used as reported.</summary>
+    public double Scale { get; init; } = 1;
+
+    /// <summary>False when the name/scale mapping is inferred but not yet proven on real hardware.</summary>
+    public bool MappingConfirmed { get; init; } = true;
 }
 
 public sealed class HardwareReading
