@@ -57,7 +57,7 @@ public static partial class SensorPresentation
                 // openhw rows keep their own (HWiNFO) order; hardware rows sort by kind, then naturally by name.
                 var rows = g.First().Backend == "openhw"
                     ? g.Select(View)
-                    : g.OrderBy(i => Array.IndexOf(KindOrder, i.Kind)).ThenBy(i => NaturalKey(DisplayName(i)), StringComparer.OrdinalIgnoreCase).Select(View);
+                    : g.OrderBy(i => Array.IndexOf(KindOrder, i.Kind)).ThenBy(i => SortKey(i), StringComparer.OrdinalIgnoreCase).Select(View);
                 return (order, title, group: new SensorGroupView(g.Key, title, rows.ToList()));
             })
             .OrderBy(g => g.order).ThenBy(g => g.title, StringComparer.OrdinalIgnoreCase)
@@ -219,6 +219,9 @@ public static partial class SensorPresentation
     private static string TitleCase(string text) => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(text);
 
     private static string PciSortKey(string label) => PciToken().Match(label).Value;
+
+    // hwmon rows keep the chip's register order (as HWiNFO lists them: Vcore, +5V, AVSB…); everything else sorts by name.
+    private static string SortKey(HardwareItem item) => NaturalKey(item.Backend == "hwmon" ? item.Id : DisplayName(item));
 
     // Pads digit runs so "in2" sorts before "in10" and "Core 2" before "Core 10".
     private static string NaturalKey(string text) => DigitRun().Replace(text, m => m.Value.PadLeft(8, '0'));

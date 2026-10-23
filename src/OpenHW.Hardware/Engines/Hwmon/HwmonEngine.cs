@@ -10,6 +10,9 @@ public sealed class HwmonEngine : ISensorEngine
     private readonly LibSensorsBackend _libSensors = new();
     private readonly HwmonBackend _sysfs = new();
     private bool _usingLibSensors;
+    private IReadOnlyDictionary<string, double> _scales = new Dictionary<string, double>();
+    private readonly string _boardVendor = SysFs.ReadText("/sys/class/dmi/id/board_vendor");
+    private readonly string _boardName = SysFs.ReadText("/sys/class/dmi/id/board_name");
 
     public string Name => "hwmon";
     public bool Available => _libSensors.Available || _sysfs.Available;
@@ -21,13 +24,19 @@ public sealed class HwmonEngine : ISensorEngine
     {
         var library = _libSensors.Available ? _libSensors.Discover() : [];
         _usingLibSensors = _libSensors.Available && _libSensors.Error is null;
-        return _usingLibSensors ? library : _sysfs.Discover().Where(i => i.Kind != HardwareKind.Control).ToList();
+        var items = _usingLibSensors ? library : _sysfs.Discover().Where(i => i.Kind != HardwareKind.Control).ToList();
+        // Known boards: name the Super I/O voltage inputs and undo their dividers (BoardProfiles).
+        (items, var scales) = BoardProfiles.Apply(items, _boardVendor, _boardName);
+        _scales = scales;
+        return items;
     }
 
     public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
     {
         if (_usingLibSensors) _libSensors.ReadInto(readings, requested);
         else _sysfs.ReadInto(readings, requested);
+        foreach (var (id, scale) in _scales)
+            if (readings.TryGetValue(id, out var raw) && raw is { } volts) readings[id] = volts * scale;
     }
 
     public void Dispose()

@@ -24,6 +24,36 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [ ] **RAPL** package/core energy → power (`/sys/class/powercap/intel-rapl:*/energy_uj`, root-only).
 - [ ] **MSR** reads: effective clocks (APERF/MPERF), per-core power, package C-states.
 
+## More sensors (HWiNFO parity)
+
+Compared against the HWiNFO captures in `reference/`. Method for board mappings: [docs/board-profiles.md](docs/board-profiles.md).
+
+- [x] **Super I/O voltages named and scaled** on the TRX50-SAGE (in0–in16; in17 hidden) — `BoardProfiles`.
+- [ ] **Confirm the inferred rails**: in6 CPU Core1 (×1.11), in13 CPU VSOC (×1.11), in15 VIN9 (×1) — load test in
+      both OSes, or a BIOS voltage change; then set `Confirmed: true`.
+- [ ] **Name the Super I/O temperatures and fans** on this board. HWiNFO shows Motherboard, Temp2, CPU (Weighted
+      Value), CPU Package, CPU, Temp9, TSI0 (CPU), Temp14 and fans Chassis 1, CPU, Chassis 2–4, Water Pump+.
+      Fan speeds differ between OSes (different fan control), so match by behaviour (stop/start a fan, or
+      watch which header follows a known fan) rather than by value alone.
+- [ ] Show the chip as HWiNFO names it (Nuvoton **NCT6701D**; the Linux driver reports `nct6799`).
+- [ ] Profiles for more boards (same method; contributions need a HWiNFO capture + raw Linux values).
+- [ ] **CPU "Enhanced" telemetry** (HWiNFO reads AMD SMU/SVI3, not the Super I/O):
+  - AMD HSMP metrics table through `openhw-helper` (root, `/dev/hsmp`): likely FCLK/UCLK, socket power, DRAM
+    bandwidth, per-core C0 residency, limit/throttle status — check what Threadripper 9000 actually reports.
+  - SVI3 rail telemetry (VDDCR_VDD / VDDCR_SOC voltage, current, power, TDC/EDC, VRM temperatures): research
+    `ryzen_smu` (out-of-tree module, PM table) support for Threadripper 9000 before committing to it.
+  - Per-core and L3 temperatures, IOD hotspot/average, per-core power, L3 clocks.
+- [ ] **VR controllers**: Infineon XDPE19283B (VR loop temperatures, VIN, VOUT, IOUT, POUT) over PMBus — Linux has
+      PMBus drivers for the XDPE family; devices must be instantiated on the right I²C bus (root, via the helper
+      or a one-time udev/modprobe setup). Read-only.
+- [ ] **DDR5 PMIC rails** per DIMM (VDD/VDDQ/VPP, 1.8V/1.0V VOUT, VIN, total power, PMIC alarms) and the TS0/TS1
+      sensors HWiNFO shows; Linux's `spd5118` driver exposes the hub temperature only. Research a safe read-only
+      path (SMBus reads of the PMIC are root-only and must never write).
+- [ ] **ASUS EC VRM data**: VRM Vcore0/1 VOUT, IOUT, POUT (HWiNFO shows them); Linux's `asus_ec_sensors` exposes
+      only temperatures and fans on this board — needs the EC register map for this model.
+- [ ] **GPU extras** HWiNFO shows: hotspot and memory-junction temperatures, per-rail voltages/powers, effective
+      clocks, PCIe error counters — check NVML field values (`nvmlDeviceGetFieldValues`) on the 615 driver.
+
 ## Resource use
 
 Measured 2026-10-22 on the TRX50 workstation (per 2 s poll, background thread): NVIDIA ~156 ms wall / ~37 ms CPU,
@@ -63,4 +93,3 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 - [ ] CSV logging.
 - [ ] Single instance (a second launch should show the running window, not add a second tray icon).
 - [ ] Optional start at login (GNOME autostart entry), minimised to tray.
-- [ ] Friendly labels for Super I/O inputs (`in0`…`in17`, `AUXTIN*`) on known boards.
