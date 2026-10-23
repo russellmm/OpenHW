@@ -24,6 +24,11 @@ cp -r "$out"/. /usr/local/lib/openhw/
 chown -R root:root /usr/local/lib/openhw
 chmod -R go-w /usr/local/lib/openhw
 
+# Boot-time GPU limits go in OpenHW's own drop-in; the helper's sandbox can write there but can't create the directory.
+if [[ -f /etc/systemd/system/nvidia-power-limit.service ]]; then
+    install -d -m 755 /etc/systemd/system/nvidia-power-limit.service.d
+fi
+
 install -m 644 "$repo/packaging/openhw-helper.service" /etc/systemd/system/openhw-helper.service
 systemctl daemon-reload
 systemctl enable openhw-helper.service

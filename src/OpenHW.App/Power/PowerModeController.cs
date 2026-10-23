@@ -58,9 +58,24 @@ public sealed class PowerModeController(CpuFrequencyLimits limits) : IDisposable
     // OpenHW's cap for the policy, or the hardware maximum; never above what the hardware offers right now.
     private long Desired(CpuFrequencyPolicy policy) => Math.Min(CapOf(policy.Id) ?? policy.HardwareMaxKHz, policy.HardwareMaxKHz);
 
+    /// <summary>Re-apply OpenHW's caps whenever OpenHW starts (so after a reboot too, with Start at login).</summary>
+    public bool KeepCapsAfterReboot
+    {
+        get { lock (_gate) return _caps.KeepAfterReboot; }
+        set
+        {
+            lock (_gate)
+            {
+                _caps.KeepAfterReboot = value;
+                _caps.Save();
+            }
+        }
+    }
+
     public async Task StartAsync()
     {
         Refresh();
+        await ReapplySavedCapsAsync();
         try
         {
             var profiles = await PowerProfiles.ConnectAsync();
@@ -170,6 +185,21 @@ public sealed class PowerModeController(CpuFrequencyLimits limits) : IDisposable
             Refresh();
         }
         Changed?.Invoke();
+    }
+
+    // Saved caps carried over from an earlier boot: write back only those, and only the ones the hardware allows right
+    // now (a cap above the boost-off base clock waits for boost — the power-mode fix applies it then). Other policies
+    // are left alone: a ceiling OpenHW didn't set is only reported.
+    private async Task ReapplySavedCapsAsync()
+    {
+        Dictionary<int, long?> targets;
+        lock (_gate)
+            targets = _caps.Policies
+                .Where(c => Cpu.Get(c.Key) is { } p && c.Value <= p.HardwareMaxKHz && p.MaxKHz != c.Value)
+                .ToDictionary(c => c.Key, c => (long?)c.Value);
+        if (targets.Count == 0) return;
+        LastError = await WriteAsync(targets);
+        Refresh();
     }
 
     // One helper command per distinct value; ids are cpufreq policy numbers.

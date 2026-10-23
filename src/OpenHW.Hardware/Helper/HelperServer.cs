@@ -20,12 +20,14 @@ public static class HelperSocket
 /// <c>cpufreqmax &lt;all|id,id,…&gt; &lt;kHz|max&gt;</c> (cpufreq ceilings; every id an existing policy, every value
 /// within its minimum and hardware maximum), <c>cpufreqrestore</c> (every capped policy to its hardware maximum),
 /// <c>gpupower &lt;uuid&gt; &lt;mW|default&gt;</c> (an enumerated card, within NVML's constraints for it) and
-/// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value). Each is read back.
+/// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value),
+/// and the boot-time limits: <c>cpupptboot &lt;mW|none&gt;</c> (hsmp-control's config, 100–300 W as it accepts) and
+/// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null)
 {
-    public const string Version = "4";
+    public const string Version = "5";
 
     public string HandleLine(string line)
     {
@@ -74,6 +76,35 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 catch (ArgumentException ex) { return "err " + ex.Message; }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
 
+            case "cpupptboot" when parts.Length == 2:
+                if (boot is null) return "err boot limits unavailable";
+                if (parts[1] != "none" && !MilliWatts().IsMatch(parts[1])) return "err expected mW or none";
+                try
+                {
+                    boot.SetCpu(parts[1] == "none" ? null : long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
+                    return "ok " + (boot.CpuBootMW()?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none");
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+
+            case "gpupowerboot" when parts.Length == 3:
+            {
+                if (boot is null || gpuPower is null) return "err boot limits unavailable";
+                if (!GpuUuid().IsMatch(parts[1])) return "err invalid GPU";
+                if (parts[2] != "default" && !Watts().IsMatch(parts[2])) return "err expected W or default";
+                var gpu = gpuPower.Read().FirstOrDefault(g => g.Uuid.Equals(parts[1], StringComparison.OrdinalIgnoreCase));
+                if (gpu is null) return "err no such GPU";
+                long? watts = parts[2] == "default" ? null : long.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
+                if (watts is { } w && (w * 1000 < gpu.MinMW || w * 1000 > gpu.MaxMW))
+                    return $"err {w} W is outside {gpu.MinMW / 1000} to {gpu.MaxMW / 1000} W for {gpu.Name}";
+                try
+                {
+                    boot.SetGpu(gpu.BusId, watts);
+                    return "ok " + (boot.GpuBoot().TryGetValue(gpu.BusId, out var b) ? (b.MilliWatts / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture) : "none");
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+            }
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -89,6 +120,7 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
     [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
     [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();
     [GeneratedRegex(@"^[1-9][0-9]{3,6}$", RegexOptions.CultureInvariant)] private static partial Regex MilliWatts();
+    [GeneratedRegex(@"^[1-9][0-9]{0,3}$", RegexOptions.CultureInvariant)] private static partial Regex Watts();
     [GeneratedRegex(@"^GPU-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.CultureInvariant)] private static partial Regex GpuUuid();
     [GeneratedRegex(@"^[0-9a-f]{64}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeIdentity();
 }
@@ -117,7 +149,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -139,7 +171,6 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
     /// 0660 root:<paramref name="group"/>. Fails closed: if the group is missing the socket stays root-only (0600).
     /// Returns whether group access was granted.
     /// </summary>
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public bool RestrictToGroup(string group)
     {
         File.SetUnixFileMode(socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -169,7 +200,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot);
         try
         {
             using (client)

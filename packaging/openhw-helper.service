@@ -18,6 +18,10 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/sys/devices/system/cpu
 ReadWritePaths=-/sys/devices/platform
+# Boot-time limits live in the owner's boot services' config: hsmp-control's ppt_mw, and OpenHW's own drop-in for
+# nvidia-power-limit.service (install-helper.sh creates that directory; the unit file itself is never written).
+ReadWritePaths=-/etc/hsmp-control
+ReadWritePaths=-/etc/systemd/system/nvidia-power-limit.service.d
 ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true

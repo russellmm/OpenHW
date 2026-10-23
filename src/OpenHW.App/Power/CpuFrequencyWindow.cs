@@ -53,6 +53,12 @@ public sealed class CpuFrequencyWindow : Window
         ToolTip.SetTip(removeAll, "Every core back to the hardware maximum.");
         _applyCores = TextButton("Apply core caps", () => _ = ApplyCoresAsync());
         _applyCores.IsEnabled = false;
+        var keep = new CheckBox
+        {
+            Content = "Re-apply these caps when OpenHW starts (after a reboot too, with Start at login in Settings)",
+            IsChecked = power.KeepCapsAfterReboot,
+        };
+        keep.IsCheckedChanged += (_, _) => _power.KeepCapsAfterReboot = keep.IsChecked == true;
 
         var top = new StackPanel
         {
@@ -65,6 +71,7 @@ public sealed class CpuFrequencyWindow : Window
                     Orientation = Orientation.Horizontal, Spacing = 8,
                     Children = { new TextBlock { Text = "All cores (MHz)", VerticalAlignment = VerticalAlignment.Center }, _all, applyAll, removeAll },
                 },
+                keep,
             },
         };
 
@@ -134,7 +141,7 @@ public sealed class CpuFrequencyWindow : Window
             ? "No cpufreq policies found."
             : $"{_power.Cores.Count} cores · caps from {floor / 1000.0:N0} to {hw / 1000.0:N0} MHz · boost {(cpu.BoostOff ? "off" : "on")}" +
               (_power.ActiveProfile is { } profile ? $" · {PowerModeController.Label(profile)}" : "") +
-              ". Caps last until reboot.";
+              (_power.KeepCapsAfterReboot ? ". Caps are re-applied when OpenHW starts." : ". Caps last until reboot.");
         _note.IsVisible = cpu.BoostOff;
         _note.Text = "Power saver has boost off, so caps above the base clock aren't available. Switch to Balanced or " +
                      "Performance for the full range; caps set here are kept when you do.";

@@ -3,14 +3,16 @@ using System.Text.Json;
 namespace OpenHW.App.Power;
 
 /// <summary>
-/// The CPU frequency caps set through OpenHW (policy id → kHz), kept in ~/.config/openhw/cpufreq-caps.json for the
-/// current boot only: the kernel forgets ceilings on reboot, so caps saved under another boot id are dropped. The
-/// power-mode fix restores these instead of the hardware maximum, so a deliberate cap survives power-saver.
+/// The CPU frequency caps set through OpenHW (policy id → kHz), kept in ~/.config/openhw/cpufreq-caps.json. The kernel
+/// forgets ceilings on reboot, so caps saved under another boot id are dropped — unless <see cref="KeepAfterReboot"/>,
+/// when OpenHW writes them back as it starts. The power-mode fix restores these instead of the hardware maximum, so a
+/// deliberate cap survives power-saver.
 /// </summary>
 public sealed class CpuCaps
 {
     public string BootId { get; set; } = "";
     public Dictionary<int, long> Policies { get; set; } = [];
+    public bool KeepAfterReboot { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
@@ -27,6 +29,11 @@ public sealed class CpuCaps
         {
             var caps = JsonSerializer.Deserialize<CpuCaps>(File.ReadAllText(FilePath));
             if (caps is not null && caps.BootId == boot) return caps;
+            if (caps is { KeepAfterReboot: true })
+            {
+                caps.BootId = boot; // carried into this boot; PowerModeController re-applies them at start
+                return caps;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
         return new CpuCaps { BootId = boot };

@@ -27,7 +27,16 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 
 `src/OpenHW.App/Tray/` implements the StatusNotifierItem and dbusmenu D-Bus interfaces directly, so each
 icon is a picture we draw (value on a coloured tile, like HWiNFO). GNOME shows them through the
-`ubuntu-appindicators` extension. Each icon has its own session-bus connection.
+`ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
+colours, are chosen in **File → Settings** (up to 8; default one CPU-temperature icon on red); tray sensors stay
+live even inside collapsed groups.
+
+## Settings
+
+**File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
+interval (1–10 s, default 2 s), start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
+optionally with `--tray` to start with only the tray icons), and the tray icons. OpenHW runs once per session: a
+second launch (app grid, or the command) shows the running window and exits.
 
 `Tmds.DBus.Protocol`'s `MessageWriter` is a `ref struct`: any helper that writes to it must take it by `ref`,
 or its output is silently lost and the bus disconnects the app for sending a malformed reply.
@@ -38,16 +47,20 @@ or its output is silently lost and the bus disconnects the app for sending a mal
 
 | Engine | Source |
 |---|---|
-| `HwmonEngine` | /sys/class/hwmon via libsensors (sysfs fallback): Super I/O, k10temp, HSMP, SPD5118, NVMe and NIC temps |
+| `HwmonEngine` | /sys/class/hwmon via libsensors (sysfs fallback): Super I/O, k10temp, HSMP power, SPD5118, NVMe and NIC temps |
+| `HsmpEngine` | AMD HSMP platform device (no root): FCLK, MCLK, core clock limit, active frequency limit and its source, C0 residency, DRAM bandwidth, PROCHOT |
 | `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters |
 | `NvmeEngine` | NVMe SMART health and live activity |
 | `EdacEngine` | Memory-controller corrected/uncorrected error counts |
 | `SystemEngine` | Memory/swap, pressure stall info, load average, per-core clocks and usage, C-state residency |
 | `NetworkEngine` | Download/upload rate and totals per physical interface |
 
-`src/OpenHW.App/Sensors/SensorHub.cs` samples every engine once per 2 s poll; the window and tray share that sample.
-The engines are read-only: no fan or power-limit writes. Write features (GPU/CPU power limits, CPU max frequency)
-are planned through the helper — see [ROADMAP.md](ROADMAP.md).
+`src/OpenHW.App/Sensors/SensorHub.cs` samples every engine once per poll (2 s by default); the window and tray share
+that sample. The engines are read-only; writes (caps, power limits) go through the helper.
+
+Super I/O inputs are named per board (`BoardProfiles`): on the Pro WS TRX50-SAGE WIFI A the voltages, temperatures
+and fans carry HWiNFO's names, matched by measurement — evidence in [docs/board-profiles.md](docs/board-profiles.md).
+Open-pin inputs HWiNFO doesn't list are hidden; mappings still inferred are flagged in their tooltips.
 
 NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (below); without it, drive health
 rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
@@ -68,8 +81,14 @@ what is limiting the cores right now (HSMP's active frequency limit and its sour
 the power limit is what bites). Ranges come from the hardware: NVML's min/max per card, and for the CPU 50 W up to
 the SMU's reported maximum (`power1_cap_max`); every write is read back, so a value firmware clamps shows as an
 error, not as a limit that isn't real. **Default** puts a card back to NVML's default limit; **Boot value** puts
-the CPU back to `/etc/hsmp-control/ppt_mw`. Limits last until reboot — at boot, `nvidia-power-limit.service` and
-`hsmp-control-apply.service` (when installed) set their configured values again.
+the CPU back to `/etc/hsmp-control/ppt_mw`. A live limit lasts until reboot.
+
+**At boot** sets the value applied at every boot, in the existing boot services rather than a new one: the CPU's goes
+in `/etc/hsmp-control/ppt_mw` for `hsmp-control-apply.service` (100–300 W, the range hsmp-control accepts — a value
+outside it would silently not apply), and a card's goes in OpenHW's own drop-in,
+`/etc/systemd/system/nvidia-power-limit.service.d/openhw.conf`, which repeats the unit's `nvidia-smi` lines with the
+changed cards. The unit file itself is never edited; **Unit value** (or deleting the drop-in) returns to it. Without
+the boot service installed, the row says so and stays read-only.
 
 ## Power modes and CPU frequency caps
 
@@ -81,7 +100,8 @@ separately; a core's cap goes to both of its SMT threads' cpufreq policies (`sca
 core's CCD, live clock and current cap ("(OpenHW)" for caps set here, "(other)" for caps from another tool). Caps
 are written by the helper, checked against each policy's minimum and hardware maximum, read back, and rolled back
 if the kernel doesn't keep them. They last until reboot; OpenHW remembers the ones it set for the current boot in
-`~/.config/openhw/cpufreq-caps.json`.
+`~/.config/openhw/cpufreq-caps.json`. With **Re-apply these caps when OpenHW starts**, they are written back each time OpenHW starts —
+after a reboot too, when Start at login is on (Settings); only the cores with a saved cap are touched.
 
 Power saver turns CPU boost off and the kernel holds every ceiling at the base clock (4.0 GHz on the 9970X).
 Leaving it normally restores the previous ceiling, but a ceiling stored while boost was off — e.g. a "hardware
@@ -99,10 +119,11 @@ way is shown as **Capped at …** in the footer and the tray menu, and fixed onl
 `cpufreqmax <all|id,id,…> <kHz|max>` (every id must be an existing cpufreq policy and every value lie within that
 policy's minimum and hardware maximum; `max` is each policy's `cpuinfo_max_freq`) and `cpufreqrestore` (every capped
 policy to its hardware maximum) — see [Power modes and CPU frequency caps](#power-modes-and-cpu-frequency-caps) —
-`gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints) and `cpuppt <mW|boot>` (see
-[Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
+`gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, and the boot
+values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`; read-only
-filesystem except `/sys/devices/system/cpu` and `/sys/devices/platform` for the HSMP power cap; no network; devices
+filesystem except `/sys/devices/system/cpu`, `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control` and
+the nvidia-power-limit drop-in directory; no network; devices
 limited to NVMe (read) and the NVIDIA control/card nodes NVML needs). Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
