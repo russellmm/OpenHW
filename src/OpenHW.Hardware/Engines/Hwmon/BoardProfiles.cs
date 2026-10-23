@@ -39,7 +39,7 @@ public static class BoardProfiles
             ["in3"] = new("3VCC"),
             ["in4"] = new("+12V", 12),
             ["in5"] = new("CPU VDDIO", LowRailDivider),
-            ["in6"] = new("CPU Core1", LowRailDivider, Confirmed: false),
+            ["in6"] = new("CPU Core1", LowRailDivider),
             ["in7"] = new("3VSB"),
             ["in8"] = new("VBAT"),
             ["in9"] = new("VTT"),

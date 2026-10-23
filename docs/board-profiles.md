@@ -29,7 +29,7 @@ Raw values read on Linux, 2026-10-22; HWiNFO 8.54 values from `reference/` captu
 | in3 | 3.296 V | 3VCC | 3.296 V | ×1 | exact |
 | in4 | 0.992 V | +12V | 11.904 V | ×12 | exact |
 | in5 | 0.968 V | CPU VDDIO | 1.074 V | ×1.11 | ratio 1.109 |
-| in6 | 0.672 V | CPU Core1 | 0.746–1.252 V | ×1.11 | **unconfirmed** (BIOS pin SIO_VIN4; tracks EC VRM Vcore1 on Windows, but not on Linux — see below) |
+| in6 | 0.672 V | CPU Core1 | 0.746–1.252 V | ×1.11 | **confirmed** (BIOS pin SIO_VIN4; tracks EC VRM Vcore1 on Windows and CCD1/CCD2 load on Linux — see below) |
 | in7 | 3.392 V | 3VSB | 3.392 V | ×1 | exact |
 | in8 | 3.296 V | VBAT | 3.296 V | ×1 | exact |
 | in9 | 3.296 V | VTT | 3.296 V | ×1 | exact |
@@ -38,47 +38,50 @@ Raw values read on Linux, 2026-10-22; HWiNFO 8.54 values from `reference/` captu
 | in12 | 1.048 V | VIN2 | 1.048–1.056 V | ×1 | in range |
 | in13 | 0.824 V | CPU VSOC | 0.915 V | ×1.11 | **likely** (BIOS pin SIO_VIN3; ×1.11 matches SVI3 VDDCR_SOC; fixed under load — BIOS change to confirm) |
 | in14 | 1.624 V | CHIPSET1 1.8V | 1.803 V | ×1.11 | ratio 1.110 |
-| in15 | 0.784 V | VIN9 | 0.800–0.944 V | ×1 | unlabeled pin (BIOS doesn't name it; flat under load) |
+| in15 | 0.784 V | VIN9 | 0.800–0.944 V | ×1 | unlabeled pin (BIOS doesn't name it; drifts 0.800→0.832 V with temperature, not load) |
 | in16 | 3.392 V | VHIF | 3.392 V | ×1 | exact |
 | in17 | 0.304 V | — | not shown by HWiNFO | — | hidden |
 
-To confirm: change SoC voltage in the BIOS and check in13 (×1.11) follows; resolve the Linux core-rail mismatch
-below for in0/in6.
+To confirm: change SoC voltage in the BIOS and check in13 (×1.11) follows.
 
-### Linux load test (2026-10-23)
+### Linux load tests (2026-10-23)
 
-`tools/loadgen/linux-capture.sh` + `compare.py` against `reference/stress-2026-10-23/windows-hwinfo-phase-medians.csv`,
-run unpinned and under `taskset -c 0-7` / `taskset -c 8-15`, in both the power-saver and performance profiles
-(OpenFan running; spot checks repeated with it closed gave the same numbers).
+**Rail layout (from HWiNFO on Windows):** the EC VRM and per-core VIDs show two core rails — **Vcore0 feeds CCD0 and
+CCD3** (cores 0–7, 24–31), **Vcore1 feeds CCD1 and CCD2** (cores 8–23). HWiNFO's Nuvoton "Vcore" follows Vcore0 and
+"CPU Core1" follows Vcore1.
 
-- **Every rail except in0/in6 matches Windows** within a few mV in every phase: in1–in5, in7–in12, in14, in16, and
-  in13 (0.915 V both OSes, flat). in15 VIN9 reads 0.792–0.800 V on Linux vs 0.824–0.832 V in HWiNFO, flat in both.
-- **loadgen is light on Linux.** Its all-core phases draw ~127 W (scalar) / ~150 W (AVX2) in either profile, vs
-  223 / 250 W on Windows. Plain busy loops on 64 threads reach the 250 W HSMP cap at ~3.9 GHz even in power-saver,
-  so the CPU isn't limited — the Linux build of loadgen is. In the performance profile in0/in6 sat flat at
-  0.872 / 0.986 V (scaled) through every loadgen phase.
-- **in0/in6 read far lower than HWiNFO at the same power.** Busy-loop spot checks (raw sysfs values):
+**First attempt — misleading.** `linux-capture.sh` + `compare.py` showed in0/in6 ~0.4 V below HWiNFO at the same
+250 W and in6 rising for either CCD. Cause: every CPU's `scaling_max_freq` was stuck at 4.0 GHz (base clock), so the
+cores never boosted. power-profiles-daemon 0.30 turns per-policy `boost` off in power-saver; the kernel then clamps
+`scaling_max_freq` to base, and switching to performance re-enables boost **without lifting the clamp**. Fix (root):
+write `cpuinfo_max_freq` back into each policy's `scaling_max_freq`. loadgen's Linux build is also light (~127 W
+all-core vs 223 W on Windows); `tools/loadgen/sweep.py` uses plain busy loops instead.
 
-| Load | Package power | in0 raw | in6 raw (×1.11) | HWiNFO, comparable load |
+**Sweep at full boost** (`tools/loadgen/sweep.py`, performance profile, cap lifted; data in
+`reference/stress-2026-10-23/linux-sweep-boost.csv`, the 4 GHz-capped power-saver run in `linux-sweep-powersaver.csv`).
+Only **in0 and in6** respond to load; every other input stays within 1–2 ADC steps except in15 (temperature drift).
+
+| Load | Package | Clock | in0 raw | in6 ×1.11 |
 |---|---|---|---|---|
-| idle | 55 W | 0.79–0.80 V | 0.72–0.79 V (0.80–0.88 V) | Vcore 0.968 V, Core1 0.764 V |
-| 64 threads | 250 W | 0.864 V | 0.864 V (0.959 V) | Vcore 1.234 V, Core1 1.252 V |
-| CPUs 0–7 only | 99 W | 0.840 V | 0.888 V (0.986 V) | 8 threads on cores 0–7: Core1 stays 0.755 V |
-| CPUs 8–15 only | 101 W | 0.840 V | 0.896 V (0.995 V) | — |
+| idle | 69 W | 1.2 GHz | 1.112 V | 1.123 V |
+| 1t CCD0 | 86 W | 5.41 GHz | 1.160 V | 1.030 V |
+| 1t CCD1 | 86 W | 5.04 GHz | 1.136 V | **1.323 V** |
+| 1t CCD2 | 85 W | 5.04 GHz | 1.104 V | **1.314 V** |
+| 1t CCD3 | 84 W | 5.03 GHz | **1.184 V** | 0.986 V |
+| 8t CCD1 | 168 W | 4.75 GHz | 1.128 V | **1.252 V** |
+| 8t CCD2 | 166 W | 4.82 GHz | 1.120 V | **1.225 V** |
+| 8t CCD3 | 158 W | 4.77 GHz | 1.112 V | 0.986 V |
+| 64t all threads | 250 W | 3.97 GHz | 0.856 V | 0.950 V |
 
-  in6 rises the same whichever CCD is loaded, unlike Windows, where it stayed flat while only cores 0–7 ran. So
-  in6 stays `Confirmed: false`, and in0's ×1 "confirmed by range" is in doubt too.
-
-Open questions:
-
-1. Does the `nct6799` driver read the NCT6701D's in0/in6 the way HWiNFO does (register, ADC scaling, an input mux
-   the BIOS/EC sets)? Every other input agrees, so it's specific to the core rails.
-2. Is HWiNFO's "Vcore" / "CPU Core1" really the raw Nuvoton pin, or a value it combines with the EC VRM / SVI3
-   telemetry? Linux has no second Vcore source to check against (`asusec` reports only temperatures and fans;
-   SVI3 needs `ryzen_smu`).
-3. Why loadgen draws half the power on Linux (compiler / code generation vs the Windows build).
-4. Note: `linux-capture.sh` filters on `asus_ec_sensors`, but the chip registers as `asusec` here, so EC readings
-   were never captured (they're temperatures and fans only anyway).
+- **in6 = Vcore1, confirmed**: it rises to 1.22–1.32 V only when CCD1 or CCD2 is loaded and stays ~0.99 V with CCD3
+  loaded — the same split as HWiNFO's Core1 / EC Vcore1 (1.252 V all-core at 4.95 GHz). Loading CCD0 alone also
+  lifts in6, most likely because unpinned background work (including the sampler) moves to CCD1 and boosts there.
+- **in0 = Vcore0**: highest with CCD3/CCD0 loaded. ×1 stays as is.
+- At 64 threads both rails drop to ~0.86 V because the 250 W HSMP cap holds the clock near 4.0 GHz with this load.
+- **in15 VIN9** follows temperature, not load: 0.800 V cold → 0.832 V warm, still 0.824 V after the load stopped.
+  Windows (warm) read 0.824–0.832 V. Stays unconfirmed/unnamed.
+- The `asusec` hwmon chip (not `asus_ec_sensors`, which `linux-capture.sh` filters for) reports only temperatures
+  and fans — Linux has no second Vcore source to cross-check against.
 
 Without HWiNFO, the BIOS image names the rails and their Nuvoton pins, and a load test separates the core rails.
 See [hwinfo-research.md](hwinfo-research.md).
