@@ -14,8 +14,18 @@ namespace OpenHW.App.Tests;
 // CPU usage — exist on any Linux box.
 public sealed class DimmingTests
 {
+    private static List<TextBlock> Values(Window window) => window.GetVisualDescendants().OfType<TextBlock>()
+        .Where(t => t.DataContext is SensorRow && t.HorizontalAlignment == HorizontalAlignment.Right && !string.IsNullOrEmpty(t.Text))
+        .ToList();
+
+    private static void Capture(Window window, string name)
+    {
+        Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), name));
+    }
+
     [AvaloniaFact]
-    public void ResumedRateRowsRenderDimmed()
+    public void ExpandedRowsStayGrayUntilTheyAreReadAgain()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-view-").FullName);
         using var hub = new SensorHub();
@@ -29,22 +39,31 @@ public sealed class DimmingTests
         hub.Sample();
         window.RefreshValues();
 
-        window.SetAllExpanded(true); // the app polls immediately after this
+        // Expanded, before the next poll: every row shown is frozen, so every value is gray.
+        window.SetAllExpanded(true);
+        Capture(window, "openhw-expanded-before-poll.png");
+        Assert.All(Values(window), t => Assert.Same(Palette.Frozen, t.Foreground));
+
+        // First poll: instant readings are live again; rate rows (CPU usage, C-states) still wait for a second sample.
         hub.Sample();
         window.RefreshValues();
-        Dispatcher.UIThread.RunJobs();
+        Capture(window, "openhw-expanded-first-poll.png");
+        var values = Values(window);
+        var gray = values.Where(t => ReferenceEquals(t.Foreground, Palette.Frozen)).ToList();
+        Assert.NotEmpty(gray);
+        Assert.All(gray, t => Assert.True(hub.IsPaused(((SensorRow)t.DataContext!).Id)));
+        Assert.Contains(values, t => ReferenceEquals(t.Foreground, Palette.Text));
 
-        var frame = window.CaptureRenderedFrame();
-        frame?.Save(Path.Combine(Path.GetTempPath(), "openhw-dimming.png"));
+        // Second poll: everything live.
+        Thread.Sleep(1100);
+        hub.Sample();
+        window.RefreshValues();
+        Assert.All(Values(window), t => Assert.Same(Palette.Text, t.Foreground));
+    }
 
-        var values = window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(t => t.DataContext is SensorRow && t.HorizontalAlignment == HorizontalAlignment.Right && !string.IsNullOrEmpty(t.Text))
-            .ToList();
-        var paused = values.Where(t => hub.IsPaused(((SensorRow)t.DataContext!).Id)).ToList();
-        var live = values.Except(paused).ToList();
-
-        Assert.NotEmpty(paused);
-        Assert.All(paused, t => Assert.True(t.Opacity < 0.6, $"{((SensorRow)t.DataContext!).Name}: opacity {t.Opacity}"));
-        Assert.All(live, t => Assert.Equal(1, t.Opacity));
+    [AvaloniaFact]
+    public void FooterShowsVersionAndRevision()
+    {
+        Assert.Matches(@"^OpenHW \d+\.\d+\.\d+ · [0-9a-f]{7}", MainWindow.VersionText());
     }
 }

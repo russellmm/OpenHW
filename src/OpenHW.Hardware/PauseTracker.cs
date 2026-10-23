@@ -29,10 +29,14 @@ public sealed class PauseTracker
         lock (_gate) _pinned = set;
     }
 
-    /// <summary>True while the sensor's values are frozen: collapsed and not pinned, or resuming without a value yet.</summary>
+    /// <summary>
+    /// True while the sensor's values are frozen: collapsed and not pinned, shown again but not read since
+    /// (frozen at the last poll), or resuming without a value yet.
+    /// </summary>
     public bool IsPaused(string id)
     {
-        lock (_gate) return (_paused.Contains(id) && !_pinned.Contains(id)) || _resuming.ContainsKey(id);
+        lock (_gate)
+            return (_paused.Contains(id) && !_pinned.Contains(id)) || _lastFrozen.Contains(id) || _resuming.ContainsKey(id);
     }
 
     /// <summary>Start of a poll: the ids not to read. Ids that were frozen last poll and are not now start resuming.</summary>

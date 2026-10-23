@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
@@ -92,12 +93,6 @@ public sealed class MainWindow : Window
         RebuildTree();
     }
 
-    /// <summary>
-    /// Raised when rows were shown or hidden, after the hub has been told which sensors to read. Newly shown rows
-    /// hold frozen values until the next poll, so the app polls right away.
-    /// </summary>
-    public event Action? ReadSetChanged;
-
     /// <summary>Re-reads the inventory into groups and rows, keeping each group's and subgroup's expansion.</summary>
     public void RebuildTree()
     {
@@ -130,12 +125,12 @@ public sealed class MainWindow : Window
     }
 
     // Only rows on screen (not inside a collapsed group or per-core list) are read. Sensors the window never
-    // shows — configured limits, alarm bits — are not read either.
+    // shows — configured limits, alarm bits — are not read either. Newly shown rows stay gray with their frozen
+    // values until the next regular poll brings them back to life.
     private void UpdateReadSet()
     {
         var shown = _rows.OfType<SensorRow>().Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         _hub.SetPaused(_hub.Inventory.Select(i => i.Id).Where(id => !shown.Contains(id)));
-        ReadSetChanged?.Invoke();
     }
 
     /// <summary>Pushes the hub's latest statistics into every row (collapsed ones too, so expanding is instant).</summary>
@@ -251,7 +246,9 @@ public sealed class MainWindow : Window
         icon.Bind(Path.DataProperty, new Binding(nameof(SensorRow.Icon)));
         icon.Bind(Shape.FillProperty, new Binding(nameof(SensorRow.IconBrush)));
         icon.Bind(Shape.StrokeProperty, new Binding(nameof(SensorRow.IconStroke)));
-        var name = new StackPanel { Orientation = Orientation.Horizontal, Children = { chevron, icon, Text(nameof(SensorRow.Name)) } };
+        var label = Text(nameof(SensorRow.Name));
+        label.Bind(TextBlock.ForegroundProperty, new Binding(nameof(SensorRow.TextBrush)));
+        var name = new StackPanel { Orientation = Orientation.Horizontal, Children = { chevron, icon, label } };
         name.Bind(MarginProperty, new Binding(nameof(SensorRow.Indent)));
         grid.Children.Add(name);
         AddValueCells(grid, withValues: true);
@@ -289,7 +286,7 @@ public sealed class MainWindow : Window
             if (withValues)
             {
                 cell.Child = Text(columns[i]);
-                cell.Child.Bind(OpacityProperty, new Binding(nameof(SensorRow.ValueOpacity)));
+                cell.Child.Bind(TextBlock.ForegroundProperty, new Binding(nameof(SensorRow.TextBrush)));
                 ((TextBlock)cell.Child).HorizontalAlignment = HorizontalAlignment.Right;
                 ((TextBlock)cell.Child).Margin = new Thickness(0, 0, 6, 0);
                 if (i == 0) cell.Bind(Border.BackgroundProperty, new Binding(nameof(SensorRow.CurrentBackground)));
@@ -358,8 +355,22 @@ public sealed class MainWindow : Window
         var bar = new DockPanel { Height = 54, Background = Palette.Window, Margin = new Thickness(4, 0) };
         DockPanel.SetDock(right, Dock.Right);
         bar.Children.Add(right);
-        bar.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse } });
+        var version = new TextBlock
+        {
+            Text = VersionText(), Foreground = Palette.Footnote, FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0),
+        };
+        bar.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse, version } });
         return bar;
+    }
+
+    /// <summary>"OpenHW 0.1.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>
+    internal static string VersionText()
+    {
+        var informational = typeof(MainWindow).Assembly
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "";
+        var parts = informational.Split('+', 2);
+        return parts.Length == 2 ? $"OpenHW {parts[0]} · {parts[1]}" : $"OpenHW {informational}";
     }
 
     private static Button FooterButton(string tip, (Geometry Data, IBrush? Fill, IBrush? Stroke) icon, Action onClick)

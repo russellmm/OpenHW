@@ -90,9 +90,10 @@ public sealed class SensorRow : Row
     /// <summary>"Highlight changing values": the Current cell turns blue while it differs from the last sample.</summary>
     public IBrush CurrentBackground { get => _currentBackground; private set => Set(ref _currentBackground, value); }
 
-    /// <summary>Frozen (collapsed, not read) rows are drawn dimmed, so stale values never pass for live ones.</summary>
-    public double ValueOpacity { get => _valueOpacity; private set => Set(ref _valueOpacity, value); }
-    private double _valueOpacity = 1;
+    /// <summary>Frozen rows (collapsed, or shown but not re-read yet) draw their name and values gray, so stale
+    /// numbers never pass for live ones.</summary>
+    public IBrush TextBrush { get => _textBrush; private set => Set(ref _textBrush, value); }
+    private IBrush _textBrush = Palette.Text;
 
     public void Update(SensorStatistics.Snapshot snapshot, bool paused)
     {
@@ -105,7 +106,7 @@ public sealed class SensorRow : Row
         Maximum = SensorPresentation.Format(Scaled(snapshot.Maximum), unit);
         Average = SensorPresentation.FormatAverage(Scaled(snapshot.Average), unit);
         CurrentBackground = _changed && !paused ? Palette.Changed : Brushes.Transparent;
-        ValueOpacity = paused ? 0.45 : 1;
+        TextBrush = paused ? Palette.Frozen : Palette.Text;
     }
 }
 
@@ -120,5 +121,7 @@ public static class Palette
     public static readonly IBrush Changed = new SolidColorBrush(Color.Parse("#152137"));
     public static readonly IBrush Separator = new SolidColorBrush(Color.Parse("#202932"));
     public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#E6E6E6"));
+    public static readonly IBrush Frozen = new SolidColorBrush(Color.Parse("#6A6A6A"));
+    public static readonly IBrush Footnote = new SolidColorBrush(Color.Parse("#8A8A8A"));
     public static readonly IBrush Selected = new SolidColorBrush(Color.Parse("#0E3A66"));
 }

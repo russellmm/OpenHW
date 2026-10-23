@@ -30,7 +30,6 @@ public sealed class App : Application
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
             _window = new MainWindow(_hub);
-            _window.ReadSetChanged += () => ThreadPool.QueueUserWorkItem(_ => Poll());
             _window.Show();
 
             lifetime.Exit += (_, _) =>

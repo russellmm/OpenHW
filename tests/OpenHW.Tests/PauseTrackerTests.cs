@@ -50,6 +50,20 @@ public sealed class PauseTrackerTests
     }
 
     [Fact]
+    public void ExpandedSensorStaysFrozenUntilAPollReadsIt()
+    {
+        var tracker = new PauseTracker();
+        tracker.SetPaused(["x"]);
+        Poll(tracker, new() { ["x"] = 1 });
+
+        tracker.SetPaused([]); // expanded, but no poll has read it yet
+        Assert.True(tracker.IsPaused("x"));
+
+        Poll(tracker, new() { ["x"] = 2 });
+        Assert.False(tracker.IsPaused("x"));
+    }
+
+    [Fact]
     public void SensorWithNoValueIsEventuallyShownAsSuch()
     {
         var tracker = new PauseTracker();
