@@ -18,8 +18,7 @@ public sealed class SensorHub : IDisposable
     private readonly object _gate = new();
     private IReadOnlyList<HardwareItem> _inventory = [];
     private string _fingerprint = "";
-    private IReadOnlySet<string> _paused = new HashSet<string>();
-    private IReadOnlySet<string> _pinned = new HashSet<string>();
+    private readonly PauseTracker _pauses = new();
 
     public SensorHub()
     {
@@ -51,37 +50,25 @@ public sealed class SensorHub : IDisposable
     /// Sensors the window has collapsed. They are not read (engines skip the hardware access where they can) and
     /// their statistics freeze until they are shown again — unless they are also <see cref="SetPinned">pinned</see>.
     /// </summary>
-    public void SetPaused(IEnumerable<string> ids)
-    {
-        var set = ids.ToHashSet(StringComparer.Ordinal);
-        lock (_gate) _paused = set;
-    }
+    public void SetPaused(IEnumerable<string> ids) => _pauses.SetPaused(ids);
 
     /// <summary>Sensors that must stay live even when collapsed (tray icons).</summary>
-    public void SetPinned(IEnumerable<string> ids)
-    {
-        var set = ids.ToHashSet(StringComparer.Ordinal);
-        lock (_gate) _pinned = set;
-    }
+    public void SetPinned(IEnumerable<string> ids) => _pauses.SetPinned(ids);
 
-    /// <summary>True when the sensor is collapsed and not pinned, i.e. its values are frozen.</summary>
-    public bool IsPaused(string id)
-    {
-        lock (_gate) return _paused.Contains(id) && !_pinned.Contains(id);
-    }
+    /// <summary>True while the sensor's values are frozen (collapsed, or just expanded and not yet re-read).</summary>
+    public bool IsPaused(string id) => _pauses.IsPaused(id);
 
     /// <summary>One poll: rediscover when due, read the sensors that are not paused, then fold the sample into the statistics.</summary>
     public void Sample()
     {
         var changed = RefreshInventory();
-        HashSet<string> frozen;
-        lock (_gate) frozen = _paused.Where(id => !_pinned.Contains(id)).ToHashSet(StringComparer.Ordinal);
+        var frozen = _pauses.BeginPoll();
         var requested = Inventory.Select(i => i.Id).Where(id => !frozen.Contains(id)).ToHashSet(StringComparer.Ordinal);
 
         var readings = requested.ToDictionary(id => id, _ => (double?)null, StringComparer.Ordinal);
         foreach (var engine in _engines) engine.ReadInto(readings, frozen.Count == 0 ? null : requested);
-        foreach (var id in frozen) readings.Remove(id); // engines that read whole sections may still fill these
-        lock (_gate) Statistics.Record(readings, frozen);
+        var hold = _pauses.EndPoll(readings, frozen);
+        lock (_gate) Statistics.Record(readings, hold);
         if (changed) InventoryChanged?.Invoke();
     }
 
