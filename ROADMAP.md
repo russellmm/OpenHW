@@ -20,8 +20,9 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [x] **CPU maximum frequency** — all-core and per-core `scaling_max_freq` caps (helper `cpufreqmax`), with
       readback and rollback; caps set here survive power-saver. Live until reboot.
 - [ ] **Keep CPU caps after reboot** (optional) — re-apply the saved caps at boot or at OpenHW start.
-- [ ] **Confirm where the 4.0 GHz clamp comes from**: set Power saver, reboot, switch to Performance with OpenHW
-      closed, and check `scaling_max_freq`. If it stays at 4.0 GHz, it's the boot sequence — report it upstream.
+- [x] **Where the 4.0 GHz clamp comes from**: not the boot sequence (booted in power-saver, switched to Performance
+      with both apps closed → full 5.49 GHz). It's a 4.0 GHz value stored while boost is off, e.g. OpenFan's
+      Hardware maximum pressed in power-saver.
 - [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect.
       Source: openfan-linux `HwmonBackend` / `NvmlFanWriter` / `FanController`.
 
