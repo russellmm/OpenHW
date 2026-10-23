@@ -182,6 +182,12 @@ public sealed class SettingsWindow : Window
         _status.Text = "Saved.";
     }
 
+    /// <summary>The tray list changed elsewhere (a sensor row's "Add to tray"): redraw it if the window is up.</summary>
+    public void RefreshTrayRows()
+    {
+        if (IsVisible) RebuildTrayRows();
+    }
+
     /// <summary>The sensor list changes as hardware comes and goes; refresh it each time the window opens.</summary>
     protected override void OnOpened(EventArgs e)
     {

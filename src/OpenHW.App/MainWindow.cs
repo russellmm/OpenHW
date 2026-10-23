@@ -17,8 +17,17 @@ using OpenHW.App.SensorWindow;
 
 namespace OpenHW.App;
 
-/// <summary>App-level actions the window's menu and footer shortcuts call.</summary>
-public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLimits, Action ShowSettings, Action Exit);
+/// <summary>App-level actions the window's menus and footer shortcuts call.</summary>
+public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLimits, Action ShowSettings, Action Exit)
+{
+    /// <summary>Tray icons for sensor rows (the row context menu); null where the app has no tray.</summary>
+    public Func<string, TrayState>? TrayStateOf { get; init; }
+    public Action<string>? AddToTray { get; init; }
+    public Action<string>? RemoveFromTray { get; init; }
+}
+
+/// <summary>Whether a sensor can be added to, or removed from, the tray — and why not.</summary>
+public sealed record TrayState(bool InTray, bool CanAdd, string? WhyNot);
 
 /// <summary>
 /// HWiNFO-style "Sensors Status" window: one virtualized list of group headings, sensor rows and spacers with
@@ -271,7 +280,67 @@ public sealed class MainWindow : Window
         name.Bind(MarginProperty, new Binding(nameof(SensorRow.Indent)));
         grid.Children.Add(name);
         AddValueCells(grid, withValues: true);
+        var menu = new ContextMenu();
+        menu.Opening += (_, _) =>
+        {
+            if (grid.DataContext is not SensorRow row) return;
+            _list.SelectedItem = row; // the row the menu acts on, highlighted as HWiNFO does
+            FillRowMenu(menu, row);
+        };
+        grid.ContextMenu = menu;
         return grid;
+    }
+
+    // ── row context menu ─────────────────────────────────────────────────────────────────────────────────────
+
+    private const string NotYet = "To be implemented";
+
+    /// <summary>
+    /// HWiNFO's sensor right-click menu, item for item and in its order. What OpenHW does today works; the rest is
+    /// shown grayed with a "To be implemented" tooltip, so the menu's shape stays familiar as features land.
+    /// </summary>
+    private void FillRowMenu(ContextMenu menu, SensorRow row)
+    {
+        MenuItem Item(string header, Action? onClick = null, string? gesture = null, string? disabledTip = NotYet, bool bold = false)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = onClick is not null };
+            if (bold) item.FontWeight = FontWeight.Bold;
+            if (gesture is not null) item.InputGesture = KeyGesture.Parse(gesture);
+            if (onClick is not null) item.Click += (_, _) => onClick();
+            else if (disabledTip is not null)
+            {
+                ToolTip.SetTip(item, disabledTip);
+                ToolTip.SetShowOnDisabled(item, true);
+            }
+            return item;
+        }
+
+        var tray = _commands?.TrayStateOf?.Invoke(row.Id);
+        var add = Item("Add to tray", tray is { InTray: false, CanAdd: true } ? () => _commands!.AddToTray?.Invoke(row.Id) : null,
+            disabledTip: tray is null ? NotYet : tray.InTray ? "Already in the tray" : tray.WhyNot);
+        var remove = Item("Remove from tray", tray is { InTray: true } ? () => _commands!.RemoveFromTray?.Invoke(row.Id) : null,
+            disabledTip: tray is null ? NotYet : "Not in the tray");
+        menu.Items.Clear();
+        foreach (var item in new Control[]
+        {
+            Item("Show Graph", bold: true),
+            add, remove,
+            Item("Disable monitoring", gesture: "Delete"),
+            Item("Enable monitoring", gesture: "Insert"),
+            Item("Rename", gesture: "F2"),
+            Item("Hide", gesture: "Shift+Delete"),
+            Item("Enable Logging"),
+            Item("Disable Logging"),
+            new Separator(),
+            Item("Layout settings…"),
+            Item("Customize values…"),
+            Item("Tray icon settings…", _commands is { } c ? c.ShowSettings : null),
+            Item("OSD settings…"),
+            Item("OSD (RTSS) settings…"),
+            Item("Alert settings…"),
+            Item("LG LCD settings…"),
+        })
+            menu.Items.Add(item);
     }
 
     private static Control BuildSpacerTemplate()

@@ -96,6 +96,9 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 ## Window and tray
 
 - [x] Choose which sensors get tray icons, with per-icon colours.
+- [x] Sensor row right-click menu in HWiNFO's shape (Add/Remove from tray work; others grayed "To be implemented").
+- [ ] Fill in the row menu: Show Graph, Disable/Enable monitoring, Rename, Hide, logging, layout/customise values,
+      alerts (OSD/RTSS/LG LCD are Windows-specific in HWiNFO — decide whether they have a Linux meaning).
 - [x] Tray icon menus start with the sensor's reading, min/max/average and explanation; sensor tooltips explain
       every reading.
 - [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,

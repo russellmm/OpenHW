@@ -36,7 +36,10 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample(); // first discovery + sample before the window builds its tree
-            _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown()));
+            _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
+            {
+                TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray,
+            });
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
 
@@ -111,6 +114,36 @@ public sealed class App : Application
             }
         }
         UpdateTray();
+    }
+
+    private TrayState TrayStateOf(string sensorId)
+    {
+        if (_settings.TrayIcons.Any(t => ResolveTrayId(t) == sensorId)) return new TrayState(true, false, null);
+        var item = _hub.Inventory.FirstOrDefault(i => i.Id == sensorId);
+        if (item?.Unit == "flag") return new TrayState(false, false, "Yes/No readings can't be shown as a tray value");
+        if (_settings.TrayIcons.Count >= AppSettings.MaxTrayIcons)
+            return new TrayState(false, false, $"The tray already has {AppSettings.MaxTrayIcons} icons, the most OpenHW shows");
+        return new TrayState(false, true, null);
+    }
+
+    // Same rules as Settings → Tray icons: the next colour not in use, saved and applied at once.
+    private void AddToTray(string sensorId)
+    {
+        if (!TrayStateOf(sensorId).CanAdd) return;
+        var used = _settings.TrayIcons.Select(t => t.Colour).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var colour = AppSettings.Colours.Select(c => c.Hex).FirstOrDefault(h => !used.Contains(h)) ?? AppSettings.Colours[0].Hex;
+        _settings.TrayIcons.Add(new TraySensor { SensorId = sensorId, Colour = colour });
+        _settings.Save();
+        ApplySettings();
+        _settingsWindow?.RefreshTrayRows();
+    }
+
+    private void RemoveFromTray(string sensorId)
+    {
+        if (_settings.TrayIcons.RemoveAll(t => ResolveTrayId(t) == sensorId) == 0) return;
+        _settings.Save();
+        ApplySettings();
+        _settingsWindow?.RefreshTrayRows();
     }
 
     /// <summary>Settings changed: poll interval and tray icons take effect now.</summary>

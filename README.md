@@ -82,6 +82,10 @@ Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry firs
 for the common ones (expand/collapse, power mode, CPU frequency, power limits, reset, close), and the tray menu
 mirrors the Power menu.
 
+Right-clicking a sensor row opens HWiNFO's sensor menu, item for item: **Add to tray** / **Remove from tray** and
+**Tray icon settings…** work today; the rest (Show Graph, monitoring on/off, Rename, Hide, logging, layout,
+customise, OSD, RTSS, alerts, LG LCD) are grayed with a "To be implemented" tooltip until they land.
+
 ## Power limits
 
 **Power Limits…** sets the CPU socket power limit (PPT) and each NVIDIA card's power limit, and shows, for the CPU,
