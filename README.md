@@ -51,7 +51,9 @@ listens on `/run/openhw/helper.sock` (`0660 root:openhw`) and answers only fixed
 write commands, caps request lines at 256 bytes, reads each drive at most once per 10 s, and runs under a
 hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`, read-only filesystem, no network, NVMe devices only).
 
-Install once, then log out and back in so your account joins the `openhw` group:
+Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
+lingering is enabled for your account — `ls /var/lib/systemd/linger` — since the user manager keeps its boot-time
+groups):
 
 ```bash
 sudo packaging/install-helper.sh

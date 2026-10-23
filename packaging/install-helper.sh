@@ -31,4 +31,8 @@ systemctl restart openhw-helper.service
 systemctl --no-pager --lines=3 status openhw-helper.service || true
 
 echo
-echo "Installed. Log out and back in once so '$SUDO_USER' picks up the openhw group (check with: id)."
+if [[ -e "/var/lib/systemd/linger/$SUDO_USER" ]]; then
+    echo "Installed. Reboot once so '$SUDO_USER' picks up the openhw group (lingering keeps the old session's groups)."
+else
+    echo "Installed. Log out and back in once so '$SUDO_USER' picks up the openhw group (check with: id)."
+fi
