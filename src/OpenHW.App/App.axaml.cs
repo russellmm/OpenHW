@@ -100,7 +100,7 @@ public sealed class App : Application
         {
             try
             {
-                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW", _trayMenu);
+                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW", [.. SensorInfoItems(config), TrayMenuItem.Separator, .. _trayMenu]);
                 icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
                 _trayIcons.Add((config, icon));
             }
@@ -150,21 +150,64 @@ public sealed class App : Application
     private string? ResolveTrayId(TraySensor config) =>
         config.SensorId == AppSettings.CpuTemperature ? _hub.CpuTemperatureId() : config.SensorId;
 
+    private const int InfoLines = 8;
+
+    // Each icon's info lines, computed once per poll on the UI thread and read by the menu on the D-Bus thread:
+    // replaced whole, never mutated.
+    private volatile IReadOnlyDictionary<TraySensor, IReadOnlyList<string>> _trayInfo = new Dictionary<TraySensor, IReadOnlyList<string>>();
+
+    private IReadOnlyList<string> CachedInfo(TraySensor config) =>
+        _trayInfo.TryGetValue(config, out var lines) ? lines : [];
+
+    // The first lines of each icon's own menu describe its sensor. GNOME's tray extension never shows tooltips, so
+    // this is where the expanded information can be seen there; the same text is the tooltip on hosts that show one.
+    private IEnumerable<TrayMenuItem> SensorInfoItems(TraySensor config) =>
+        Enumerable.Range(0, InfoLines).Select(i => new TrayMenuItem("", null)
+        {
+            Enabled = false,
+            DynamicLabel = () => CachedInfo(config).ElementAtOrDefault(i) ?? "",
+            Visible = () => i < CachedInfo(config).Count,
+        });
+
+    /// <summary>Name and reading, min/max/average, the device it belongs to, then what it measures (wrapped).</summary>
+    private IReadOnlyList<string> SensorInfo(TraySensor config, IReadOnlyList<SensorGroupView> groups)
+    {
+        var id = ResolveTrayId(config);
+        var item = id is null ? null : _hub.Inventory.FirstOrDefault(i => i.Id == id);
+        if (item is null) return ["Sensor not present now"];
+        var name = SensorPresentation.DisplayName(item);
+        var stats = _hub.Get(item.Id);
+        string F(double? v) => v is { } x ? SensorPresentation.Format(SensorPresentation.Scale(item, x), item.Unit) : "–";
+        var lines = new List<string>
+        {
+            $"{name}: {F(stats.Current)}",
+            $"Min {F(stats.Minimum)}  ·  Max {F(stats.Maximum)}  ·  Avg {F(stats.Average)}",
+        };
+        var group = groups.FirstOrDefault(g => Flatten(g.Sensors).Any(v => v.Id == item.Id))?.Title;
+        if (group is not null) lines.Add(group);
+        var explanation = SensorExplanations.Explain(item, name);
+        if (explanation.Length > 0) lines.AddRange(SensorPresentation.Wrap(explanation, 52).Split('\n'));
+        return lines.Take(InfoLines).ToList();
+    }
+
+    private static IEnumerable<SensorView> Flatten(IEnumerable<SensorView> views) =>
+        views.SelectMany(v => Flatten(v.Children).Prepend(v));
+
     private void UpdateTray()
     {
         var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().ToArray();
         _hub.SetPinned(ids); // tray sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
+        var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
+        _trayInfo = _trayIcons.ToDictionary(t => t.Config, t => SensorInfo(t.Config, groups));
         foreach (var (config, icon) in _trayIcons)
         {
             var id = ResolveTrayId(config);
             var item = id is null ? null : items.GetValueOrDefault(id);
             var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
-            var name = item is null ? "Sensor unavailable" : SensorPresentation.DisplayName(item);
-            icon.Update(
-                TrayIconRenderer.Render(TrayText(value), config.Colour),
-                _hub.Machine.CpuModel,
-                item is null ? name : $"{name}: {(value is null ? "–" : SensorPresentation.Format(value, item.Unit))}");
+            var info = CachedInfo(config);
+            icon.Update(TrayIconRenderer.Render(TrayText(value), config.Colour), "OpenHW · " + info[0], string.Join("\n", info.Skip(1)));
+            icon.RefreshMenu(); // the info lines change every poll
         }
     }
 

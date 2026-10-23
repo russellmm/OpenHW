@@ -16,6 +16,9 @@ public sealed record TrayMenuItem(string Label, Action? Clicked)
 
     /// <summary>Label that changes with state; <see cref="Label"/> is used when null.</summary>
     public Func<string>? DynamicLabel { get; init; }
+
+    /// <summary>False for information lines: shown, not clickable.</summary>
+    public bool Enabled { get; init; } = true;
 }
 
 /// <summary>
@@ -180,6 +183,12 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
                     writer.WriteSignature("i");
                     writer.WriteInt32(isChecked() ? 1 : 0);
                 }
+            }
+            if (!item.Enabled)
+            {
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("enabled");
+                writer.WriteVariantBool(false);
             }
             if (item.Visible is { } visible)
             {

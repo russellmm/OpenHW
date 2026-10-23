@@ -13,7 +13,7 @@ namespace OpenHW.App.Tray;
 /// </summary>
 public static class TrayIconRenderer
 {
-    private static readonly int[] Sizes = [16, 22, 24, 32, 48, 64];
+    private static readonly int[] Sizes = [16, 22, 24, 32, 44, 48, 64]; // 44: 22 px icons at 2× scale
 
     public static IconPixmap[] Render(string text, string backgroundHex)
     {
@@ -55,16 +55,21 @@ public static class TrayIconRenderer
             ? Color.Parse("#141414")
             : Colors.White;
 
-    // Largest bold size whose width still fits the tile, so "45" is big and "100" shrinks to fit.
+    // A narrow bold face fits more digit height into a square tile ("250" is three digits wide); the default font is
+    // the fallback where it isn't installed.
+    private static readonly FontFamily Narrow = new("Liberation Sans Narrow, Nimbus Sans Narrow, " + FontFamily.Default.Name);
+
+    // Largest size whose glyph outlines (not the font's line box or advance widths) fit the tile with a 1 px margin
+    // across and ~6 % top and bottom, so "45" fills the tile and "5.3k" still fits.
     private static FormattedText FitText(string text, int size, Color foreground)
     {
-        var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+        var typeface = new Typeface(Narrow, FontStyle.Normal, FontWeight.Bold);
         var brush = new SolidColorBrush(foreground);
-        for (var em = size * 0.8; ; em -= 0.5)
+        for (var em = size * 1.4; ; em -= 0.25)
         {
-            var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                              typeface, em, brush);
-            if (formatted.Width <= size - 1 || em <= 4) return formatted;
+            var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, em, brush);
+            var ink = formatted.BuildGeometry(default)?.Bounds ?? new Rect(0, 0, formatted.Width, formatted.Height);
+            if (ink.Width <= size - 2 && ink.Height <= size * 0.88 || em <= 4) return formatted;
         }
     }
 

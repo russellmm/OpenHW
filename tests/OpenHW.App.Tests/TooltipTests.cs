@@ -88,3 +88,21 @@ public sealed class TooltipTests
         Assert.Contains("Unmapped input:", SensorPresentation.Tooltip(fan));
     }
 }
+
+// Every row this machine shows should say what it measures, not just fall back to "A temperature sensor."
+public sealed class ExplanationCoverageTests
+{
+    [Xunit.Fact]
+    public void EveryShownSensorHereHasASpecificExplanation()
+    {
+        using var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var generic = new HashSet<string> { "", "A temperature sensor.", "A voltage measured by the board.", "A fan or pump speed.",
+            "A power reading.", "A clock frequency.", "A utilisation reading." };
+        var missing = hub.Inventory.Where(Sensors.SensorPresentation.IsShown)
+            .Select(i => (Item: i, Name: Sensors.SensorPresentation.DisplayName(i)))
+            .Where(x => generic.Contains(Sensors.SensorExplanations.Explain(x.Item, x.Name)))
+            .Select(x => x.Name).Distinct().Order().ToList();
+        Xunit.Assert.True(missing.Count == 0, "No explanation for: " + string.Join(", ", missing));
+    }
+}

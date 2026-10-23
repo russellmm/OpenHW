@@ -187,6 +187,7 @@ public static partial class SensorPresentation
     {
         var name = DisplayName(item);
         var lines = new List<string> { name };
+        // An uncertain name is called out before anything is said about what it means.
         if (!item.MappingConfirmed)
             lines.Add("Unconfirmed mapping: this name and scale were inferred by comparing readings with HWiNFO " +
                       "and have not been verified on this board yet.");
@@ -195,6 +196,10 @@ public static partial class SensorPresentation
         else if (item.OriginalName.Length == 0 && IsSuperIo(item) && item.Kind is HardwareKind.Temperature or HardwareKind.Tach)
             lines.Add("Unmapped input: this is the chip's own name for the input; which board sensor or fan header " +
                       "it is has not been mapped yet.");
+
+        var explanation = SensorExplanations.Explain(item, name);
+        if (explanation.Length > 0) lines.Add(explanation);
+        lines.Add(""); // what it means above, where it comes from below
 
         if (item.OriginalName.Length > 0)
             lines.Add($"Board input: {item.OriginalName} on {ChipName(item)}" +
@@ -205,7 +210,26 @@ public static partial class SensorPresentation
         var details = item.Details.Replace(BoardProfiles.UnmappedRailNote, "");
         if (details.Length > 0) lines.Add(details);
         else if (item.Source.Length > 0) lines.Add($"Source: {item.Source}");
-        lines.Add($"Sensor ID: {item.Id}");
+        // Prose wraps; the id stays on one line so it can be read (and copied) whole.
+        return string.Join("\n", lines.Select(l => Wrap(l)).Append($"Sensor ID: {item.Id}"));
+    }
+
+    /// <summary>Breaks text into lines of about <paramref name="width"/> characters at spaces (tooltips and tray menus don't wrap).</summary>
+    public static string Wrap(string text, int width = 72)
+    {
+        var lines = new List<string>();
+        var line = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' '))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > width)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+            if (line.Length > 0) line.Append(' ');
+            line.Append(word);
+        }
+        if (line.Length > 0) lines.Add(line.ToString());
         return string.Join("\n", lines);
     }
 

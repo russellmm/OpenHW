@@ -29,7 +29,15 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 icon is a picture we draw (value on a coloured tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
 colours, are chosen in **File → Settings** (up to 8; default one CPU-temperature icon on red); tray sensors stay
-live even inside collapsed groups.
+live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile.
+
+Each icon's right-click menu starts with its sensor: the reading, min/max/average, the device it belongs to and a
+plain-language explanation. GNOME's AppIndicator extension never shows tooltips, so that menu is where the
+expanded information appears there; the same text is published as the icon's tooltip for hosts that show one
+(e.g. KDE). On GNOME the icon size is the extension's `icon-size` setting (22 px on the workstation).
+
+Every sensor row's tooltip in the main window also starts with what the reading means and when it matters
+(`SensorExplanations`), before its source and id.
 
 ## Settings
 
