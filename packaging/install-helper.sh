@@ -16,6 +16,9 @@ trap 'rm -rf "$out"' EXIT
 sudo -u "$SUDO_USER" dotnet publish "$repo/src/OpenHW.Helper/OpenHW.Helper.csproj" -c Release -o "$out" --nologo -v quiet
 
 groupadd -f openhw
+# Only a first install adds the user to the group; updates (the usual case) just restart the helper below.
+already_member=0
+id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx openhw && already_member=1
 usermod -aG openhw "$SUDO_USER"
 
 install -d -m 755 /usr/local/lib/openhw
@@ -36,7 +39,9 @@ systemctl restart openhw-helper.service
 systemctl --no-pager --lines=3 status openhw-helper.service || true
 
 echo
-if [[ -e "/var/lib/systemd/linger/$SUDO_USER" ]]; then
+if [[ $already_member -eq 1 ]]; then
+    echo "Updated and restarted; '$SUDO_USER' is already in the openhw group, so no reboot or logout is needed."
+elif [[ -e "/var/lib/systemd/linger/$SUDO_USER" ]]; then
     echo "Installed. Reboot once so '$SUDO_USER' picks up the openhw group (lingering keeps the old session's groups)."
 else
     echo "Installed. Log out and back in once so '$SUDO_USER' picks up the openhw group (check with: id)."
