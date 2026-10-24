@@ -135,13 +135,38 @@ public sealed class SettingsWindow : Window
     public static bool Matches(string label, string query) =>
         query.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(word => label.Contains(word, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Whether this sensor already has a tray icon. "CPU temperature (automatic)" and the row it resolves to are the
+    /// same sensor, so each blocks the other.
+    /// </summary>
+    private bool InTray(string id)
+    {
+        var cpu = _hub.CpuTemperatureId();
+        string Resolve(string sensor) => sensor == AppSettings.CpuTemperature ? cpu ?? sensor : sensor;
+        return _settings.TrayIcons.Any(t => t.SensorId == id || Resolve(t.SensorId) == Resolve(id));
+    }
+
+    // Sensors already in the tray stay listed (so a search still finds them) but grayed, and can't be added again.
     private void ApplyFilter()
     {
         var query = _search.Text ?? "";
         var shown = _choices.Where(c => Matches(c.Label, query)).ToList();
         _results.Items.Clear();
-        foreach (var choice in shown) _results.Items.Add(new ListBoxItem { Content = choice.Label, Tag = choice.Id, Padding = new Thickness(8, 3) });
-        _results.SelectedIndex = shown.Count > 0 ? 0 : -1;
+        foreach (var choice in shown)
+        {
+            var inTray = InTray(choice.Id);
+            var item = new ListBoxItem
+            {
+                Content = inTray ? choice.Label + "   (in tray)" : choice.Label, Tag = choice.Id, Padding = new Thickness(8, 3), IsEnabled = !inTray,
+            };
+            if (inTray)
+            {
+                ToolTip.SetTip(item, "Already in the tray — change or remove it above, or from its own tray menu");
+                ToolTip.SetShowOnDisabled(item, true);
+            }
+            _results.Items.Add(item);
+        }
+        _results.SelectedItem = _results.Items.OfType<ListBoxItem>().FirstOrDefault(i => i.IsEnabled);
         _matches.Text = query.Trim().Length == 0 ? $"{shown.Count} sensors" : $"{shown.Count} of {_choices.Count} sensors";
     }
 
@@ -189,7 +214,7 @@ public sealed class SettingsWindow : Window
 
     private void AddSensor()
     {
-        if (_results.SelectedItem is not ListBoxItem { Tag: string id } || _settings.TrayIcons.Count >= AppSettings.MaxTrayIcons) return;
+        if (_results.SelectedItem is not ListBoxItem { Tag: string id } || _settings.TrayIcons.Count >= AppSettings.MaxTrayIcons || InTray(id)) return;
         // Next colour not already in use, so new icons are told apart at a glance.
         var used = _settings.TrayIcons.Select(t => t.Colour).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var colour = AppSettings.Colours.Select(c => c.Hex).FirstOrDefault(h => !used.Contains(h)) ?? AppSettings.Colours[0].Hex;
@@ -210,14 +235,20 @@ public sealed class SettingsWindow : Window
         change();
         _settings.Save();
         _applied();
-        if (rebuild) RebuildTrayRows();
+        if (rebuild)
+        {
+            RebuildTrayRows();
+            ApplyFilter(); // what's grayed follows what's in the tray
+        }
         _status.Text = "Saved.";
     }
 
     /// <summary>The tray list changed elsewhere (a sensor row's "Add to tray"): redraw it if the window is up.</summary>
     public void RefreshTrayRows()
     {
-        if (IsVisible) RebuildTrayRows();
+        if (!IsVisible) return;
+        RebuildTrayRows();
+        ApplyFilter();
     }
 
     /// <summary>The sensor list changes as hardware comes and goes; refresh it each time the window opens.</summary>

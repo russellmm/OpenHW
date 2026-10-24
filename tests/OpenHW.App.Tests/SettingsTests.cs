@@ -143,3 +143,55 @@ public sealed class SensorSearchTests
         Assert.True(all > 100);
     }
 }
+
+public sealed class TrayDuplicateTests
+{
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void SensorsInTheTrayAreGrayedAndCantBeAddedTwice()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-dupes-").FullName);
+        using var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var settings = AppSettings.Load(); // default: the automatic CPU temperature
+        settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:fclk", Colour = "#2E86DE" });
+        var window = new SettingsWindow(settings, hub, () => { });
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
+        var list = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ListBox>().Single();
+        var add = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => (b.Content as string) == "Add to tray");
+
+        search.Text = "fclk";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var fclk = Assert.Single(list.Items.OfType<Avalonia.Controls.ListBoxItem>());
+        Assert.False(fclk.IsEnabled);
+        Assert.EndsWith("(in tray)", (string)fclk.Content!);
+        Assert.Null(list.SelectedItem);
+        add.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.Equal(2, settings.TrayIcons.Count);
+
+        // The automatic CPU temperature is the same sensor as the Tctl row it resolves to.
+        search.Text = "Tctl";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.All(list.Items.OfType<Avalonia.Controls.ListBoxItem>().Where(i => (string)i.Tag! == hub.CpuTemperatureId()), i => Assert.False(i.IsEnabled));
+
+        // Something not in the tray is still offered and selected.
+        search.Text = "mclk";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.True(Assert.Single(list.Items.OfType<Avalonia.Controls.ListBoxItem>()).IsEnabled);
+        Assert.NotNull(list.SelectedItem);
+    }
+
+    [Xunit.Fact]
+    public void ASettingsFileWithDuplicatesKeepsOneOfEach()
+    {
+        var dir = Directory.CreateTempSubdirectory("openhw-dupefile-").FullName;
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", dir);
+        Directory.CreateDirectory(Path.Combine(dir, "openhw"));
+        File.WriteAllText(Path.Combine(dir, "openhw", "settings.json"),
+            """{"TrayIcons":[{"SensorId":"hsmp:fclk","Colour":"#2E86DE"},{"SensorId":"hsmp:fclk","Colour":"#27AE60"},{"SensorId":"hsmp:mclk","Colour":"#C0392B"}]}""");
+        var icons = AppSettings.Load().TrayIcons;
+        Assert.Equal(["hsmp:fclk", "hsmp:mclk"], icons.Select(t => t.SensorId));
+        Assert.Equal("#2E86DE", icons[0].Colour); // the first one wins
+    }
+}

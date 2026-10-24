@@ -54,7 +54,8 @@ public sealed class AppSettings
     private void Normalise()
     {
         if (!PollChoices.Contains(PollSeconds)) PollSeconds = 2;
-        TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).Take(MaxTrayIcons).ToList();
+        // One icon per sensor: a file from before duplicates were blocked keeps the first of each.
+        TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
         foreach (var icon in TrayIcons)
             if (!Colours.Any(c => c.Hex.Equals(icon.Colour, StringComparison.OrdinalIgnoreCase))) icon.Colour = Colours[0].Hex;
         StartAtLogin = File.Exists(AutostartPath); // the file is the truth: the user may have removed it elsewhere
