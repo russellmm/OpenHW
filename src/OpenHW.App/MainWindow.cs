@@ -46,7 +46,7 @@ public sealed class MainWindow : Window
 {
     // Fixed widths so header and rows line up regardless of the list's scrollbar; the trailing * is HWiNFO's
     // empty band to the right of Average.
-    private const string Columns = "362,96,96,96,96,*";
+    private readonly ColumnLayout _columns;
     private const double RowHeight = 20;
 
     private readonly SensorHub _hub;
@@ -81,6 +81,7 @@ public sealed class MainWindow : Window
         _hub = hub;
         _power = power;
         _commands = commands;
+        _columns = new ColumnLayout(_view.ColumnWidths);
         _collapsedGroups = _view.CollapsedGroups;
         _expandedSensors = _view.ExpandedSensors;
         Title = "OpenHW Sensors Status";
@@ -147,6 +148,7 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Children = { menu, footer, header, _list } };
 
+        RestoreWindow();
         RebuildTree();
     }
 
@@ -313,7 +315,11 @@ public sealed class MainWindow : Window
         icon.Bind(Shape.StrokeProperty, new Binding(nameof(SensorRow.IconStroke)));
         var label = Text(nameof(SensorRow.Label));
         label.Bind(TextBlock.ForegroundProperty, new Binding(nameof(SensorRow.TextBrush)));
-        var name = new StackPanel { Orientation = Orientation.Horizontal, Children = { chevron, icon, label } };
+        // A DockPanel, not a StackPanel: the name gets only the column's remaining width (and trims with "…"), so a
+        // long name can't widen the column past what the header shows.
+        DockPanel.SetDock(chevron, Dock.Left);
+        DockPanel.SetDock(icon, Dock.Left);
+        var name = new DockPanel { LastChildFill = true, Children = { chevron, icon, label } };
         name.Bind(MarginProperty, new Binding(nameof(SensorRow.Indent)));
         grid.Children.Add(name);
         AddValueCells(grid, withValues: true);
@@ -388,16 +394,16 @@ public sealed class MainWindow : Window
             menu.Items.Add(item);
     }
 
-    private static Control BuildSpacerTemplate()
+    private Control BuildSpacerTemplate()
     {
         var grid = RowGrid();
         AddValueCells(grid, withValues: false);
         return grid;
     }
 
-    private static Grid RowGrid()
+    private Grid RowGrid()
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(Columns), Height = RowHeight };
+        var grid = new Grid { ColumnDefinitions = _columns.Definitions(), Height = RowHeight };
         grid.Bind(Panel.BackgroundProperty, new Binding(nameof(Row.Background)));
         // Selection is an overlay so it shows over both shading and the "changed" highlight.
         var selection = new Border { Background = Palette.Selected, Opacity = 0.75, IsHitTestVisible = false };
@@ -450,9 +456,9 @@ public sealed class MainWindow : Window
 
     // ── header / footer ──────────────────────────────────────────────────────────────────────────────────────
 
-    private static Control BuildHeader()
+    private Control BuildHeader()
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(Columns), Height = 24, Background = Palette.ColumnHeader };
+        var grid = new Grid { ColumnDefinitions = _columns.Definitions(), Height = 24, Background = Palette.ColumnHeader };
         string[] titles = ["Sensor", "Current", "Minimum", "Maximum", "Average"];
         for (var i = 0; i < titles.Length; i++)
         {
@@ -468,8 +474,76 @@ public sealed class MainWindow : Window
             };
             Grid.SetColumn(cell, i);
             grid.Children.Add(cell);
+
+            // Drag the column's right edge to resize it (in every row); double-click it for the default width.
+            var column = i;
+            var handle = new Avalonia.Controls.Primitives.Thumb
+            {
+                Width = 7, HorizontalAlignment = HorizontalAlignment.Right, Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.SizeWestEast), Template = null,
+            };
+            handle.DragDelta += (_, e) => _columns.Set(column, _columns.Widths[column] + e.Vector.X);
+            handle.DragCompleted += (_, _) => SaveColumns();
+            handle.DoubleTapped += (_, _) => { _columns.Reset(column); SaveColumns(); };
+            ToolTip.SetTip(handle, "Drag to resize; double-click for the default width");
+            Grid.SetColumn(handle, i);
+            grid.Children.Add(handle);
         }
         return grid;
+    }
+
+    internal ColumnLayout ColumnLayout => _columns;
+
+    internal void SaveColumns()
+    {
+        _view.ColumnWidths = _columns.Widths.ToList();
+        _view.Save();
+    }
+
+    // ── window size and position ────────────────────────────────────────────────────────────────────────────
+
+    private void RestoreWindow()
+    {
+        if (_view.WindowWidth is { } w && _view.WindowHeight is { } h && w >= MinWidth && h >= 200 && w < 10000 && h < 10000)
+        {
+            Width = w;
+            Height = h;
+        }
+        if (_view.WindowX is { } x && _view.WindowY is { } y)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(x, y);
+        }
+        if (_view.Maximized) WindowState = WindowState.Maximized;
+        Opened += (_, _) =>
+        {
+            // Saved on a monitor that's gone: start centred on the primary screen instead.
+            if (Screens.ScreenFromPoint(Position) is null && Screens.Primary is { } screen)
+                Position = new PixelPoint(screen.WorkingArea.X + (int)Math.Max(0, (screen.WorkingArea.Width - Width * screen.Scaling) / 2),
+                                          screen.WorkingArea.Y + (int)Math.Max(0, (screen.WorkingArea.Height - Height * screen.Scaling) / 2));
+        };
+    }
+
+    /// <summary>Remembers size, position and maximized state for next time (called when hidden and at exit).</summary>
+    public void SaveWindowState()
+    {
+        if (!IsVisible) return; // a hidden window's geometry isn't meaningful
+        _view.Maximized = WindowState == WindowState.Maximized;
+        if (!_view.Maximized)
+        {
+            _view.WindowWidth = Width;
+            _view.WindowHeight = Height;
+            _view.WindowX = Position.X;
+            _view.WindowY = Position.Y;
+        }
+        _view.Save();
+    }
+
+    /// <summary>Hides to the tray (File → Hide Window, the close button), remembering the window's place.</summary>
+    public void HideWindow()
+    {
+        SaveWindowState();
+        Hide();
     }
 
     // ── menu ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -489,7 +563,7 @@ public sealed class MainWindow : Window
         }
 
         var file = new MenuItem { Header = "_File" };
-        file.Items.Add(Item("_Hide Window", Hide, "Ctrl+W"));
+        file.Items.Add(Item("_Hide Window", HideWindow, "Ctrl+W"));
         if (_commands is { StartLogging: { } start, StopLogging: { } stop, IsLogging: { } logging })
         {
             var startItem = Item("Start _Logging…", start);
@@ -560,7 +634,7 @@ public sealed class MainWindow : Window
         var expand = FooterButton("Expand all", FooterIcons.Expand, () => SetAllExpanded(true));
         var collapse = FooterButton("Collapse all", FooterIcons.Collapse, () => SetAllExpanded(false));
         var reset = FooterButton("Reset Min/Max/Average", FooterIcons.Clock, ResetStatistics);
-        var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, Hide);
+        var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, HideWindow);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _logging, _elapsedText, reset, close } };
         if (BuildPowerControls() is { } power) right.Children.Insert(0, power);
@@ -715,7 +789,7 @@ public sealed class MainWindow : Window
         if (!e.IsProgrammatic)
         {
             e.Cancel = true;
-            Hide();
+            HideWindow();
         }
         base.OnClosing(e);
     }

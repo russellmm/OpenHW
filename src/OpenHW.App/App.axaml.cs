@@ -51,6 +51,7 @@ public sealed class App : Application
 
             lifetime.Exit += (_, _) =>
             {
+                _window?.SaveWindowState();
                 _poll?.Dispose();
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
                 _logger?.Dispose();

@@ -99,14 +99,15 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 - [x] Tray icon menus: Move left/right, Remove, Color submenu; saved custom colors (hex entry or color picker); panel order follows
       Settings; Settings sensor picker is searchable.
 - [x] Sensor row right-click menu in HWiNFO's shape (Add/Remove from tray work; others grayed "To be implemented").
-- [ ] Fill in the row menu: Show Graph, Disable/Enable monitoring, Rename, Hide, logging, layout/customise values,
-      alerts (OSD/RTSS/LG LCD are Windows-specific in HWiNFO — decide whether they have a Linux meaning).
+- [x] Row menu: Show Graph, Disable/Enable monitoring, Rename, Hide/Unhide, Enable/Disable Logging (0.3.0).
+- [ ] Row menu still to do: Layout settings, Customize values, Alerts (OSD/RTSS/LG LCD are Windows-specific in
+      HWiNFO — decide whether they have a Linux meaning).
 - [x] Tray icon menus start with the sensor's reading, min/max/average and explanation; sensor tooltips explain
       every reading.
 - [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,
       or an OpenHW GNOME Shell extension with real hover tooltips. Deferred by the owner.
 - [ ] More settings modelled on `reference/` (units, shown columns, row shading, highlight).
-- [ ] Column resizing; remember window size, expanded groups and hidden sensors.
-- [ ] CSV logging.
+- [x] Column resizing; remember window size/position, expanded groups and hidden sensors.
+- [x] CSV logging.
 - [x] Single instance (a second launch shows the running window).
 - [x] Optional start at login (autostart entry), optionally in the tray only.

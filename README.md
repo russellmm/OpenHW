@@ -92,9 +92,28 @@ Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry firs
 for the common ones (expand/collapse, power mode, CPU frequency, power limits, reset, close), and the tray menu
 mirrors the Power menu.
 
-Right-clicking a sensor row opens HWiNFO's sensor menu, item for item: **Add to tray** / **Remove from tray** and
-**Tray icon settings…** work today; the rest (Show Graph, monitoring on/off, Rename, Hide, logging, layout,
-customise, OSD, RTSS, alerts, LG LCD) are grayed with a "To be implemented" tooltip until they land.
+Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
+- **Show Graph** — a live window per sensor with its last 30 minutes (OpenHW keeps that history for every sensor it
+  reads; unread stretches are gaps) and Current/Min/Max/Average.
+- **Add to tray / Remove from tray**, **Tray icon settings…**.
+- **Disable / Enable monitoring** (Del / Ins) — the sensor isn't read and its values go blank (a tray icon or open
+  graph keeps its own sensor live).
+- **Rename** (F2) — your name everywhere the sensor appears; the tooltip keeps the original.
+- **Hide** (Shift+Del) — View → **Show Hidden Sensors** brings hidden rows back marked "(hidden)" (right-click →
+  Unhide), View → **Unhide All Sensors** clears them.
+- **Enable / Disable Logging** — which sensors the next CSV log includes.
+- Layout settings, Customize values, OSD, RTSS, Alerts and LG LCD are grayed "To be implemented".
+
+These choices are kept in `~/.config/openhw/sensors.json`.
+
+**CSV logging**: File → **Start Logging…** asks where to save (default `~/Documents/OpenHW/openhw-<date>-<time>.csv`)
+and writes Date, Time and every monitored, logged sensor in window order ("Device: Sensor [unit]"), one row per poll,
+flushed as it goes; the footer shows "● Logging". Logged sensors are read every poll while logging. File → **Stop
+Logging** ends it.
+
+**Columns and window**: drag a column header's right edge to resize the column everywhere (double-click it for the
+default width); long names trim with "…". Column widths and the window's size, position and maximized state are
+saved in `~/.config/openhw/view.json`.
 
 ## Power limits
 

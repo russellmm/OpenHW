@@ -3,6 +3,26 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.3.0 — 2026-10-23
+
+**Sensor right-click menu, filled in**
+- Rename (F2): your own name for a sensor, shown in the window, tray, Settings, graphs and logs; sorting and
+  explanations keep OpenHW's name, and the tooltip notes the original.
+- Hide / Unhide (Shift+Del); View → Show Hidden Sensors and Unhide All Sensors.
+- Disable / Enable monitoring (Del / Ins): the sensor isn't read and its values are blank.
+- Show Graph: a live 30-minute graph per sensor (history kept for every sensor read).
+- Enable / Disable Logging, with File → Start Logging… / Stop Logging writing a CSV (Date, Time, every monitored and
+  logged sensor in window order), one row per poll.
+- Choices are saved in `~/.config/openhw/sensors.json`.
+
+**Window**
+- Column resizing: drag a header edge (double-click for the default); long names trim with "…".
+- The window's size, position and maximized state are remembered.
+
+**Other**
+- `install-helper.sh` asks for a reboot only on a first install.
+- The version stamp shows the commit hash even on a tagged commit.
+
 ## 0.2.0 — 2026-10-23
 
 **Controls (through openhw-helper)**

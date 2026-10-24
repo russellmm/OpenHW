@@ -12,6 +12,16 @@ public sealed class ViewState
     public HashSet<string> CollapsedGroups { get; set; } = [];
     public HashSet<string> ExpandedSensors { get; set; } = [];
 
+    /// <summary>Column widths (Sensor, Current, Minimum, Maximum, Average); null = defaults.</summary>
+    public List<double>? ColumnWidths { get; set; }
+
+    /// <summary>Window size and position in device pixels when last hidden or closed; null = defaults.</summary>
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public int? WindowX { get; set; }
+    public int? WindowY { get; set; }
+    public bool Maximized { get; set; }
+
     private static string FilePath => Path.Combine(
         Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
             ? config
