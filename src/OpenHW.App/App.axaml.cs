@@ -25,6 +25,8 @@ public sealed class App : Application
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
+    private volatile SensorLogger? _logger;
+    private string[] _loggedIds = [];
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
     private int _polls;
@@ -37,10 +39,12 @@ public sealed class App : Application
         {
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _hub.Sample(); // first discovery + sample before the window builds its tree
+            _hub.Sample();
+            _logger?.Append(DateTime.Now, id => _hub.Get(id).Current); // first discovery + sample before the window builds its tree
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
+                IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             });
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
@@ -49,6 +53,7 @@ public sealed class App : Application
             {
                 _poll?.Dispose();
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
+                _logger?.Dispose();
                 Program.Instance?.Dispose();
                 _power.Dispose();
                 _gpuPower.Dispose();
@@ -183,6 +188,7 @@ public sealed class App : Application
         try
         {
             _hub.Sample();
+            _logger?.Append(DateTime.Now, id => _hub.Get(id).Current);
             // Another tool (or the power menu while OpenHW was closed) can change the ceilings; re-check every 10 s.
             if (++_polls % 5 == 0)
             {
@@ -315,8 +321,8 @@ public sealed class App : Application
 
     private void UpdateTray()
     {
-        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).ToArray();
-        _hub.SetPinned(ids); // tray and graphed sensors stay live even inside a collapsed group
+        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds).ToArray();
+        _hub.SetPinned(ids); // tray, graphed and logged sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
         var before = _trayInfo;
@@ -353,6 +359,59 @@ public sealed class App : Application
         _window?.RefreshPower();
         _cpuFrequency?.RefreshFromController();
         foreach (var (_, icon) in _trayIcons) icon.RefreshMenu();
+    }
+
+    /// <summary>
+    /// File → Start Logging: asks where to save (suggesting ~/Documents/OpenHW/openhw-date-time.csv; the default is used
+    /// if no file dialog is available), then logs every monitored, logged sensor in window order each poll.
+    /// </summary>
+    private async Task StartLoggingAsync()
+    {
+        if (_logger is not null || _window is null) return;
+        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) is { Length: > 0 } docs
+            ? docs : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OpenHW");
+        Directory.CreateDirectory(folder);
+        var name = $"openhw-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
+        string? path;
+        try
+        {
+            var file = await _window.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Log sensors to CSV", SuggestedFileName = name, DefaultExtension = "csv",
+                SuggestedStartLocation = await _window.StorageProvider.TryGetFolderFromPathAsync(new Uri(folder)),
+                FileTypeChoices = [new Avalonia.Platform.Storage.FilePickerFileType("CSV") { Patterns = ["*.csv"] }],
+            });
+            if (file is null) return; // cancelled
+            path = Avalonia.Platform.Storage.StorageProviderExtensions.TryGetLocalPath(file) ?? Path.Combine(folder, name);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            path = Path.Combine(folder, name); // no dialog on this desktop: use the default
+        }
+
+        var columns = SensorLogger.ColumnsFor(_hub);
+        try
+        {
+            _logger = new SensorLogger(path, columns);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"openhw: could not start logging ({ex.Message})");
+            return;
+        }
+        _loggedIds = columns.Select(c => c.Id).ToArray();
+        UpdateTray(); // pins the logged sensors
+        _window.SetLogging(path);
+    }
+
+    private void StopLogging()
+    {
+        var logger = _logger;
+        _logger = null;
+        logger?.Dispose();
+        _loggedIds = [];
+        UpdateTray();
+        _window?.SetLogging(null);
     }
 
     // One graph window per sensor; asking again brings it forward. Its sensor is pinned (kept live) while it's open.

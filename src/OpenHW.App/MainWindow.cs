@@ -27,6 +27,11 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
 
     /// <summary>Opens (or brings forward) a sensor's graph window.</summary>
     public Action<string>? ShowGraph { get; init; }
+
+    /// <summary>CSV logging (File menu); null where the app doesn't log.</summary>
+    public Func<bool>? IsLogging { get; init; }
+    public Action? StartLogging { get; init; }
+    public Action? StopLogging { get; init; }
 }
 
 /// <summary>Whether a sensor can be added to, or removed from, the tray — and why not.</summary>
@@ -59,6 +64,11 @@ public sealed class MainWindow : Window
     private ComboBox? _powerMode;
     private Button? _removeCap;
     private TextBlock? _powerError;
+    private readonly TextBlock _logging = new()
+    {
+        IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+    };
     private Button? _cpuFrequency;
     private readonly WindowCommands? _commands;
     private MenuItem? _powerMenu;
@@ -364,8 +374,8 @@ public sealed class MainWindow : Window
             row.HiddenByUser
                 ? Item("Unhide", () => _custom.SetHidden(row.Id, false), "Shift+Delete")
                 : Item("Hide", () => _custom.SetHidden(row.Id, true), "Shift+Delete"),
-            Item("Enable Logging"),
-            Item("Disable Logging"),
+            Item("Enable Logging", _custom.IsLogged(row.Id) ? null : () => _custom.SetLogged(row.Id, true), disabledTip: "Already logged (File → Start Logging)"),
+            Item("Disable Logging", _custom.IsLogged(row.Id) ? () => _custom.SetLogged(row.Id, false) : null, disabledTip: "Not logged"),
             new Separator(),
             Item("Layout settings…"),
             Item("Customize values…"),
@@ -480,6 +490,15 @@ public sealed class MainWindow : Window
 
         var file = new MenuItem { Header = "_File" };
         file.Items.Add(Item("_Hide Window", Hide, "Ctrl+W"));
+        if (_commands is { StartLogging: { } start, StopLogging: { } stop, IsLogging: { } logging })
+        {
+            var startItem = Item("Start _Logging…", start);
+            var stopItem = Item("Stop L_ogging", stop);
+            file.Items.Add(startItem);
+            file.Items.Add(stopItem);
+            file.SubmenuOpened += (_, _) => { startItem.IsVisible = !logging(); stopItem.IsVisible = logging(); };
+            file.Items.Add(new Separator());
+        }
         if (_commands is { } c)
         {
             file.Items.Add(Item("_Settings…", c.ShowSettings));
@@ -543,7 +562,7 @@ public sealed class MainWindow : Window
         var reset = FooterButton("Reset Min/Max/Average", FooterIcons.Clock, ResetStatistics);
         var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, Hide);
 
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _elapsedText, reset, close } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _logging, _elapsedText, reset, close } };
         if (BuildPowerControls() is { } power) right.Children.Insert(0, power);
         // The version takes whatever width is left and trims, so the power controls never draw over it.
         var version = new TextBlock
@@ -655,6 +674,14 @@ public sealed class MainWindow : Window
             }
         }
         foreach (var (item, profile) in _profileItems.Zip(_power.Profiles)) item.IsChecked = profile == _power.ActiveProfile;
+    }
+
+    /// <summary>Shows "● Logging" in the footer while a CSV log is being written (null when not). UI thread.</summary>
+    public void SetLogging(string? path)
+    {
+        _logging.IsVisible = path is not null;
+        _logging.Text = path is null ? "" : "● Logging";
+        ToolTip.SetTip(_logging, path is null ? null : $"Writing {path} — File → Stop Logging to finish");
     }
 
     /// <summary>"OpenHW 0.2.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>
