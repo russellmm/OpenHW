@@ -125,10 +125,12 @@ public sealed class AppSettings
             """);
     }
 
-    // The installed launcher (~/.local/bin/openhw) when there is one, so autostart survives reinstalls; else this process.
+    // The installed launcher when there is one (the per-user install's ~/.local/bin/openhw, else the package's
+    // /usr/bin/openhw), so autostart survives reinstalls; else this process.
     private static string LauncherPath()
     {
-        var launcher = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "openhw");
-        return File.Exists(launcher) ? launcher : Environment.ProcessPath ?? "openhw";
+        var user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "openhw");
+        if (File.Exists(user)) return user;
+        return File.Exists("/usr/bin/openhw") ? "/usr/bin/openhw" : Environment.ProcessPath ?? "openhw";
     }
 }
