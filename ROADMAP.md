@@ -1,8 +1,8 @@
 # OpenHW roadmap
 
-Planned work, roughly in priority order within each section. openfan-linux already implements most write
-features; port the logic (copy, never reference) and expose it as validated `openhw-helper` commands, keeping
-the GUI unprivileged.
+Planned work, roughly in priority order within each section. Writes are validated `openhw-helper` commands,
+keeping the GUI unprivileged. Behaviour is derived from the hardware's own interfaces (ranges, readback) — not
+copied from openfan-linux, which OpenHW never references.
 
 ## Write capabilities (via openhw-helper)
 
@@ -24,8 +24,8 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [x] **Where the 4.0 GHz clamp comes from**: not the boot sequence (booted in power-saver, switched to Performance
       with both apps closed → full 5.49 GHz). It's a 4.0 GHz value stored while boost is off, e.g. OpenFan's
       Hardware maximum pressed in power-saver.
-- [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect.
-      Source: openfan-linux `HwmonBackend` / `NvmlFanWriter` / `FanController`.
+- [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect, from the
+      hwmon `pwmN`/`pwmN_enable` interface and NVML's fan-control calls.
 
 ## Root-only readings (via openhw-helper)
 
@@ -75,7 +75,7 @@ per drive — each read is an admin command to the drive, which can also wake it
       expanded. Tray sensors stay live. Collapse state persists in `~/.config/openhw/view.json`.
       Measured per poll: all open 71 ms wall / 32 ms CPU; GPU + drive groups collapsed 3.7 ms / 2 ms.
 - [x] PCIe throughput sampled every 10 s instead of every poll.
-- [ ] Pause reads while the window is hidden (tray only), optionally — HWiNFO keeps statistics running.
+- [x] Pause reads while the window is hidden, optionally (Settings; off by default — HWiNFO keeps statistics running) (0.6.0).
 
 ### Memory
 
@@ -83,12 +83,13 @@ Measured 2026-10-22 (b68a473, everything collapsed, window open): ~0.7% of one c
 (~190 MB private). Breakdown: ~130 MB .NET runtime (GC heap, JIT code, 35 MB W^X double-mapping), ~70 MB
 NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libraries.
 
-- [ ] **Runtime settings first** (no code changes; measure before/after with the same collapse state):
-      disable W^X double-mapping (`DOTNET_EnableWriteXorExecute=0` via the launcher, ~35 MB),
-      `<ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>` and `<TieredPGO>false</TieredPGO>`,
-      GC conserve-memory (`System.GC.ConserveMemory`), optionally a heap hard limit. Expect 40–60 MB less.
-- [ ] Optional software rendering (`X11RenderingMode.Software`) as a setting: drops most of the ~70 MB driver
-      mappings, at some CPU cost while the window is visible — measure both.
+- [x] **Runtime settings** (0.6.0; measured 2026-10-24, window open, 90 s median): TieredPGO off, GC
+      conserve-memory 7 and a 4 MB gen0 budget (environment only — the launcher re-executes itself to set it):
+      322 → 293 MB resident, 219 → 187 MB private, no extra CPU. Tried and dropped: W^X off (the 34 MB
+      double-mapping just moves into anonymous memory), non-concurrent GC (no gain), heap hard limit and
+      `MALLOC_ARENA_MAX=2` (no gain); `System.GC.Gen0Size` in runtimeconfig is ignored.
+- [x] Optional software rendering (Settings, next start) (0.6.0): 293 → 228 MB resident, +0.8% of a core while a
+      window is visible.
 - [ ] **Native AOT later**: compile ahead of time to remove the JIT and most runtime overhead (large memory and
       startup win). Needs trim-safe code first: replace reflection `Binding("Name")` in the row templates with
       compiled bindings, check Tmds.DBus and System.Text.Json (source-generated context for `ViewState`) and
@@ -102,8 +103,9 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 - [x] Sensor row right-click menu in HWiNFO's shape (Add/Remove from tray work; others grayed "To be implemented").
 - [x] Row menu: Show Graph, Disable/Enable monitoring, Rename, Hide/Unhide, Enable/Disable Logging (0.3.0).
 - [x] Alerts: per-sensor rules, desktop notifications, File → Alerts… (0.5.0).
-- [ ] Row menu still to do: Layout settings, Customize values (OSD/RTSS/LG LCD are Windows-specific in HWiNFO —
-      decide whether they have a Linux meaning).
+- [x] Row menu: Layout settings (View → Layout Settings…: order, show/hide, monitoring) and Customize values
+      (label, unit, multiply, offset, decimals) (0.6.0).
+- [ ] OSD / RTSS / LG LCD are Windows-specific in HWiNFO — decide whether they have a Linux meaning.
 - [x] Tray icon menus start with the sensor's reading, min/max/average and explanation; sensor tooltips explain
       every reading.
 - [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,

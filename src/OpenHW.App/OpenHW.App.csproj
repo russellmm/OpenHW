@@ -7,7 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>OpenHW.App</RootNamespace>
     <AssemblyName>openhw</AssemblyName>
+    <!-- Memory (measured 2026-10-24, window open, 90 s median): PGO's instrumented tier costs ~7 MB for no visible
+         gain in a 2 s poll loop. See Program.Gen0Budget for the GC's allocation budget. -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Lets the GC compact harder to keep the heap small (~6 MB here); 7 of 9 is a moderate setting. -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Avalonia 11.2 pins Tmds.DBus.Protocol 0.20, which the tray code also uses. Upgrade them together. -->

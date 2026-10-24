@@ -35,6 +35,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>Sensors with a firing alert (their Current cell turns red).</summary>
     public Func<IReadOnlySet<string>>? Alerting { get; init; }
 
+    /// <summary>View → Layout Settings… and a sensor's "Layout settings…" (which selects that sensor).</summary>
+    public Action<string?>? ShowLayout { get; init; }
+
     /// <summary>Opens (or brings forward) a sensor's graph window.</summary>
     public Action<string>? ShowGraph { get; init; }
 
@@ -205,8 +208,27 @@ public sealed class MainWindow : Window
     private void UpdateReadSet()
     {
         // Monitoring turned off counts as not shown: those sensors aren't read either (tray icons still pin theirs).
-        var shown = _rows.OfType<SensorRow>().Where(r => !r.Disabled).Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        // Settings → "Pause sensors while the window is hidden": a hidden or minimized window shows nothing.
+        var hidden = _pauseWhenHidden && (!IsVisible || WindowState == WindowState.Minimized);
+        var shown = hidden
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : _rows.OfType<SensorRow>().Where(r => !r.Disabled).Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         _hub.SetPaused(_hub.Inventory.Select(i => i.Id).Where(id => !shown.Contains(id)));
+    }
+
+    private bool _pauseWhenHidden;
+
+    /// <summary>Settings → pause sensors while the window is hidden; pinned sensors (tray, alerts, logs, graphs) stay live.</summary>
+    public bool PauseWhenHidden
+    {
+        get => _pauseWhenHidden;
+        set { _pauseWhenHidden = value; UpdateReadSet(); }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (_pauseWhenHidden && (change.Property == IsVisibleProperty || change.Property == WindowStateProperty)) UpdateReadSet();
     }
 
     /// <summary>Pushes the hub's latest statistics into every row (collapsed ones too, so expanding is instant).</summary>
@@ -355,6 +377,14 @@ public sealed class MainWindow : Window
         if (name is not null) _custom.Rename(row.Id, name);
     }
 
+    internal async Task CustomizeAsync(SensorRow row)
+    {
+        var reading = _hub.Get(row.Id).Current is { } raw ? SensorPresentation.BuiltInScale(row.Item, raw) : (double?)null;
+        if (await CustomizeDialog.AskAsync(this, row.Item, reading) is not { } result) return;
+        _custom.Rename(row.Id, result.Name);
+        _custom.Customize(row.Id, result.Values);
+    }
+
     /// <summary>
     /// HWiNFO's sensor right-click menu, item for item and in its order. What OpenHW does today works; the rest is
     /// shown grayed with a "To be implemented" tooltip, so the menu's shape stays familiar as features land.
@@ -394,8 +424,9 @@ public sealed class MainWindow : Window
             Item("Enable Logging", _custom.IsLogged(row.Id) ? null : () => _custom.SetLogged(row.Id, true), disabledTip: "Already in the log (File → Start Logging)"),
             Item("Disable Logging", _custom.IsLogged(row.Id) ? () => _custom.SetLogged(row.Id, false) : null, disabledTip: "Not in the log — Enable Logging to add it"),
             new Separator(),
-            Item("Layout settings…"),
-            Item("Customize values…"),
+            Item("Layout settings…", _commands?.ShowLayout is { } layout ? () => layout(row.Id) : null),
+            Item("Customize values…", SensorPresentation.CanCustomize(row.Item) ? () => _ = CustomizeAsync(row) : null,
+                disabledTip: "Yes/No, P-state and link-width readings are labels, not numbers to rescale"),
             Item("Tray icon settings…", _commands?.ShowTrayIcons ?? _commands?.ShowSettings),
             Item("OSD settings…"),
             Item("OSD (RTSS) settings…"),
@@ -636,6 +667,7 @@ public sealed class MainWindow : Window
         };
         view.Items.Add(showHidden);
         view.Items.Add(Item("_Unhide All Sensors", _custom.UnhideAll));
+        if (_commands?.ShowLayout is { } showLayout) view.Items.Add(Item("_Layout Settings…", () => showLayout(null)));
         view.Items.Add(new Separator());
         view.Items.Add(Item("_Reset Min/Max/Average", ResetStatistics, "Ctrl+R"));
 

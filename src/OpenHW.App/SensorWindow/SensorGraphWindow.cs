@@ -48,9 +48,9 @@ public sealed class SensorGraphWindow : Window
     {
         var name = SensorPresentation.DisplayName(_item);
         Title = $"OpenHW — {name}";
-        var unit = _graph.Unit;
+        _graph.Unit = SensorPresentation.DisplayUnit(_item); // Customize values can change it while the graph is open
         var s = _hub.Get(_item.Id);
-        string F(double? v) => SensorPresentation.Format(v is { } x ? SensorPresentation.Scale(_item, x) : null, unit) is { Length: > 0 } t ? t : "–";
+        string F(double? v) => SensorPresentation.Format(_item, v is { } x ? SensorPresentation.Scale(_item, x) : null) is { Length: > 0 } t ? t : "–";
         _stats.Text = $"{name}\nCurrent {F(s.Current)}   Min {F(s.Minimum)}   Max {F(s.Maximum)}   Avg {F(s.Average)}";
         _graph.Points = _hub.History.Get(_item.Id).Select(p => (p.Age, SensorPresentation.Scale(_item, p.Value))).ToList();
         _graph.InvalidateVisual();

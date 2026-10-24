@@ -66,6 +66,20 @@ interval (1–10 s, default 2 s) and start at login (a freedesktop autostart ent
 optionally with `--tray` to start with only the tray icons). OpenHW runs once per session: a
 second launch (app grid, or the command) shows the running window and exits.
 
+- **Pause sensors while the window is hidden** (off by default): while the window is hidden or minimized, only
+  sensors in the tray, with an alert, being logged or with a graph open are read — as if every group were
+  collapsed. Your expanded/collapsed layout is unchanged; when the window comes back, the other rows are gray for one
+  poll and then live again. Their minimum, maximum, average and graph history skip the hidden time (HWiNFO keeps
+  everything running, hence off by default). It saves the most when groups are left expanded.
+- **Draw windows in software (no OpenGL)** (off by default, applies at the next start): OpenHW doesn't load the GPU
+  driver's OpenGL libraries. Measured 2026-10-24 with the window open: 293 → 228 MB resident, about 0.8% more of
+  one core while a window is visible (nothing extra while hidden).
+
+**Memory**: OpenHW sets three .NET runtime options for a smaller footprint — TieredPGO off and GC conserve-memory
+(in the runtimeconfig), and a 4 MB gen0 allocation budget (`DOTNET_GCgen0size`; the launcher re-executes itself
+once to set it, since the runtime reads it only from the environment — set the variable yourself to override, `0`
+for the GC's default). Measured 2026-10-24: 322 → 293 MB resident, 219 → 187 MB private, no extra CPU.
+
 **File → Tray Icons…** (also in the tray menu and a sensor's **Tray icon settings…**) has its own window: the icons —
 sensor, color and order (↑ / ↓ = left / right in the panel) — the **custom colors** (add by hex code, `#1E90FF` or
 `1e90ff`, or with **Pick…**, a color dialog with a hex field kept in step with the wheel; offered after the presets in
@@ -96,13 +110,15 @@ and fans carry HWiNFO's names, matched by measurement — evidence in [docs/boar
 Open-pin inputs HWiNFO doesn't list are hidden; mappings still inferred are flagged in their tooltips.
 
 NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (below); without it, drive health
-rows stay empty and everything else keeps working. Not yet read (root only): RAPL package energy and the MSRs
-(effective clocks, per-core power) — they will go through the same helper.
+rows stay empty and everything else keeps working. RAPL package and core energy also come through the helper;
+effective clocks come from the kernel's APERF/MPERF average (no root). Not read: per-core power (MSRs, would need
+CAP_SYS_RAWIO in the helper).
 
 ## Menu and shortcuts
 
-The main window has a menu bar — **File** (Hide Window Ctrl+W, Exit Ctrl+Q), **View** (Expand All Ctrl+E,
-Collapse All Ctrl+Shift+E, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
+The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
+Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
+Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
 Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry first; the footer keeps icon shortcuts
 for the common ones (expand/collapse, power mode, CPU frequency, power limits, reset, close), and the tray menu
 mirrors the Power menu.
@@ -117,9 +133,27 @@ Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
 - **Hide** (Shift+Del) — View → **Show Hidden Sensors** brings hidden rows back marked "(hidden)" (right-click →
   Unhide), View → **Unhide All Sensors** clears them.
 - **Enable / Disable Logging** — which sensors the next CSV log includes (opt-in: none until you enable them).
-- Layout settings, Customize values, OSD, RTSS, Alerts and LG LCD are grayed "To be implemented".
+- **Layout settings…** — opens View → Layout Settings with this sensor selected (below).
+- **Customize values…** — label, unit, multiplier, offset and decimal places for this sensor (below).
+- **Alert settings…** — see [Alerts](#alerts).
+- OSD, OSD (RTSS) and LG LCD settings are grayed "To be implemented" (Windows-only in HWiNFO).
 
 These choices are kept in `~/.config/openhw/sensors.json`.
+
+**Layout Settings** (View menu, or a sensor's **Layout settings…**) is HWiNFO's Layout tab: every group and sensor
+with its Monitoring state, **Monitoring** / **Show** checkboxes for the selected sensor, and the order — ⤒ ↑ ↓ ⤓ move
+a sensor within its group, or a whole group among groups. Hidden sensors are listed below (select one and tick Show
+to bring it back); Rename… and Customize values… act on the selection; **Restore Original Order** goes back to
+OpenHW's order. Per-core rows follow their parent row. A sensor or group that appears later (a new drive, a driver
+update) keeps OpenHW's place for it.
+
+**Customize values** (a sensor's **Customize values…**, or the button in Layout Settings) shows the sensor as
+reading × multiplier + offset, in a unit and with decimal places of your choice ("Automatic" keeps OpenHW's) — e.g.
+°C to °F: unit °F, multiply by 1.8, add 32. The dialog previews the current reading. The customized value is used
+everywhere: the window, graphs, tray icons and menus, CSV logs and alert thresholds (an alert's threshold is in the
+unit shown, so check alerts after changing a sensor's scale). Unlike HWiNFO, "Multiply by" really multiplies and
+takes either decimal separator. Yes/No, P-state and link-width readings can't be customized. **OpenHW's values**
+resets the dialog.
 
 **CSV logging**: File → **Start Logging…** asks where to save (default `~/Documents/OpenHW/openhw-<date>-<time>.csv`)
 and writes Date, Time and every sensor you enabled logging for (still monitored), in window order ("Device: Sensor [unit]"), one row per poll,
@@ -224,7 +258,8 @@ fixes only. The version is set once in `Directory.Build.props` (app, helper and 
 ## Status
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
-highlight, expand/collapse all, reset), one CPU-temperature tray icon, power-mode switching that keeps boost
-working, all-core and per-core CPU frequency caps, CPU and GPU power limits, a menu bar, and the root helper for NVMe SMART,
-cpufreq ceilings and power limits.
+highlight, expand/collapse all, reset) with HWiNFO's sensor menu (graphs, rename, hide, monitoring, logging, alerts,
+layout and value customization), up to 8 tray icons, CSV logging, alerts with desktop notifications, power-mode
+switching that keeps boost working, all-core and per-core CPU frequency caps, CPU and GPU power limits, and the
+root helper for NVMe SMART, RAPL, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

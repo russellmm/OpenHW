@@ -7,7 +7,7 @@ using OpenHW.App.SensorWindow;
 namespace OpenHW.App.Settings;
 
 /// <summary>
-/// File → Settings: OpenHW-wide options — poll interval and start at login. Tray icons have their own window
+/// File → Settings: OpenHW-wide options — poll interval, start at login, pausing reads while hidden, rendering. Tray icons have their own window
 /// (File → Tray Icons…) so this one stays about the app as a whole. Changes are saved and applied at once.
 /// </summary>
 public sealed class SettingsWindow : Window
@@ -49,6 +49,12 @@ public sealed class SettingsWindow : Window
         };
         startInTray.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = startInTray.IsChecked == true);
 
+        var pauseWhenHidden = new CheckBox { Content = "Pause sensors while the window is hidden", IsChecked = settings.PauseWhenHidden };
+        pauseWhenHidden.IsCheckedChanged += (_, _) => Save(() => _settings.PauseWhenHidden = pauseWhenHidden.IsChecked == true);
+        var softwareRendering = new CheckBox { Content = "Draw windows in software (no OpenGL)", IsChecked = settings.SoftwareRendering };
+        softwareRendering.IsCheckedChanged += (_, _) =>
+            Save(() => _settings.SoftwareRendering = softwareRendering.IsChecked == true, "Saved. Takes effect the next time OpenHW starts.");
+
         var trayIcons = new Button
         {
             Content = "Tray Icons…", Padding = new Thickness(10, 4), Background = FooterIcons.ButtonFace,
@@ -73,6 +79,13 @@ public sealed class SettingsWindow : Window
                     TextWrapping = TextWrapping.Wrap, Margin = new Thickness(98, -4, 0, 4),
                 },
                 startAtLogin, startInTray,
+                pauseWhenHidden,
+                Note("Only sensors in the tray, with an alert, being logged or with a graph open keep reading, as if " +
+                     "every group were collapsed. Saves the most when groups are left expanded. Statistics of the " +
+                     "other sensors (minimum, maximum, average, graph history) skip the time the window was hidden."),
+                softwareRendering,
+                Note("Uses less memory (no GPU driver in OpenHW) and a little more CPU while a window is open. " +
+                     "Applies the next time OpenHW starts."),
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 10, 0, 0),
@@ -87,13 +100,18 @@ public sealed class SettingsWindow : Window
         };
     }
 
-    private void Save(Action change)
+    private void Save(Action change, string status = "Saved.")
     {
         change();
         _settings.Save();
         _applied();
-        _status.Text = "Saved.";
+        _status.Text = status;
     }
+
+    private static TextBlock Note(string text) => new()
+    {
+        Text = text, Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(28, -6, 0, 4),
+    };
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {

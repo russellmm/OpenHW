@@ -3,11 +3,32 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
-## Unreleased
+## 0.6.0 — 2026-10-24
 
+**Layout and values**
+- View → Layout Settings… (and a sensor's "Layout settings…"): HWiNFO's Layout tab — every group and sensor with
+  its monitoring state, Monitoring / Show for the selected sensor, move sensors within a group and groups among
+  groups (top, up, down, bottom), the hidden sensors listed below, Restore Original Order. New sensors keep
+  OpenHW's place.
+- Sensor menu → Customize values…: label, unit, multiplier, offset and decimal places, with a live preview. Used
+  everywhere the value appears (window, graphs, tray, logs, alert thresholds). "Multiply by" multiplies (HWiNFO's
+  takes the inverse) and accepts "." or ",".
+
+**Settings**
+- Pause sensors while the window is hidden (off by default): only tray, alerted, logged and graphed sensors are
+  read while the window is hidden or minimized.
+- Draw windows in software (no OpenGL), from the next start: about 65 MB less resident memory, a little more CPU
+  while a window is open.
+
+**Memory**
+- Runtime options: TieredPGO off, GC conserve-memory, and a 4 MB gen0 budget (the launcher re-executes itself to
+  set `DOTNET_GCgen0size`). With the window open: 322 → 293 MB resident, 219 → 187 MB private.
+
+**Packaging**
 - Debian package: `packaging/build-deb.sh` builds `dist/openhw_<version>_amd64.deb` with the app and openhw-helper
   installed system-wide (`/usr/lib/openhw`, `/usr/bin/openhw`, the helper service, the menu entry). Each release
   ships one from now on.
+- Start at login falls back to `/usr/bin/openhw` when there's no per-user launcher.
 
 ## 0.5.0 — 2026-10-23
 

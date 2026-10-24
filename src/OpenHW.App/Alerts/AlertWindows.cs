@@ -140,7 +140,7 @@ public sealed class AlertDialog : Window
     /// <summary>Current value and each rule's state. UI thread, every poll.</summary>
     public void Refresh()
     {
-        _current.Text = AlertMonitor.DisplayValue(_hub, _item) is { } v ? $"Now: {SensorPresentation.Format(v, _unit)}" : "Now: no reading";
+        _current.Text = AlertMonitor.DisplayValue(_hub, _item) is { } v ? $"Now: {SensorPresentation.Format(_item, v)}" : "Now: no reading";
         foreach (var state in _rules.LogicalDescendants<TextBlock>().Where(t => t.Tag is AlertRule))
         {
             var rule = (AlertRule)state.Tag!;

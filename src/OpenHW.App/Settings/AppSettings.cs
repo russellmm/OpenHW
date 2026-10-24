@@ -56,6 +56,15 @@ public sealed class AppSettings
     public double PollSeconds { get; set; } = 2;
     public bool StartAtLogin { get; set; }
     public bool StartInTray { get; set; } = true;
+
+    /// <summary>
+    /// While the window is hidden or minimized, read only the pinned sensors (tray icons, alerts, logging, open
+    /// graphs) — as if every group were collapsed. Off by default: HWiNFO keeps all statistics running.
+    /// </summary>
+    public bool PauseWhenHidden { get; set; }
+
+    /// <summary>Draw windows without OpenGL (applies at the next start). Saves the GPU driver's memory, costs some CPU.</summary>
+    public bool SoftwareRendering { get; set; }
     public List<TraySensor> TrayIcons { get; set; } = [new()];
 
     private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config

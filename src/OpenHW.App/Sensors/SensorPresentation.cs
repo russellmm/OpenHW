@@ -50,7 +50,8 @@ public static partial class SensorPresentation
                 ? ids.Where(byId.ContainsKey).Select(id => View(byId[id])).ToList()
                 : []);
 
-        return shown.Where(i => !childIds.Contains(i.Id))
+        var custom = SensorCustomizations.Current;
+        var groups = shown.Where(i => !childIds.Contains(i.Id))
             .GroupBy(i => GroupKey(i, machine))
             .Select(g =>
             {
@@ -59,11 +60,14 @@ public static partial class SensorPresentation
                 var rows = g.First().Backend == "openhw"
                     ? g.Select(View)
                     : g.OrderBy(i => Array.IndexOf(KindOrder, i.Kind)).ThenBy(i => SortKey(i), StringComparer.OrdinalIgnoreCase).Select(View);
-                return (order, title, group: new SensorGroupView(g.Key, title, rows.ToList()));
+                var arranged = SensorCustomizations.Arrange(rows.ToList(), r => r.Id, custom.RowOrder.GetValueOrDefault(g.Key));
+                return (order, title, group: new SensorGroupView(g.Key, title, arranged));
             })
             .OrderBy(g => g.order).ThenBy(g => g.title, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.group)
             .ToList();
+        // Layout settings: the user's order on top of OpenHW's (HWiNFO's) own. Per-core rows keep their parent's order.
+        return SensorCustomizations.Arrange(groups, g => g.Key, custom.GroupOrder);
     }
 
     private static string Chip(HardwareItem item) => item.Id.Split(':').ElementAtOrDefault(1) ?? "";
@@ -244,7 +248,16 @@ public static partial class SensorPresentation
 
     private static string ChipName(HardwareItem item) => item.Group.Length > 0 ? item.Group : Chip(item);
 
-    public static string DisplayUnit(HardwareItem item) => item.Unit switch
+    /// <summary>The unit shown: the user's own (Customize values…) or OpenHW's.</summary>
+    public static string DisplayUnit(HardwareItem item) =>
+        CanCustomize(item) && SensorCustomizations.Current.ValuesOf(item.Id)?.Unit is { } unit ? unit : BuiltInUnit(item);
+
+    /// <summary>
+    /// Yes/No, P-state and lane-width readings are labels rather than quantities, so Customize values doesn't apply.
+    /// </summary>
+    public static bool CanCustomize(HardwareItem item) => BuiltInUnit(item) is not ("flag" or "pstate" or "lanes");
+
+    public static string BuiltInUnit(HardwareItem item) => item.Unit switch
     {
         "" => item.Kind switch
         {
@@ -258,16 +271,31 @@ public static partial class SensorPresentation
         _ => item.Unit,
     };
 
-    /// <summary>Raw reading → displayed unit (only GiB→MB needs it today).</summary>
-    public static double Scale(HardwareItem item, double value) => item.Unit == "GiB" ? value * 1024 : value;
+    /// <summary>Raw reading → displayed value: OpenHW's unit conversion (only GiB→MB), then the user's Customize values.</summary>
+    public static double Scale(HardwareItem item, double value)
+    {
+        var shown = BuiltInScale(item, value);
+        return CanCustomize(item) && SensorCustomizations.Current.ValuesOf(item.Id) is { } custom ? custom.Apply(shown) : shown;
+    }
 
-    public static string Format(double? value, string unit)
+    /// <summary>Raw reading → OpenHW's own displayed value, before the user's Customize values.</summary>
+    public static double BuiltInScale(HardwareItem item, double value) => item.Unit == "GiB" ? value * 1024 : value;
+
+    /// <summary>A displayed (already <see cref="Scale">scaled</see>) value in the sensor's unit and decimal places.</summary>
+    /// <remarks>"Automatic" decimals follow OpenHW's unit even under a unit of the user's (°C → °F keeps one decimal).</remarks>
+    public static string Format(HardwareItem item, double? value) =>
+        Format(value, DisplayUnit(item), CanCustomize(item) ? SensorCustomizations.Current.ValuesOf(item.Id)?.Decimals : null, BuiltInUnit(item));
+
+    public static string FormatAverage(HardwareItem item, double? value) =>
+        BuiltInUnit(item) == "flag" ? Format(value * 100, "%") : Format(item, value);
+
+    public static string Format(double? value, string unit, int? decimalPlaces = null, string? decimalsFor = null)
     {
         if (value is not { } v || !double.IsFinite(v)) return "";
         if (unit == "flag") return v >= 0.5 ? "Yes" : "No";
         if (unit == "pstate") return "P" + Math.Round(v).ToString(CultureInfo.InvariantCulture);
         if (unit == "lanes") return "x" + Math.Round(v).ToString(CultureInfo.InvariantCulture);
-        var decimals = unit switch
+        var decimals = decimalPlaces ?? (decimalsFor ?? unit) switch
         {
             "°C" or "MHz" or "%" or "KB/s" => 1,
             "V" or "A" or "W" or "MB/s" or "GB" or "TB" or "GT/s" => 3,

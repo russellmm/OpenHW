@@ -21,6 +21,7 @@ public sealed class RowMenuTests
         var commands = new WindowCommands(() => { }, () => { }, () => { }, () => { })
         {
             ShowTrayIcons = () => { },
+            ShowLayout = _ => { },
             TrayStateOf = id => new TrayState(tray.Contains(id), !tray.Contains(id), null),
             AddToTray = id => tray.Add(id),
             RemoveFromTray = id => tray.Remove(id),
@@ -39,7 +40,8 @@ public sealed class RowMenuTests
                       "OSD settings…", "OSD (RTSS) settings…", "Alert settings…", "LG LCD settings…"],
                      items.Select(i => (string)i.Header!));
         var enabled = items.Where(i => i.IsEnabled).Select(i => (string)i.Header!).ToList();
-        Assert.Equal(["Add to tray", "Disable monitoring", "Rename", "Hide", "Enable Logging", "Tray icon settings…"], enabled);
+        Assert.Equal(["Add to tray", "Disable monitoring", "Rename", "Hide", "Enable Logging", "Layout settings…", "Customize values…",
+                      "Tray icon settings…"], enabled);
         Assert.All(items.Where(i => !i.IsEnabled && (string)i.Header! is not ("Remove from tray" or "Enable monitoring" or "Disable Logging")), i =>
         {
             Assert.Equal("To be implemented", ToolTip.GetTip(i));

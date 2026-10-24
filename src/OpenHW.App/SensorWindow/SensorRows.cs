@@ -120,14 +120,13 @@ public sealed class SensorRow : Row
             TextBrush = Palette.Frozen;
             return;
         }
-        var unit = View.Unit;
         double? Scaled(double? v) => v is { } x ? SensorPresentation.Scale(Item, x) : null;
-        var current = SensorPresentation.Format(Scaled(snapshot.Current), unit);
+        var current = SensorPresentation.Format(Item, Scaled(snapshot.Current));
         _changed = Current.Length > 0 && current != Current;
         Current = current;
-        Minimum = SensorPresentation.Format(Scaled(snapshot.Minimum), unit);
-        Maximum = SensorPresentation.Format(Scaled(snapshot.Maximum), unit);
-        Average = SensorPresentation.FormatAverage(Scaled(snapshot.Average), unit);
+        Minimum = SensorPresentation.Format(Item, Scaled(snapshot.Minimum));
+        Maximum = SensorPresentation.Format(Item, Scaled(snapshot.Maximum));
+        Average = SensorPresentation.FormatAverage(Item, Scaled(snapshot.Average));
         CurrentBackground = alerting ? AlertBackground : _changed && !paused ? Palette.Changed : Brushes.Transparent;
         TextBrush = paused ? Palette.Frozen : Palette.Text;
     }

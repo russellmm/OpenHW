@@ -26,6 +26,7 @@ public sealed class App : Application
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
     private TrayIconsWindow? _trayIconsWindow;
+    private LayoutWindow? _layoutWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
     private readonly AlertMonitor _alerts = new(AlertStore.Load());
     private readonly DesktopNotifier _notifier = new();
@@ -52,10 +53,10 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings,
+                ShowTrayIcons = ShowTrayIcons, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
-            });
+            }) { PauseWhenHidden = _settings.PauseWhenHidden };
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
 
@@ -192,6 +193,7 @@ public sealed class App : Application
     {
         var period = TimeSpan.FromSeconds(_settings.PollSeconds);
         _poll?.Change(period, period);
+        if (_window is not null) _window.PauseWhenHidden = _settings.PauseWhenHidden;
         _ = RebuildTrayAsync();
     }
 
@@ -320,7 +322,7 @@ public sealed class App : Application
         if (item is null) return ["Sensor not present now"];
         var name = SensorPresentation.DisplayName(item);
         var stats = _hub.Get(item.Id);
-        string F(double? v) => v is { } x ? SensorPresentation.Format(SensorPresentation.Scale(item, x), item.Unit) : "–";
+        string F(double? v) => v is { } x ? SensorPresentation.Format(item, SensorPresentation.Scale(item, x)) : "–";
         var lines = new List<string>
         {
             $"{name}: {F(stats.Current)}",
@@ -504,6 +506,12 @@ public sealed class App : Application
         _trayIconsWindow ??= new TrayIconsWindow(_settings, _hub, ApplySettings);
         _trayIconsWindow.Show();
         _trayIconsWindow.Activate();
+    }
+
+    private void ShowLayout(string? sensorId)
+    {
+        _layoutWindow ??= new LayoutWindow(_hub);
+        _layoutWindow.ShowFor(sensorId);
     }
 
     private void ShowPowerLimits()
