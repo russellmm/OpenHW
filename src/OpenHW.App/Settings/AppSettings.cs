@@ -35,6 +35,24 @@ public sealed class AppSettings
     public static string? PresetName(string hex) =>
         Colours.FirstOrDefault(c => c.Hex.Equals(hex, StringComparison.OrdinalIgnoreCase)).Name;
 
+    public const int MaxCustomColours = 16;
+
+    /// <summary>Colors the user added (picked or typed), "#RRGGBB", offered after the presets everywhere a color is chosen.</summary>
+    public List<string> CustomColours { get; set; } = [];
+
+    /// <summary>Every color to offer: the presets by name, then the custom colors labelled with their hex code.</summary>
+    public IReadOnlyList<(string Label, string Hex)> AllColours() =>
+        [.. Colours, .. CustomColours.Where(h => PresetName(h) is null).Select(h => (h, h))];
+
+    /// <summary>Adds a color to the custom list (normalised to upper case) unless it's a preset or already there.</summary>
+    public void AddCustomColour(string hex)
+    {
+        var color = hex.ToUpperInvariant();
+        if (!IsColor(color) || PresetName(color) is not null || CustomColours.Contains(color)) return;
+        CustomColours.Add(color);
+        if (CustomColours.Count > MaxCustomColours) CustomColours.RemoveAt(0); // oldest goes first
+    }
+
     public double PollSeconds { get; set; } = 2;
     public bool StartAtLogin { get; set; }
     public bool StartInTray { get; set; } = true;
@@ -66,6 +84,8 @@ public sealed class AppSettings
         TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
         foreach (var icon in TrayIcons)
             if (!IsColor(icon.Colour)) icon.Colour = Colours[0].Hex;
+        CustomColours = CustomColours.Where(IsColor).Select(h => h.ToUpperInvariant()).Where(h => PresetName(h) is null)
+            .Distinct().TakeLast(MaxCustomColours).ToList();
         StartAtLogin = File.Exists(AutostartPath); // the file is the truth: the user may have removed it elsewhere
     }
 

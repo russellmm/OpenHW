@@ -92,7 +92,9 @@ public sealed class SettingsWindowTests
         using var hub = new Sensors.SensorHub();
         hub.Sample();
         var settings = AppSettings.Load();
-        settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:active-limit", Colour = "#2E86DE" });
+        settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:active-limit", Colour = "#1E90FF" });
+        settings.AddCustomColour("#1E90FF");
+        settings.AddCustomColour("#FF6F61");
         var window = new SettingsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -245,5 +247,80 @@ public sealed class ColorDialogRenderTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(dialog)?.Save(Path.Combine(Path.GetTempPath(), "openhw-color-dialog.png"));
         Assert.Single(Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(dialog).OfType<Avalonia.Controls.ColorView>());
+    }
+}
+
+public sealed class CustomColorTests
+{
+    [Fact]
+    public void TheCustomListKeepsNewColorsOnly()
+    {
+        var s = new AppSettings();
+        s.AddCustomColour("#1e90ff");
+        s.AddCustomColour("#1E90FF");   // same color
+        s.AddCustomColour("#16A085");   // the Teal preset
+        s.AddCustomColour("blue");      // not a color
+        Assert.Equal(["#1E90FF"], s.CustomColours);
+        for (var i = 0; i < 20; i++) s.AddCustomColour($"#0000{i:X2}");
+        Assert.Equal(AppSettings.MaxCustomColours, s.CustomColours.Count);
+        Assert.DoesNotContain("#1E90FF", s.CustomColours); // the oldest went first
+        Assert.Equal(AppSettings.Colours.Length + AppSettings.MaxCustomColours, s.AllColours().Count);
+    }
+
+    [Theory]
+    [InlineData("#1e90ff", "#1E90FF")]
+    [InlineData("1E90FF", "#1E90FF")]
+    [InlineData("  #abcdef ", "#ABCDEF")]
+    [InlineData("#12345", null)]
+    [InlineData("#zzzzzz", null)]
+    [InlineData("", null)]
+    public void HexIsReadWithOrWithoutTheHash(string text, string? expected) => Assert.Equal(expected, ColorDialog.Parse(text));
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TypingAHexCodeAddsItToTheListAndEveryIconsChoices()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-custom-").FullName);
+        using var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var settings = AppSettings.Load();
+        var window = new SettingsWindow(settings, hub, () => { });
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var hex = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().Single(t => t.Watermark as string == "#RRGGBB");
+        var add = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Content as string == "Add color");
+
+        hex.Text = "1e90f";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(add.IsEnabled);
+        hex.Text = "1e90ff";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.True(add.IsEnabled);
+        add.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(["#1E90FF"], settings.CustomColours);
+        Assert.Equal(["#1E90FF"], AppSettings.Load().CustomColours); // saved
+        var texts = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains("#1E90FF", texts); // its chip
+        var box = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ComboBox>().First(c => c.Items.OfType<Avalonia.Controls.ComboBoxItem>().Any(i => i.Tag is "custom"));
+        Assert.Contains(box.Items.OfType<Avalonia.Controls.ComboBoxItem>(), i => i.Tag is "#1E90FF");
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheDialogsHexFieldMovesTheWheel()
+    {
+        var dialog = new ColorDialog("#C0392B");
+        dialog.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var hex = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(dialog).OfType<Avalonia.Controls.TextBox>().First();
+        var view = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(dialog).OfType<Avalonia.Controls.ColorView>().Single();
+        Assert.Equal("#C0392B", hex.Text);
+        hex.Text = "#1E90FF";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Avalonia.Media.Color.Parse("#1E90FF"), view.Color);
+        view.Color = Avalonia.Media.Color.Parse("#27AE60");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal("#27AE60", hex.Text);
+        Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(dialog)?.Save(Path.Combine(Path.GetTempPath(), "openhw-color-dialog.png"));
     }
 }

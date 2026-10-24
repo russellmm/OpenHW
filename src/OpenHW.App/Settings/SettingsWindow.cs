@@ -27,6 +27,10 @@ public sealed class SettingsWindow : Window
     private readonly Button _add;
     private readonly TextBlock _status = new() { Foreground = Palette.Footnote, Margin = new Thickness(0, 6, 0, 0) };
     private readonly CheckBox _startInTray;
+    private readonly WrapPanel _customChips = new();
+    private readonly TextBox _newHex = new() { Width = 110, Watermark = "#RRGGBB", FontFamily = new FontFamily("monospace") };
+    private readonly Border _newSwatch = new() { Width = 28, Height = 22, CornerRadius = new CornerRadius(3), BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1) };
+    private readonly Button _addHex;
 
     private sealed record SensorChoice(string Id, string Group, string Name)
     {
@@ -67,6 +71,20 @@ public sealed class SettingsWindow : Window
         };
         _startInTray.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = _startInTray.IsChecked == true);
 
+        _addHex = Button("Add color", () => AddCustom(ColorDialog.Parse(_newHex.Text)));
+        _addHex.IsEnabled = false;
+        _newHex.TextChanged += (_, _) =>
+        {
+            var hex = ColorDialog.Parse(_newHex.Text);
+            _newSwatch.Background = hex is null ? Brushes.Transparent : new SolidColorBrush(Color.Parse(hex));
+            _addHex.IsEnabled = hex is not null;
+        };
+        _newHex.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter) { AddCustom(ColorDialog.Parse(_newHex.Text)); e.Handled = true; }
+        };
+        var pick = Button("Pick…", async () => AddCustom(await ColorDialog.PickAsync(this, ColorDialog.Parse(_newHex.Text) ?? "#2E86DE")));
+        ToolTip.SetTip(pick, "Choose a color on a color wheel (or type its hex there)");
         _add = Button("Add to tray", AddSensor);
         _add.HorizontalAlignment = HorizontalAlignment.Left;
         _search.TextChanged += (_, _) => ApplyFilter();
@@ -102,6 +120,16 @@ public sealed class SettingsWindow : Window
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
+                    Heading("Custom colors"),
+                    new TextBlock
+                    {
+                        Text = "Your own tile colors, offered after the presets for every icon (here and in each icon's tray menu). " +
+                               "Type a hex code or pick one; colors picked from an icon's \"Custom…\" are added here too.",
+                        Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
+                    },
+                    _customChips,
+                    Row(new TextBlock { Text = "Hex", VerticalAlignment = VerticalAlignment.Center }, _newHex, _newSwatch, _addHex, pick),
+                    Heading("Add a sensor to the tray"),
                     Row(_search, _matches),
                     _results,
                     _add,
@@ -177,6 +205,7 @@ public sealed class SettingsWindow : Window
 
     private void RebuildTrayRows()
     {
+        RebuildCustomChips();
         _trayRows.Children.Clear();
         for (var i = 0; i < _settings.TrayIcons.Count; i++)
         {
@@ -211,9 +240,12 @@ public sealed class SettingsWindow : Window
                 Children = { new Rectangle { Width = 14, Height = 14, Fill = new SolidColorBrush(Color.Parse(hex)) }, new TextBlock { Text = label } },
             },
         };
-        var box = new ComboBox { Width = 130 };
-        foreach (var (name, hex) in AppSettings.Colours) box.Items.Add(Swatch(name, hex));
-        if (AppSettings.PresetName(icon.Colour) is null) box.Items.Add(Swatch(icon.Colour.ToUpperInvariant(), icon.Colour));
+        var box = new ComboBox { Width = 130, MaxDropDownHeight = 420 };
+        var all = _settings.AllColours();
+        foreach (var (label, hex) in all) box.Items.Add(Swatch(label, hex));
+        // An icon can keep a custom color that was later removed from the list: still show it.
+        if (!all.Any(c => c.Hex.Equals(icon.Colour, StringComparison.OrdinalIgnoreCase)))
+            box.Items.Add(Swatch(icon.Colour.ToUpperInvariant(), icon.Colour));
         box.Items.Add(new ComboBoxItem { Content = "Custom…", Tag = "custom" });
         var current = box.Items.OfType<ComboBoxItem>().First(c => ((string)c.Tag!).Equals(icon.Colour, StringComparison.OrdinalIgnoreCase));
         box.SelectedItem = current;
@@ -227,9 +259,53 @@ public sealed class SettingsWindow : Window
             }
             var picked = await ColorDialog.PickAsync(this, icon.Colour);
             if (picked is null) box.SelectedItem = current; // cancelled: back to what it was
-            else Save(() => icon.Colour = picked, rebuild: true);
+            else Save(() =>
+            {
+                _settings.AddCustomColour(picked); // kept for the other icons and the tray menus
+                icon.Colour = picked;
+            }, rebuild: true);
         };
         return box;
+    }
+
+    private void AddCustom(string? hex)
+    {
+        if (hex is null) return;
+        if (AppSettings.PresetName(hex) is { } preset)
+        {
+            _status.Text = $"{hex} is the {preset} preset — it's already in every color list.";
+            return;
+        }
+        Save(() => _settings.AddCustomColour(hex), rebuild: true);
+        _newHex.Text = "";
+    }
+
+    // One chip per custom color: swatch, hex code, and ✕ to take it off the list (icons using it keep it).
+    private void RebuildCustomChips()
+    {
+        _customChips.Children.Clear();
+        foreach (var hex in _settings.CustomColours)
+        {
+            var remove = Button("✕", () => Save(() => _settings.CustomColours.Remove(hex), rebuild: true));
+            remove.Padding = new Thickness(6, 0);
+            ToolTip.SetTip(remove, "Remove from the list (icons using it keep it)");
+            _customChips.Children.Add(new Border
+            {
+                Margin = new Thickness(0, 0, 8, 6), Padding = new Thickness(6, 3), CornerRadius = new CornerRadius(3), Background = Palette.RowB,
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 6,
+                    Children =
+                    {
+                        new Rectangle { Width = 16, Height = 16, Fill = new SolidColorBrush(Color.Parse(hex)), VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = hex, FontFamily = new FontFamily("monospace"), VerticalAlignment = VerticalAlignment.Center },
+                        remove,
+                    },
+                },
+            });
+        }
+        if (_settings.CustomColours.Count == 0)
+            _customChips.Children.Add(new TextBlock { Text = "None yet.", Foreground = Palette.Footnote });
     }
 
     private void AddSensor()

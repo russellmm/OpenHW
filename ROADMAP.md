@@ -96,7 +96,7 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 ## Window and tray
 
 - [x] Choose which sensors get tray icons, with per-icon colours.
-- [x] Tray icon menus: Move left/right, Remove, Color submenu; custom colors (color picker); panel order follows
+- [x] Tray icon menus: Move left/right, Remove, Color submenu; saved custom colors (hex entry or color picker); panel order follows
       Settings; Settings sensor picker is searchable.
 - [x] Sensor row right-click menu in HWiNFO's shape (Add/Remove from tray work; others grayed "To be implemented").
 - [ ] Fill in the row menu: Show Graph, Disable/Enable monitoring, Rename, Hide, logging, layout/customise values,

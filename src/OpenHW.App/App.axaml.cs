@@ -238,16 +238,17 @@ public sealed class App : Application
         {
             Children =
             [
-                .. AppSettings.Colours.Select(c => new TrayMenuItem(c.Name, () => Dispatcher.UIThread.Post(() => SetTrayColour(config, c.Hex)))
+                // The presets, then the user's custom colors by hex code (Settings → Custom colors).
+                .. _settings.AllColours().Select(c => new TrayMenuItem(c.Label, () => Dispatcher.UIThread.Post(() => SetTrayColour(config, c.Hex)))
                 {
                     Checked = () => config.Colour.Equals(c.Hex, StringComparison.OrdinalIgnoreCase),
                 }),
-                // A custom color (picked in Settings) shows ticked; any color can be picked there.
+                // A color no longer in either list (removed from the custom list) still shows, ticked.
                 new TrayMenuItem("", null)
                 {
                     DynamicLabel = () => $"Custom ({config.Colour.ToUpperInvariant()})",
                     Checked = () => true,
-                    Visible = () => AppSettings.PresetName(config.Colour) is null,
+                    Visible = () => !_settings.AllColours().Any(c => c.Hex.Equals(config.Colour, StringComparison.OrdinalIgnoreCase)),
                 },
                 new("Custom color…", () => Dispatcher.UIThread.Post(ShowSettings)),
             ],

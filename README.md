@@ -47,8 +47,10 @@ Every sensor row's tooltip in the main window also starts with what the reading 
 
 **File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
 interval (1–10 s, default 2 s), start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
-optionally with `--tray` to start with only the tray icons), and the tray icons — sensor, color (a preset or
-**Custom…**, a full color picker; any `#RRGGBB` is kept) and order (↑ / ↓ = left / right in the panel). The sensor picker is a search box:
+optionally with `--tray` to start with only the tray icons), and the tray icons — sensor, color and order (↑ / ↓ = left / right in the panel). **Custom colors**: add your own by typing a hex code
+(`#1E90FF` or `1e90ff`) or with **Pick…** (a color dialog with a hex field kept in step with the wheel); they are
+saved and offered after the presets in every icon's color list and tray Color submenu, labelled with their hex.
+Colors chosen through an icon's **Custom…** are added to the list too; ✕ removes one (icons using it keep it). The sensor picker is a search box:
 every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk"); Enter or double-click adds.
 Sensors already in the tray are listed grayed with "(in tray)" and can't be added twice (from Settings or a row's
 right-click menu); a settings file with duplicates keeps the first of each. OpenHW runs once per session: a
