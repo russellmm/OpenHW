@@ -68,6 +68,7 @@ Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" a
 |---|---|
 | `HwmonEngine` | /sys/class/hwmon via libsensors (sysfs fallback): Super I/O, k10temp, HSMP power, SPD5118, NVMe and NIC temps |
 | `HsmpEngine` | AMD HSMP platform device (no root): FCLK, MCLK, core clock limit, active frequency limit and its source, C0 residency, DRAM bandwidth, PROCHOT |
+| `RaplEngine` | RAPL package and core energy → power, through openhw-helper (`rapl`; the counters are root-only) |
 | `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters |
 | `NvmeEngine` | NVMe SMART health and live activity |
 | `EdacEngine` | Memory-controller corrected/uncorrected error counts |
@@ -115,6 +116,15 @@ Logging** ends it.
 **Columns and window**: drag a column header's right edge to resize the column everywhere (double-click it for the
 default width); long names trim with "…". Column widths and the window's size, position and maximized state are
 saved in `~/.config/openhw/view.json`.
+
+## Alerts
+
+Right-click a sensor → **Alert settings…** to add rules: alert when it **is above** / **is below** a value (in the unit
+the window shows) **for** a chosen time (at once, 5 s … 5 min — so one spike doesn't fire it), or, for Yes/No sensors,
+when it **becomes Yes** / **becomes No**. When a rule fires OpenHW shows a desktop notification (critical, so GNOME
+keeps it until dismissed) and turns the sensor's Current cell red; when it clears, a "back to normal" notification
+replaces it. One notification per episode; sensors with alerts are read every poll. **File → Alerts…** lists every
+rule with its live state (OK / ALERT / off), Edit… and Remove. Rules are kept in `~/.config/openhw/alerts.json`.
 
 ## Power limits
 

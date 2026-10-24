@@ -29,8 +29,9 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 
 ## Root-only readings (via openhw-helper)
 
-- [ ] **RAPL** package/core energy → power (`/sys/class/powercap/intel-rapl:*/energy_uj`, root-only).
-- [ ] **MSR** reads: effective clocks (APERF/MPERF), per-core power, package C-states.
+- [x] **RAPL** package/core energy → power, through the helper (0.5.0).
+- [x] **Effective clocks** from the kernel's APERF/MPERF average (`cpuinfo_avg_freq`, no root) (0.5.0).
+- [ ] **Per-core power** (AMD core-energy MSR) — needs CAP_SYS_RAWIO in the helper; owner to decide.
 
 ## More sensors (HWiNFO parity)
 
@@ -41,7 +42,7 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
 - [ ] **Confirm in13 CPU VSOC** (×1.11) with a BIOS SoC-voltage change. in15 VIN9 follows temperature, not load.
 - [x] **Super I/O temperatures and fans named** on this board, by behaviour (docs/board-profiles.md). Still inferred:
       CPU (PECI/TSI calibration) and CPU (Weighted Value) (Virtual_TEMP) — confirm with a longer cross-OS run.
-- [ ] Show the chip as HWiNFO names it (Nuvoton **NCT6701D**; the Linux driver reports `nct6799`).
+- [x] Show the chip as HWiNFO names it (Nuvoton **NCT6701D**) (0.5.0).
 - [ ] Profiles for more boards (same method; contributions need a HWiNFO capture + raw Linux values).
 - [ ] **CPU "Enhanced" telemetry** (HWiNFO reads AMD SMU/SVI3, not the Super I/O):
   - AMD HSMP metrics: the kernel already exposes many without root on the HSMP platform device
@@ -59,8 +60,8 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
       path (SMBus reads of the PMIC are root-only and must never write).
 - [ ] **ASUS EC VRM data**: VRM Vcore0/1 VOUT, IOUT, POUT (HWiNFO shows them); Linux's `asus_ec_sensors` exposes
       only temperatures and fans on this board — needs the EC register map for this model.
-- [ ] **GPU extras** HWiNFO shows: hotspot and memory-junction temperatures, per-rail voltages/powers, effective
-      clocks, PCIe error counters — check NVML field values (`nvmlDeviceGetFieldValues`) on the 615 driver.
+- [x] **GPU extras** where NVML has them: 1 s average power, PCIe error counters (0.5.0). Hotspot / memory-junction
+      temperatures aren't in NVML's public interface (memory temperature reports "not supported" on these cards).
 
 ## Resource use
 
@@ -100,8 +101,9 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
       Settings; Settings sensor picker is searchable.
 - [x] Sensor row right-click menu in HWiNFO's shape (Add/Remove from tray work; others grayed "To be implemented").
 - [x] Row menu: Show Graph, Disable/Enable monitoring, Rename, Hide/Unhide, Enable/Disable Logging (0.3.0).
-- [ ] Row menu still to do: Layout settings, Customize values, Alerts (OSD/RTSS/LG LCD are Windows-specific in
-      HWiNFO — decide whether they have a Linux meaning).
+- [x] Alerts: per-sensor rules, desktop notifications, File → Alerts… (0.5.0).
+- [ ] Row menu still to do: Layout settings, Customize values (OSD/RTSS/LG LCD are Windows-specific in HWiNFO —
+      decide whether they have a Linux meaning).
 - [x] Tray icon menus start with the sensor's reading, min/max/average and explanation; sensor tooltips explain
       every reading.
 - [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,

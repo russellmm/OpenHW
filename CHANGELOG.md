@@ -3,6 +3,20 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.5.0 — 2026-10-23
+
+**Alerts**
+- Per-sensor rules: above / below a value (in the sensor's unit) for a chosen time, or "becomes Yes/No" for Yes/No
+  sensors. Firing shows a desktop notification kept until dismissed and turns the sensor's Current cell red; a "back
+  to normal" notification follows. Sensor menu → Alert settings…; File → Alerts… lists every rule with its state.
+
+**Sensors**
+- Core effective clocks and their average (kernel APERF/MPERF average, no root).
+- CPU Package Power (RAPL) and CPU Cores Power (RAPL), through openhw-helper v6 (`rapl`).
+- GPU: 1 s average power and the PCIe error counters (NVML field values). Hotspot and memory-junction temperatures
+  aren't available through NVML on these cards.
+- The Super I/O shows as Nuvoton NCT6701D, as HWiNFO names it.
+
 ## 0.4.0 — 2026-10-23
 
 - Logging is opt-in: no sensor is logged until you choose Enable Logging on it, so logs only hold what you want.
