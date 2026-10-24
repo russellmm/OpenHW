@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using OpenHW.Hardware;
+using OpenHW.App.Alerts;
 using OpenHW.App.Power;
 using OpenHW.App.Sensors;
 using OpenHW.App.Settings;
@@ -26,6 +27,11 @@ public sealed class App : Application
     private SettingsWindow? _settingsWindow;
     private TrayIconsWindow? _trayIconsWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
+    private readonly AlertMonitor _alerts = new(AlertStore.Load());
+    private readonly DesktopNotifier _notifier = new();
+    private readonly System.Diagnostics.Stopwatch _alertClock = System.Diagnostics.Stopwatch.StartNew();
+    private AlertsWindow? _alertsWindow;
+    private readonly Dictionary<string, AlertDialog> _alertDialogs = new(StringComparer.Ordinal);
     private volatile SensorLogger? _logger;
     private string[] _loggedIds = [];
     private Timer? _poll;
@@ -41,11 +47,13 @@ public sealed class App : Application
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _hub.Sample();
-            _logger?.Append(DateTime.Now, id => _hub.Get(id).Current); // first discovery + sample before the window builds its tree
+            _logger?.Append(DateTime.Now, id => _hub.Get(id).Current);
+            CheckAlerts(); // first discovery + sample before the window builds its tree
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons,
+                ShowTrayIcons = ShowTrayIcons, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings,
+                Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             });
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
@@ -57,6 +65,7 @@ public sealed class App : Application
                 _poll?.Dispose();
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
                 _logger?.Dispose();
+                _notifier.Dispose();
                 Program.Instance?.Dispose();
                 _power.Dispose();
                 _gpuPower.Dispose();
@@ -65,6 +74,7 @@ public sealed class App : Application
 
             _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
             SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
+            _alerts.Store.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // re-pins the watched sensors
             _ = _power.StartAsync();
 
             _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => _window?.RebuildTree());
@@ -193,6 +203,7 @@ public sealed class App : Application
         {
             _hub.Sample();
             _logger?.Append(DateTime.Now, id => _hub.Get(id).Current);
+            CheckAlerts();
             // Another tool (or the power menu while OpenHW was closed) can change the ceilings; re-check every 10 s.
             if (++_polls % 5 == 0)
             {
@@ -209,6 +220,8 @@ public sealed class App : Application
         {
             if (_window is { IsVisible: true }) _window.RefreshValues();
             foreach (var graph in _graphs.Values) graph.Refresh();
+            _alertsWindow?.Refresh();
+            foreach (var dialog in _alertDialogs.Values) dialog.Refresh();
             UpdateTray();
         });
     }
@@ -325,8 +338,9 @@ public sealed class App : Application
 
     private void UpdateTray()
     {
-        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds).ToArray();
-        _hub.SetPinned(ids); // tray, graphed and logged sensors stay live even inside a collapsed group
+        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds)
+            .Concat(_alerts.WatchedSensors).ToArray();
+        _hub.SetPinned(ids); // tray, graphed, logged and alerted sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
         var before = _trayInfo;
@@ -423,6 +437,40 @@ public sealed class App : Application
         _loggedIds = [];
         UpdateTray();
         _window?.SetLogging(null);
+    }
+
+    // Runs on the poll thread after each sample: fired and cleared alerts become desktop notifications.
+    private void CheckAlerts()
+    {
+        var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
+        var events = _alerts.Evaluate(_alertClock.Elapsed.TotalSeconds,
+            id => AlertMonitor.DisplayValue(_hub, items.GetValueOrDefault(id)),
+            id => items.TryGetValue(id, out var item) ? (SensorPresentation.DisplayName(item), SensorPresentation.DisplayUnit(item)) : (id, ""));
+        foreach (var e in events)
+            _ = e.Firing
+                ? _notifier.NotifyAsync(e.Rule.Id, $"⚠ {e.SensorName}: {e.Value}", $"Alert: {e.Description}.", critical: true)
+                : _notifier.NotifyAsync(e.Rule.Id, $"✓ {e.SensorName}: {e.Value}", $"Back to normal (alert: {e.Description}).", critical: false);
+    }
+
+    private void ShowAlerts()
+    {
+        _alertsWindow ??= new AlertsWindow(_alerts, _hub, ShowAlertSettings);
+        _alertsWindow.Show();
+        _alertsWindow.Activate();
+    }
+
+    // One Alert Settings window per sensor; asking again brings it forward.
+    private void ShowAlertSettings(string sensorId)
+    {
+        if (!_alertDialogs.TryGetValue(sensorId, out var dialog))
+        {
+            if (_hub.Inventory.FirstOrDefault(i => i.Id == sensorId) is not { } item) return;
+            dialog = new AlertDialog(_alerts, _hub, item);
+            dialog.Closed += (_, _) => _alertDialogs.Remove(sensorId);
+            _alertDialogs[sensorId] = dialog;
+        }
+        dialog.Show();
+        dialog.Activate();
     }
 
     // One graph window per sensor; asking again brings it forward. Its sensor is pinned (kept live) while it's open.

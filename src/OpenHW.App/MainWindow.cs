@@ -28,6 +28,13 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>File → Tray Icons… and a sensor's "Tray icon settings…".</summary>
     public Action? ShowTrayIcons { get; init; }
 
+    /// <summary>File → Alerts… and a sensor's "Alert settings…".</summary>
+    public Action? ShowAlerts { get; init; }
+    public Action<string>? AlertSettings { get; init; }
+
+    /// <summary>Sensors with a firing alert (their Current cell turns red).</summary>
+    public Func<IReadOnlySet<string>>? Alerting { get; init; }
+
     /// <summary>Opens (or brings forward) a sensor's graph window.</summary>
     public Action<string>? ShowGraph { get; init; }
 
@@ -205,11 +212,12 @@ public sealed class MainWindow : Window
     /// <summary>Pushes the hub's latest statistics into every row (collapsed ones too, so expanding is instant).</summary>
     public void RefreshValues()
     {
+        var alerting = _commands?.Alerting?.Invoke() ?? new HashSet<string>();
         foreach (var group in _groups)
             foreach (var sensor in group.Sensors)
             {
-                sensor.Update(_hub.Get(sensor.Id), _hub.IsPaused(sensor.Id));
-                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id), _hub.IsPaused(child.Id));
+                sensor.Update(_hub.Get(sensor.Id), _hub.IsPaused(sensor.Id), alerting.Contains(sensor.Id));
+                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id), _hub.IsPaused(child.Id), alerting.Contains(child.Id));
             }
         _elapsedText.Text = _elapsed.Elapsed.ToString(@"h\:mm\:ss");
     }
@@ -391,7 +399,7 @@ public sealed class MainWindow : Window
             Item("Tray icon settings…", _commands?.ShowTrayIcons ?? _commands?.ShowSettings),
             Item("OSD settings…"),
             Item("OSD (RTSS) settings…"),
-            Item("Alert settings…"),
+            Item("Alert settings…", _commands?.AlertSettings is { } alert ? () => alert(row.Id) : null),
             Item("LG LCD settings…"),
         })
             menu.Items.Add(item);
@@ -608,6 +616,7 @@ public sealed class MainWindow : Window
         }
         if (_commands is { } c)
         {
+            if (c.ShowAlerts is { } alerts) file.Items.Add(Item("_Alerts…", alerts));
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());
