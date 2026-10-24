@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.3.1 — 2026-10-23
+
+- Fix: column header edges couldn't be dragged. The handles had no visual template, so they never received the
+  pointer; they're now hit areas that show a faint line on hover. Tested with a simulated mouse drag.
+
 ## 0.3.0 — 2026-10-23
 
 **Sensor right-click menu, filled in**

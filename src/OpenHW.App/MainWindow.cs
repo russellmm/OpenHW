@@ -475,16 +475,46 @@ public sealed class MainWindow : Window
             Grid.SetColumn(cell, i);
             grid.Children.Add(cell);
 
-            // Drag the column's right edge to resize it (in every row); double-click it for the default width.
+            // Drag the column's right edge to resize it (in every row); double-click it for the default width. A plain
+            // Border with a transparent fill so it takes the pointer, showing a faint line on hover.
             var column = i;
-            var handle = new Avalonia.Controls.Primitives.Thumb
+            var handle = new Border
             {
-                Width = 7, HorizontalAlignment = HorizontalAlignment.Right, Background = Brushes.Transparent,
-                Cursor = new Cursor(StandardCursorType.SizeWestEast), Template = null,
+                Width = 8, HorizontalAlignment = HorizontalAlignment.Right, Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.SizeWestEast),
             };
-            handle.DragDelta += (_, e) => _columns.Set(column, _columns.Widths[column] + e.Vector.X);
-            handle.DragCompleted += (_, _) => SaveColumns();
-            handle.DoubleTapped += (_, _) => { _columns.Reset(column); SaveColumns(); };
+            double? dragFrom = null;
+            double startWidth = 0;
+            handle.PointerEntered += (_, _) => handle.Background = Palette.Separator;
+            handle.PointerExited += (_, _) => { if (dragFrom is null) handle.Background = Brushes.Transparent; };
+            handle.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) return;
+                if (e.ClickCount == 2)
+                {
+                    _columns.Reset(column);
+                    SaveColumns();
+                }
+                else
+                {
+                    dragFrom = e.GetPosition(grid).X;
+                    startWidth = _columns.Widths[column];
+                    e.Pointer.Capture(handle);
+                }
+                e.Handled = true;
+            };
+            handle.PointerMoved += (_, e) =>
+            {
+                if (dragFrom is { } from) _columns.Set(column, startWidth + e.GetPosition(grid).X - from);
+            };
+            handle.PointerReleased += (_, e) =>
+            {
+                if (dragFrom is null) return;
+                dragFrom = null;
+                e.Pointer.Capture(null);
+                handle.Background = Brushes.Transparent;
+                SaveColumns();
+            };
             ToolTip.SetTip(handle, "Drag to resize; double-click for the default width");
             Grid.SetColumn(handle, i);
             grid.Children.Add(handle);
