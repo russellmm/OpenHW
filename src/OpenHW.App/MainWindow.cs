@@ -24,6 +24,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     public Func<string, TrayState>? TrayStateOf { get; init; }
     public Action<string>? AddToTray { get; init; }
     public Action<string>? RemoveFromTray { get; init; }
+
+    /// <summary>Opens (or brings forward) a sensor's graph window.</summary>
+    public Action<string>? ShowGraph { get; init; }
 }
 
 /// <summary>Whether a sensor can be added to, or removed from, the tray — and why not.</summary>
@@ -353,7 +356,7 @@ public sealed class MainWindow : Window
         menu.Items.Clear();
         foreach (var item in new Control[]
         {
-            Item("Show Graph", bold: true),
+            Item("Show Graph", _commands?.ShowGraph is { } graph ? () => graph(row.Id) : null, bold: true),
             add, remove,
             Item("Disable monitoring", row.Disabled ? null : () => _custom.SetDisabled(row.Id, true), "Delete", "Monitoring is already off"),
             Item("Enable monitoring", row.Disabled ? () => _custom.SetDisabled(row.Id, false) : null, "Insert", "Monitoring is already on"),

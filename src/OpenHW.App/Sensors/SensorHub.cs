@@ -27,6 +27,9 @@ public sealed class SensorHub : IDisposable
 
     public SensorStatistics Statistics { get; } = new();
 
+    /// <summary>The last 30 minutes of what each poll read, for graphs (sized for the shortest poll, 1 s).</summary>
+    public SensorHistory History { get; } = new(TimeSpan.FromSeconds(1));
+
     /// <summary>Current inventory; replaced (never mutated) when discovery finds a different set.</summary>
     public IReadOnlyList<HardwareItem> Inventory { get { lock (_gate) return _inventory; } }
 
@@ -69,6 +72,7 @@ public sealed class SensorHub : IDisposable
         foreach (var engine in _engines) engine.ReadInto(readings, frozen.Count == 0 ? null : requested);
         var hold = _pauses.EndPoll(readings, frozen);
         lock (_gate) Statistics.Record(readings, hold);
+        History.Record(readings.Where(r => r.Value is not null && !hold.Contains(r.Key)).Select(r => (r.Key, r.Value!.Value)));
         if (changed) InventoryChanged?.Invoke();
     }
 

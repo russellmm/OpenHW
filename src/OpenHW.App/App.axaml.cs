@@ -7,6 +7,7 @@ using OpenHW.Hardware;
 using OpenHW.App.Power;
 using OpenHW.App.Sensors;
 using OpenHW.App.Settings;
+using OpenHW.App.SensorWindow;
 using OpenHW.App.Tray;
 
 namespace OpenHW.App;
@@ -23,6 +24,7 @@ public sealed class App : Application
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
+    private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
     private int _polls;
@@ -38,7 +40,7 @@ public sealed class App : Application
             _hub.Sample(); // first discovery + sample before the window builds its tree
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
-                TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray,
+                TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
             });
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
@@ -196,6 +198,7 @@ public sealed class App : Application
         Dispatcher.UIThread.Post(() =>
         {
             if (_window is { IsVisible: true }) _window.RefreshValues();
+            foreach (var graph in _graphs.Values) graph.Refresh();
             UpdateTray();
         });
     }
@@ -312,8 +315,8 @@ public sealed class App : Application
 
     private void UpdateTray()
     {
-        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().ToArray();
-        _hub.SetPinned(ids); // tray sensors stay live even inside a collapsed group
+        var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).ToArray();
+        _hub.SetPinned(ids); // tray and graphed sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
         var before = _trayInfo;
@@ -350,6 +353,25 @@ public sealed class App : Application
         _window?.RefreshPower();
         _cpuFrequency?.RefreshFromController();
         foreach (var (_, icon) in _trayIcons) icon.RefreshMenu();
+    }
+
+    // One graph window per sensor; asking again brings it forward. Its sensor is pinned (kept live) while it's open.
+    private void ShowGraph(string sensorId)
+    {
+        if (!_graphs.TryGetValue(sensorId, out var graph))
+        {
+            if (_hub.Inventory.FirstOrDefault(i => i.Id == sensorId) is not { } item) return;
+            graph = new SensorGraphWindow(_hub, item);
+            graph.Closed += (_, _) =>
+            {
+                _graphs.Remove(sensorId);
+                UpdateTray(); // re-pins without it
+            };
+            _graphs[sensorId] = graph;
+            UpdateTray();
+        }
+        graph.Show();
+        graph.Activate();
     }
 
     private void ShowSettings()
