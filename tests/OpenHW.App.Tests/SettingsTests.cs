@@ -95,10 +95,51 @@ public sealed class SettingsWindowTests
         var window = new SettingsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>()
+            .First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal)).Text = "gpu power";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?.Save(Path.Combine(Path.GetTempPath(), "openhw-settings.png"));
 
         var texts = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text ?? "").ToList();
-        Assert.Contains(texts, t => t.StartsWith("CPU temperature", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.StartsWith("CPU temperature", StringComparison.Ordinal)); // the first tray row
         Assert.Contains(texts, t => t.StartsWith("Active Frequency Limit  ·  CPU", StringComparison.Ordinal));
+    }
+}
+
+public sealed class SensorSearchTests
+{
+    [Theory]
+    [InlineData("GPU [#1]: NVIDIA RTX PRO 6000 › GPU Power", "gpu power", true)]
+    [InlineData("GPU [#1]: NVIDIA RTX PRO 6000 › GPU Power", "power 6000", true)]   // any order
+    [InlineData("GPU [#1]: NVIDIA RTX PRO 6000 › GPU Power", "  GPU   POWER ", true)] // spaces and case don't matter
+    [InlineData("GPU [#1]: NVIDIA RTX PRO 6000 › GPU Power", "gpu temperature", false)]
+    [InlineData("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced › CCD2 (Tdie)", "ccd2 tdie", true)]
+    [InlineData("anything", "", true)]
+    public void EveryWordMustMatch(string label, string query, bool expected) =>
+        Assert.Equal(expected, SettingsWindow.Matches(label, query));
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TypingNarrowsTheList()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-search-").FullName);
+        using var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var window = new SettingsWindow(AppSettings.Load(), hub, () => { });
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
+        var list = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ListBox>().Single();
+        var all = list.ItemCount;
+
+        search.Text = "fclk";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var fclk = Assert.Single(list.Items.OfType<Avalonia.Controls.ListBoxItem>());
+        Assert.EndsWith("Infinity Fabric Clock (FCLK)", (string)fclk.Content!);
+        Assert.Same(fclk, list.SelectedItem); // Enter would add it
+
+        search.Text = "";
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(all, list.ItemCount);
+        Assert.True(all > 100);
     }
 }

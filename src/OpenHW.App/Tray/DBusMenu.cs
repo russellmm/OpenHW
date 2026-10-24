@@ -19,16 +19,38 @@ public sealed record TrayMenuItem(string Label, Action? Clicked)
 
     /// <summary>False for information lines: shown, not clickable.</summary>
     public bool Enabled { get; init; } = true;
+
+    /// <summary>Makes this a submenu of these items.</summary>
+    public IReadOnlyList<TrayMenuItem>? Children { get; init; }
 }
 
 /// <summary>
-/// Minimal com.canonical.dbusmenu: a flat list of items under root id 0 (ids 1..n). This is what the panel
-/// renders when a tray icon is right-clicked. Items are fixed; their labels, radio state and visibility are read
-/// on each request, and <see cref="Invalidate"/> tells the panel to re-read them.
+/// Minimal com.canonical.dbusmenu: the items under root id 0, numbered depth-first from 1 (a submenu's items follow
+/// it). This is what the panel renders when a tray icon is right-clicked. Items are fixed; their labels, radio state
+/// and visibility are read on each request, and <see cref="Invalidate"/> tells the panel to re-read them.
 /// </summary>
-public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
+public sealed class DBusMenu : DBusObject
 {
     public const string MenuPath = "/MenuBar";
+
+    // _nodes[id - 1] is item id; _children[id] its child ids (0 = the root). Ids follow position, so one item
+    // instance (the shared Separator) can appear in several places.
+    private readonly List<TrayMenuItem> _nodes = [];
+    private readonly Dictionary<int, List<int>> _children = [];
+
+    public DBusMenu(IReadOnlyList<TrayMenuItem> items) => Number(items, 0);
+
+    private void Number(IReadOnlyList<TrayMenuItem> items, int parent)
+    {
+        _children[parent] = [];
+        foreach (var item in items)
+        {
+            _nodes.Add(item);
+            var id = _nodes.Count;
+            _children[parent].Add(id);
+            if (item.Children is { } children) Number(children, id);
+        }
+    }
     private uint _revision = 1;
     private uint Revision => _revision;
 
@@ -57,7 +79,7 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
             case "GetGroupProperties":
             {
                 var ids = reader.ReadArrayOfInt32();
-                if (ids.Length == 0) ids = Enumerable.Range(1, items.Count).ToArray();
+                if (ids.Length == 0) ids = Enumerable.Range(1, _nodes.Count).ToArray();
                 Reply(context, "a(ia{sv})", (ref MessageWriter writer) =>
                 {
                     var array = writer.WriteArrayStart(DBusType.Struct);
@@ -75,7 +97,7 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
             {
                 var id = reader.ReadInt32();
                 var eventId = reader.ReadString();
-                if (eventId == "clicked" && IsItem(id)) items[id - 1].Clicked?.Invoke();
+                if (eventId == "clicked" && IsItem(id)) _nodes[id - 1].Clicked?.Invoke();
                 ReplyEmpty(context);
                 return true;
             }
@@ -89,7 +111,7 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
                     var eventId = reader.ReadString();
                     reader.ReadVariantValue();
                     reader.ReadUInt32();
-                    if (eventId == "clicked" && IsItem(id)) items[id - 1].Clicked?.Invoke();
+                    if (eventId == "clicked" && IsItem(id)) _nodes[id - 1].Clicked?.Invoke();
                 }
                 using var writer = context.CreateReplyWriter("ai");
                 writer.WriteArray(Array.Empty<int>());
@@ -116,7 +138,7 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
         }
     }
 
-    private bool IsItem(int id) => id >= 1 && id <= items.Count;
+    private bool IsItem(int id) => id >= 1 && id <= _nodes.Count;
 
     /// <summary>State behind a label, radio or visibility changed: the panel re-reads the layout.</summary>
     public void Invalidate(Connection connection)
@@ -139,13 +161,7 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
         writer.WriteVariantString("submenu");
         writer.WriteDictionaryEnd(props);
 
-        var children = writer.WriteArrayStart(DBusType.Variant);
-        for (var id = 1; id <= items.Count; id++)
-        {
-            writer.WriteSignature("(ia{sv}av)");
-            WriteNode(ref writer, id);
-        }
-        writer.WriteArrayEnd(children);
+        WriteChildren(ref writer, 0);
     }
 
     private void WriteNode(ref MessageWriter writer, int id)
@@ -153,7 +169,18 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
         writer.WriteStructureStart();
         writer.WriteInt32(id);
         WriteItemProperties(ref writer, id);
-        writer.WriteArrayEnd(writer.WriteArrayStart(DBusType.Variant)); // leaf: no children
+        WriteChildren(ref writer, id);
+    }
+
+    private void WriteChildren(ref MessageWriter writer, int id)
+    {
+        var children = writer.WriteArrayStart(DBusType.Variant);
+        foreach (var child in _children.GetValueOrDefault(id) ?? [])
+        {
+            writer.WriteSignature("(ia{sv}av)");
+            WriteNode(ref writer, child);
+        }
+        writer.WriteArrayEnd(children);
     }
 
     private void WriteItemProperties(ref MessageWriter writer, int id)
@@ -161,7 +188,13 @@ public sealed class DBusMenu(IReadOnlyList<TrayMenuItem> items) : DBusObject
         var props = writer.WriteDictionaryStart();
         if (IsItem(id))
         {
-            var item = items[id - 1];
+            var item = _nodes[id - 1];
+            if (item.Children is not null)
+            {
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("children-display");
+                writer.WriteVariantString("submenu");
+            }
             if (item.IsSeparator)
             {
                 writer.WriteDictionaryEntryStart();

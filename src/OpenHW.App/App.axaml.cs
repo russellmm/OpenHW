@@ -103,7 +103,8 @@ public sealed class App : Application
         {
             try
             {
-                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW", [.. SensorInfoItems(config), TrayMenuItem.Separator, .. _trayMenu]);
+                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW",
+                    [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu]);
                 icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
                 _trayIcons.Add((config, icon));
             }
@@ -201,6 +202,37 @@ public sealed class App : Application
             DynamicLabel = () => CachedInfo(config).ElementAtOrDefault(i) ?? "",
             Visible = () => i < CachedInfo(config).Count,
         });
+
+    // This icon's own settings, in its own menu: take it off the tray, or give it another tile colour. Menu events
+    // arrive on the D-Bus thread of the icon being changed, so the work is posted to the UI thread.
+    private IEnumerable<TrayMenuItem> IconItems(TraySensor config) =>
+    [
+        new("Remove from tray", () => Dispatcher.UIThread.Post(() => RemoveTrayIcon(config))),
+        new("Colour", null)
+        {
+            Children = AppSettings.Colours.Select(c => new TrayMenuItem(c.Name, () => Dispatcher.UIThread.Post(() => SetTrayColour(config, c.Hex)))
+            {
+                Checked = () => config.Colour.Equals(c.Hex, StringComparison.OrdinalIgnoreCase),
+            }).ToList(),
+        },
+    ];
+
+    private void RemoveTrayIcon(TraySensor config)
+    {
+        if (!_settings.TrayIcons.Remove(config)) return;
+        _settings.Save();
+        ApplySettings();
+        _settingsWindow?.RefreshTrayRows();
+        if (_settings.TrayIcons.Count == 0) ShowWindow(); // with no icons left, the window is the only way back in
+    }
+
+    private void SetTrayColour(TraySensor config, string hex)
+    {
+        config.Colour = hex;
+        _settings.Save();
+        UpdateTray(); // repaints the tile and refreshes the menu's tick
+        _settingsWindow?.RefreshTrayRows();
+    }
 
     /// <summary>Name and reading, min/max/average, the device it belongs to, then what it measures (wrapped).</summary>
     private IReadOnlyList<string> SensorInfo(TraySensor config, IReadOnlyList<SensorGroupView> groups)

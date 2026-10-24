@@ -19,7 +19,11 @@ public sealed class SettingsWindow : Window
     private readonly SensorHub _hub;
     private readonly Action _applied;
     private readonly StackPanel _trayRows = new() { Spacing = 4 };
-    private readonly ComboBox _sensorPicker = new() { Width = 420, MaxDropDownHeight = 420 };
+    // Sensor picker: a search box over a short results list (the full list runs to hundreds of rows).
+    private readonly TextBox _search = new() { Width = 420, Watermark = "Search sensors — e.g. gpu power, 6000 temp, fclk, ccd" };
+    private readonly ListBox _results = new() { Height = 200, Width = 560, HorizontalAlignment = HorizontalAlignment.Left, Background = Palette.RowB };
+    private readonly TextBlock _matches = new() { Foreground = Palette.Footnote, VerticalAlignment = VerticalAlignment.Center };
+    private IReadOnlyList<SensorChoice> _choices = [];
     private readonly Button _add;
     private readonly TextBlock _status = new() { Foreground = Palette.Footnote, Margin = new Thickness(0, 6, 0, 0) };
     private readonly CheckBox _startInTray;
@@ -63,7 +67,20 @@ public sealed class SettingsWindow : Window
         };
         _startInTray.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = _startInTray.IsChecked == true);
 
-        _add = Button("Add", AddSensor);
+        _add = Button("Add to tray", AddSensor);
+        _add.HorizontalAlignment = HorizontalAlignment.Left;
+        _search.TextChanged += (_, _) => ApplyFilter();
+        _search.KeyDown += (_, e) =>
+        {
+            // Down moves into the results; Enter adds the selected (or only) match.
+            if (e.Key == Avalonia.Input.Key.Down && _results.ItemCount > 0) { _results.SelectedIndex = 0; _results.Focus(); e.Handled = true; }
+            else if (e.Key == Avalonia.Input.Key.Enter) { AddSensor(); e.Handled = true; }
+        };
+        _results.DoubleTapped += (_, _) => AddSensor();
+        _results.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter) { AddSensor(); e.Handled = true; }
+        };
         FillPicker();
         RebuildTrayRows();
 
@@ -85,7 +102,9 @@ public sealed class SettingsWindow : Window
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
-                    Row(_sensorPicker, _add),
+                    Row(_search, _matches),
+                    _results,
+                    _add,
                     _status,
                 },
             },
@@ -108,9 +127,22 @@ public sealed class SettingsWindow : Window
 
     private void FillPicker()
     {
-        _sensorPicker.Items.Clear();
-        foreach (var choice in Sensors()) _sensorPicker.Items.Add(new ComboBoxItem { Content = choice.Label, Tag = choice.Id });
-        _sensorPicker.SelectedIndex = 0;
+        _choices = Sensors();
+        ApplyFilter();
+    }
+
+    /// <summary>Every word typed must appear in "Device › Sensor" (any order, any case): "gpu power", "ccd2 tdie".</summary>
+    public static bool Matches(string label, string query) =>
+        query.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(word => label.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    private void ApplyFilter()
+    {
+        var query = _search.Text ?? "";
+        var shown = _choices.Where(c => Matches(c.Label, query)).ToList();
+        _results.Items.Clear();
+        foreach (var choice in shown) _results.Items.Add(new ListBoxItem { Content = choice.Label, Tag = choice.Id, Padding = new Thickness(8, 3) });
+        _results.SelectedIndex = shown.Count > 0 ? 0 : -1;
+        _matches.Text = query.Trim().Length == 0 ? $"{shown.Count} sensors" : $"{shown.Count} of {_choices.Count} sensors";
     }
 
     // Sensor name first: group titles are long ("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced") and would hide it.
@@ -157,7 +189,7 @@ public sealed class SettingsWindow : Window
 
     private void AddSensor()
     {
-        if (_sensorPicker.SelectedItem is not ComboBoxItem { Tag: string id } || _settings.TrayIcons.Count >= AppSettings.MaxTrayIcons) return;
+        if (_results.SelectedItem is not ListBoxItem { Tag: string id } || _settings.TrayIcons.Count >= AppSettings.MaxTrayIcons) return;
         // Next colour not already in use, so new icons are told apart at a glance.
         var used = _settings.TrayIcons.Select(t => t.Colour).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var colour = AppSettings.Colours.Select(c => c.Hex).FirstOrDefault(h => !used.Contains(h)) ?? AppSettings.Colours[0].Hex;
