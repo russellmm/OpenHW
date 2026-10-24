@@ -612,7 +612,7 @@ public sealed class MainWindow : Window
         foreach (var (item, profile) in _profileItems.Zip(_power.Profiles)) item.IsChecked = profile == _power.ActiveProfile;
     }
 
-    /// <summary>"OpenHW 0.1.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>
+    /// <summary>"OpenHW 0.2.0 · b8d3adf" — the git revision is stamped in at build time (see OpenHW.App.csproj).</summary>
     internal static string VersionText()
     {
         var informational = typeof(MainWindow).Assembly

@@ -171,6 +171,13 @@ rows draw — e.g. that frozen rows render dimmed; it reads this machine's live 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
 
+## Versions
+
+Semantic versioning, pre-1.0: the **minor** number goes up with each round of new features, the **patch** number for
+fixes only. The version is set once in `Directory.Build.props` (app, helper and tests share it), every release gets a
+[CHANGELOG.md](CHANGELOG.md) entry and a `vX.Y.Z` git tag, and the window footer / Help → About show
+`OpenHW X.Y.Z · <git revision>` ("-dirty" if built with uncommitted changes — commit before installing).
+
 ## Status
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value

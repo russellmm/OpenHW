@@ -20,7 +20,10 @@ using var gpuPower = new GpuPowerLimits();
 var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits());
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
-Console.WriteLine($"openhw-helper {HelperSession.Version} listening on {socketPath}" +
+var product = typeof(HelperSession).Assembly
+    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "?";
+Console.WriteLine($"openhw-helper {product} (protocol {HelperSession.Version}) listening on {socketPath}" +
                   (shared ? $" (group {HelperSocket.Group})" : $" (root only: group '{HelperSocket.Group}' missing)"));
 
 var stopping = new ManualResetEventSlim();
