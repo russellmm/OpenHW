@@ -32,6 +32,7 @@ public sealed class TrayIconsWindow : Window
     private readonly TextBox _newHex = new() { Width = 110, Watermark = "#RRGGBB", FontFamily = new FontFamily("monospace") };
     private readonly Border _newSwatch = new() { Width = 28, Height = 22, CornerRadius = new CornerRadius(3), BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1) };
     private readonly Button _addHex;
+    private readonly CheckBox _units = new() { Content = "Show units on the tiles: 32°, 55W, 87% (other units stay digits only)" };
     private readonly ITrayHover _hover;
     private readonly CheckBox _hoverBox = new() { Content = "Show a sensor's details while the pointer is over its tray icon" };
     private readonly TextBlock _hoverNote = new() { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
@@ -48,6 +49,8 @@ public sealed class TrayIconsWindow : Window
         _hub = hub;
         _applied = applied;
         _hover = hover ?? new GnomeTrayHover();
+        _units.IsChecked = settings.TrayUnits;
+        _units.IsCheckedChanged += (_, _) => Save(() => _settings.TrayUnits = _units.IsChecked == true);
         _hoverBox.IsCheckedChanged += async (_, _) =>
         {
             if (_showingHover) return;
@@ -112,6 +115,7 @@ public sealed class TrayIconsWindow : Window
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
+                    _units,
                     Heading("Hover"),
                     _hoverBox,
                     _hoverNote,

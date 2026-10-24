@@ -69,6 +69,20 @@ public sealed class SettingsTests
     [InlineData(0.5, "0.5")]
     public void TrayTextFitsATile(double? value, string text) => Assert.Equal(text, App.TrayText(value));
 
+    [Theory]
+    [InlineData("°C", "°")]
+    [InlineData("°F", "°")] // a unit set in Customize values
+    [InlineData("W", "W")]
+    [InlineData("V", "V")]
+    [InlineData("A", "A")]
+    [InlineData("%", "%")]
+    [InlineData("MHz", "")] // long, and "4.5k" + "MHz" would be wrong
+    [InlineData("RPM", "")]
+    [InlineData("MB", "")]
+    [InlineData("MB/s", "")]
+    [InlineData("", "")]
+    public void TrayTilesShowShortUnitsOnly(string unit, string shown) => Assert.Equal(shown, App.TrayUnit(unit));
+
     [Fact]
     public void ASecondLaunchAsksTheFirstToShow()
     {

@@ -67,6 +67,9 @@ public sealed class AppSettings
     public bool SoftwareRendering { get; set; }
     public List<TraySensor> TrayIcons { get; set; } = [new()];
 
+    /// <summary>Tray tiles show a short unit after the digits ("32°", "55W", "87%"); off = digits only, as before 0.8.0.</summary>
+    public bool TrayUnits { get; set; } = true;
+
     private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
         ? config
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");

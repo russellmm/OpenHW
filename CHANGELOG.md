@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.8.0 — 2026-10-24
+
+**Tray units**
+- Tray tiles show a short unit after the digits: a degree sign for temperatures (32°, also °F set in Customize
+  values), and a small W, V, A or % for power, voltage, current and load (55W, 87%). Other units (MHz, RPM, MB,
+  MB/s…) stay digits only: they're long, and their values are already shortened ("4.5k"). The tile stays square —
+  GNOME's tray squeezes wider icons — so the digits get a little smaller to make room.
+- File → Tray Icons… → "Show units on the tiles" (on by default) turns it off again for every icon.
+
 ## 0.7.0 — 2026-10-24
 
 **Tray hover**

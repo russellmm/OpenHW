@@ -42,7 +42,11 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 icon is a picture we draw (value on a colored tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
 colors, are chosen in **File → Tray Icons…** (up to 8; default one CPU-temperature icon on red); tray sensors stay
-live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile.
+live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile, followed by a short
+unit when there is one — ° for temperatures (full size, "32°"), a small W, V, A or % ("55W", "87%"); other units
+(MHz, RPM, MB…) are left off because the values are already shortened ("4.5k"). **Show units on the tiles** in Tray
+Icons turns units off for all icons. Tiles stay square: GNOME's tray fits every pixmap icon into a square, so a wider
+tile would only be shrunk (wide images work only for icons loaded from files, which would mean a new PNG per poll).
 
 Each icon's right-click menu starts with its sensor: the reading, min/max/average, the device it belongs to and a
 plain-language explanation — then **Move left** / **Move right**, **Remove from tray** and a **Color** submenu
@@ -93,8 +97,8 @@ sensor, color and order (↑ / ↓ = left / right in the panel) — the **custom
 `1e90ff`, or with **Pick…**, a color dialog with a hex field kept in step with the wheel; offered after the presets in
 every icon's color list and tray Color submenu, labelled with their hex; ✕ removes one, icons using it keep it), and
 a searchable sensor list: every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk");
-Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" and can't be added twice. **Hover**
-turns the tray icons' hover details on or off (see Tray icons).
+Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" and can't be added twice. **Show
+units on the tiles** and **Hover** turn the tiles' units and the hover details on or off (see Tray icons).
 
 ## Sensors
 

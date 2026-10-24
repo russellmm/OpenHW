@@ -358,7 +358,9 @@ public sealed class App : Application
             var item = id is null ? null : items.GetValueOrDefault(id);
             var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
             var info = CachedInfo(config);
-            icon.Update(TrayIconRenderer.Render(TrayText(value), config.Colour), "OpenHW · " + info[0], _trayInfo[config].Tooltip);
+            var unit = item is null || value is null || !_settings.TrayUnits ? "" : TrayUnit(SensorPresentation.DisplayUnit(item));
+            icon.Update(TrayIconRenderer.Render(TrayText(value) + (unit == "°" ? "°" : ""), config.Colour, unit == "°" ? "" : unit),
+                "OpenHW · " + info[0], _trayInfo[config].Tooltip);
             // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
             // place, so a menu or submenu the user has open stays open; a different number: rebuild the layout.
             var old = before.TryGetValue(config, out var o) ? o.Lines : [];
@@ -366,6 +368,18 @@ public sealed class App : Application
             else if (!old.SequenceEqual(info)) icon.RefreshMenuItems(Enumerable.Range(1, InfoLines));
         }
     }
+
+    /// <summary>
+    /// What a tray tile shows after the digits: "°" for any temperature (drawn full size, "32°"), the one-letter units
+    /// W, V, A and % (drawn small, "55W"), and nothing for the rest — MHz, RPM, MB, MB/s… are long, and their values are
+    /// already shortened ("4.5k"), where "kMB" would mislead. Follows the unit shown in the window, custom ones included.
+    /// </summary>
+    internal static string TrayUnit(string unit) => unit switch
+    {
+        _ when unit.StartsWith('°') => "°",
+        "W" or "V" or "A" or "%" => unit,
+        _ => "",
+    };
 
     /// <summary>A value short enough for a 16 px tile: 45, 250, 5.3k, 1.25.</summary>
     internal static string TrayText(double? value)

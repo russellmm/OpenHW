@@ -114,3 +114,26 @@ public sealed class TrayHoverTests
         window.Close();
     }
 }
+
+public sealed class TrayUnitsSettingTests
+{
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheUnitsBoxIsSavedAndAppliedAtOnce()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-units-").FullName);
+        var settings = AppSettings.Load();
+        Assert.True(settings.TrayUnits); // on unless turned off
+        var applied = 0;
+        var window = new TrayIconsWindow(settings, new Sensors.SensorHub(), () => applied++, new FakeTrayHover());
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var box = window.GetVisualDescendants().OfType<CheckBox>().Single(c => (c.Content as string ?? "").StartsWith("Show units", StringComparison.Ordinal));
+        Assert.True(box.IsChecked);
+
+        box.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, applied);
+        Assert.False(AppSettings.Load().TrayUnits);
+        window.Close();
+    }
+}
