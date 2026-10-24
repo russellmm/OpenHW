@@ -27,10 +27,11 @@
     <ProjectReference Include="..\OpenHW.Hardware\OpenHW.Hardware.csproj" />
   </ItemGroup>
 
-  <!-- Stamp the git revision into InformationalVersion ("0.2.0+b8d3adf", "-dirty" with uncommitted changes) so the
+  <!-- Stamp the git revision into InformationalVersion ("0.2.0+b8d3adf", "-dirty" with uncommitted changes; tags are
+       ignored so a tagged commit still shows its hash) so the
        window footer shows exactly which build is running. Builds outside a git checkout keep the plain version. -->
   <Target Name="StampGitRevision" BeforeTargets="InitializeSourceControlInformation" Condition="'$(SourceRevisionId)' == ''">
-    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; describe --always --dirty --abbrev=7" ConsoleToMSBuild="true" StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true" ContinueOnError="true">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; describe --always --dirty --abbrev=7 --exclude=*" ConsoleToMSBuild="true" StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true" ContinueOnError="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="SourceRevisionId" />
       <Output TaskParameter="ExitCode" PropertyName="GitExitCode" />
     </Exec>
