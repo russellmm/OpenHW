@@ -128,7 +128,11 @@ public static partial class SensorPresentation
         vendor.StartsWith("ASUSTeK", StringComparison.OrdinalIgnoreCase) ? "ASUS"
         : vendor.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? vendor;
 
-    public static string DisplayName(HardwareItem item)
+    /// <summary>The name shown everywhere: the user's own (sensor menu → Rename) or OpenHW's.</summary>
+    public static string DisplayName(HardwareItem item) => SensorCustomizations.Current.NameOf(item.Id) ?? BuiltInName(item);
+
+    /// <summary>OpenHW's own name for the sensor, HWiNFO-style; used for sorting and explanations so a rename moves neither.</summary>
+    public static string BuiltInName(HardwareItem item)
     {
         var name = item.Name;
         switch (item.Backend)
@@ -186,7 +190,9 @@ public static partial class SensorPresentation
     public static string Tooltip(HardwareItem item)
     {
         var name = DisplayName(item);
+        var builtIn = BuiltInName(item);
         var lines = new List<string> { name };
+        if (name != builtIn) lines.Add($"Renamed from: {builtIn}");
         // An uncertain name is called out before anything is said about what it means.
         if (!item.MappingConfirmed)
             lines.Add("Unconfirmed mapping: this name and scale were inferred by comparing readings with HWiNFO " +
@@ -197,14 +203,14 @@ public static partial class SensorPresentation
             lines.Add("Unmapped input: this is the chip's own name for the input; which board sensor or fan header " +
                       "it is has not been mapped yet.");
 
-        var explanation = SensorExplanations.Explain(item, name);
+        var explanation = SensorExplanations.Explain(item, builtIn);
         if (explanation.Length > 0) lines.Add(explanation);
         lines.Add(""); // what it means above, where it comes from below
 
         if (item.OriginalName.Length > 0)
             lines.Add($"Board input: {item.OriginalName} on {ChipName(item)}" +
                       (item.Scale != 1 ? $", raw reading × {item.Scale.ToString("0.###", CultureInfo.InvariantCulture)}" : ""));
-        else if (!string.Equals(item.Name, name, StringComparison.Ordinal))
+        else if (!string.Equals(item.Name, builtIn, StringComparison.Ordinal))
             lines.Add($"Reported as: {item.Name}");
 
         var details = item.Details.Replace(BoardProfiles.UnmappedRailNote, "");
@@ -281,7 +287,7 @@ public static partial class SensorPresentation
     private static string PciSortKey(string label) => PciToken().Match(label).Value;
 
     // hwmon rows keep the chip's register order (as HWiNFO lists them: Vcore, +5V, AVSB…); everything else sorts by name.
-    private static string SortKey(HardwareItem item) => NaturalKey(item.Backend == "hwmon" ? item.Id : DisplayName(item));
+    private static string SortKey(HardwareItem item) => NaturalKey(item.Backend == "hwmon" ? item.Id : BuiltInName(item));
 
     // Pads digit runs so "in2" sorts before "in10" and "Core 2" before "Core 10".
     private static string NaturalKey(string text) => DigitRun().Replace(text, m => m.Value.PadLeft(8, '0'));

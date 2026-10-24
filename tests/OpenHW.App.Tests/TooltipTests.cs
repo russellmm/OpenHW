@@ -100,7 +100,7 @@ public sealed class ExplanationCoverageTests
         var generic = new HashSet<string> { "", "A temperature sensor.", "A voltage measured by the board.", "A fan or pump speed.",
             "A power reading.", "A clock frequency.", "A utilisation reading." };
         var missing = hub.Inventory.Where(Sensors.SensorPresentation.IsShown)
-            .Select(i => (Item: i, Name: Sensors.SensorPresentation.DisplayName(i)))
+            .Select(i => (Item: i, Name: Sensors.SensorPresentation.BuiltInName(i)))
             .Where(x => generic.Contains(Sensors.SensorExplanations.Explain(x.Item, x.Name)))
             .Select(x => x.Name).Distinct().Order().ToList();
         Xunit.Assert.True(missing.Count == 0, "No explanation for: " + string.Join(", ", missing));

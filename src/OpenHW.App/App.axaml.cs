@@ -54,6 +54,7 @@ public sealed class App : Application
             };
 
             _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
+            SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
             _ = _power.StartAsync();
 
             _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => _window?.RebuildTree());
@@ -301,7 +302,7 @@ public sealed class App : Application
         };
         var group = groups.FirstOrDefault(g => Flatten(g.Sensors).Any(v => v.Id == item.Id))?.Title;
         if (group is not null) lines.Add(group);
-        var explanation = SensorExplanations.Explain(item, name);
+        var explanation = SensorExplanations.Explain(item, SensorPresentation.BuiltInName(item));
         if (explanation.Length > 0) lines.AddRange(SensorPresentation.Wrap(explanation, 52).Split('\n'));
         return lines.Take(InfoLines).ToList();
     }

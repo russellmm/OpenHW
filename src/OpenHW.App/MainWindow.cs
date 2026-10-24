@@ -50,6 +50,8 @@ public sealed class MainWindow : Window
     private readonly Stopwatch _elapsed = Stopwatch.StartNew();
     private readonly TextBlock _elapsedText = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
     private readonly ListBox _list;
+    private readonly SensorCustomizations _custom = SensorCustomizations.Current;
+    private bool _showHidden; // View → Show Hidden Sensors: hidden rows come back, grayed, so they can be unhidden
     private readonly PowerModeController? _power;
     private ComboBox? _powerMode;
     private Button? _removeCap;
@@ -109,6 +111,21 @@ public sealed class MainWindow : Window
             }
         };
 
+        _custom.Changed += RebuildTree;
+        _list.KeyDown += (_, e) =>
+        {
+            if (_list.SelectedItem is not SensorRow row) return;
+            switch (e.Key)
+            {
+                case Key.Delete when e.KeyModifiers == KeyModifiers.Shift: _custom.SetHidden(row.Id, !row.HiddenByUser); break;
+                case Key.Delete: _custom.SetDisabled(row.Id, true); break;
+                case Key.Insert: _custom.SetDisabled(row.Id, false); break;
+                case Key.F2: _ = RenameAsync(row); break;
+                default: return;
+            }
+            e.Handled = true;
+        };
+
         var menu = BuildMenu();
         var footer = BuildFooter();
         var header = BuildHeader();
@@ -124,17 +141,23 @@ public sealed class MainWindow : Window
     public void RebuildTree()
     {
         var byId = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
+        bool Shown(string id) => _showHidden || !_custom.IsHidden(id);
+        SensorRow Row(SensorView view, int depth) => new(view, byId[view.Id], depth)
+        {
+            Disabled = _custom.IsDisabled(view.Id), HiddenByUser = _custom.IsHidden(view.Id),
+            IsExpanded = depth == 0 && _expandedSensors.Contains(view.Id),
+        };
         _groups.Clear();
         foreach (var group in SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine))
         {
             var groupRow = new GroupRow(group) { IsExpanded = !_collapsedGroups.Contains(group.Key) };
-            foreach (var view in group.Sensors)
+            foreach (var view in group.Sensors.Where(v => Shown(v.Id)))
             {
-                var row = new SensorRow(view, byId[view.Id], 0) { IsExpanded = _expandedSensors.Contains(view.Id) };
-                row.Children.AddRange(view.Children.Select(child => new SensorRow(child, byId[child.Id], 1)));
+                var row = Row(view, 0);
+                row.Children.AddRange(view.Children.Where(c => Shown(c.Id)).Select(child => Row(child, 1)));
                 groupRow.Sensors.Add(row);
             }
-            _groups.Add(groupRow);
+            if (groupRow.Sensors.Count > 0) _groups.Add(groupRow); // a group whose rows are all hidden goes too
         }
 
         var rows = new List<Row>();
@@ -156,7 +179,8 @@ public sealed class MainWindow : Window
     // values until the next regular poll brings them back to life.
     private void UpdateReadSet()
     {
-        var shown = _rows.OfType<SensorRow>().Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        // Monitoring turned off counts as not shown: those sensors aren't read either (tray icons still pin theirs).
+        var shown = _rows.OfType<SensorRow>().Where(r => !r.Disabled).Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         _hub.SetPaused(_hub.Inventory.Select(i => i.Id).Where(id => !shown.Contains(id)));
     }
 
@@ -274,7 +298,7 @@ public sealed class MainWindow : Window
         icon.Bind(Path.DataProperty, new Binding(nameof(SensorRow.Icon)));
         icon.Bind(Shape.FillProperty, new Binding(nameof(SensorRow.IconBrush)));
         icon.Bind(Shape.StrokeProperty, new Binding(nameof(SensorRow.IconStroke)));
-        var label = Text(nameof(SensorRow.Name));
+        var label = Text(nameof(SensorRow.Label));
         label.Bind(TextBlock.ForegroundProperty, new Binding(nameof(SensorRow.TextBrush)));
         var name = new StackPanel { Orientation = Orientation.Horizontal, Children = { chevron, icon, label } };
         name.Bind(MarginProperty, new Binding(nameof(SensorRow.Indent)));
@@ -294,6 +318,12 @@ public sealed class MainWindow : Window
     // ── row context menu ─────────────────────────────────────────────────────────────────────────────────────
 
     private const string NotYet = "To be implemented";
+
+    private async Task RenameAsync(SensorRow row)
+    {
+        var name = await RenameDialog.AskAsync(this, row.Name, SensorPresentation.BuiltInName(row.Item));
+        if (name is not null) _custom.Rename(row.Id, name);
+    }
 
     /// <summary>
     /// HWiNFO's sensor right-click menu, item for item and in its order. What OpenHW does today works; the rest is
@@ -325,10 +355,12 @@ public sealed class MainWindow : Window
         {
             Item("Show Graph", bold: true),
             add, remove,
-            Item("Disable monitoring", gesture: "Delete"),
-            Item("Enable monitoring", gesture: "Insert"),
-            Item("Rename", gesture: "F2"),
-            Item("Hide", gesture: "Shift+Delete"),
+            Item("Disable monitoring", row.Disabled ? null : () => _custom.SetDisabled(row.Id, true), "Delete", "Monitoring is already off"),
+            Item("Enable monitoring", row.Disabled ? () => _custom.SetDisabled(row.Id, false) : null, "Insert", "Monitoring is already on"),
+            Item("Rename", () => _ = RenameAsync(row), "F2"),
+            row.HiddenByUser
+                ? Item("Unhide", () => _custom.SetHidden(row.Id, false), "Shift+Delete")
+                : Item("Hide", () => _custom.SetHidden(row.Id, true), "Shift+Delete"),
             Item("Enable Logging"),
             Item("Disable Logging"),
             new Separator(),
@@ -455,6 +487,16 @@ public sealed class MainWindow : Window
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(Item("_Expand All", () => SetAllExpanded(true), "Ctrl+E"));
         view.Items.Add(Item("_Collapse All", () => SetAllExpanded(false), "Ctrl+Shift+E"));
+        view.Items.Add(new Separator());
+        var showHidden = new MenuItem { Header = "Show _Hidden Sensors", ToggleType = MenuItemToggleType.CheckBox };
+        showHidden.Click += (_, _) =>
+        {
+            _showHidden = !_showHidden;
+            showHidden.IsChecked = _showHidden;
+            RebuildTree();
+        };
+        view.Items.Add(showHidden);
+        view.Items.Add(Item("_Unhide All Sensors", _custom.UnhideAll));
         view.Items.Add(new Separator());
         view.Items.Add(Item("_Reset Min/Max/Average", ResetStatistics, "Ctrl+R"));
 

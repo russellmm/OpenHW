@@ -67,6 +67,15 @@ public sealed class SensorRow : Row
     public HardwareItem Item { get; }
     public string Id => View.Id;
     public string Name => View.Name;
+
+    /// <summary>Monitoring turned off from the sensor menu: not read, values blank, name grayed.</summary>
+    public bool Disabled { get; init; }
+
+    /// <summary>Hidden from the sensor menu, and on screen only because View → Show Hidden Sensors is on.</summary>
+    public bool HiddenByUser { get; init; }
+
+    /// <summary>The row's label: its name, plus a note when it's hidden or not monitored.</summary>
+    public string Label => Name + (HiddenByUser ? "   (hidden)" : "") + (Disabled ? "   (monitoring disabled)" : "");
     public int Depth { get; }
     public List<SensorRow> Children { get; }
     public bool HasChildren => Children.Count > 0;
@@ -101,6 +110,13 @@ public sealed class SensorRow : Row
 
     public void Update(SensorStatistics.Snapshot snapshot, bool paused)
     {
+        if (Disabled)
+        {
+            Current = Minimum = Maximum = Average = "";
+            CurrentBackground = Brushes.Transparent;
+            TextBrush = Palette.Frozen;
+            return;
+        }
         var unit = View.Unit;
         double? Scaled(double? v) => v is { } x ? SensorPresentation.Scale(Item, x) : null;
         var current = SensorPresentation.Format(Scaled(snapshot.Current), unit);
