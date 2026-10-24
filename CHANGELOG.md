@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## Unreleased
+
+- Debian package: `packaging/build-deb.sh` builds `dist/openhw_<version>_amd64.deb` with the app and openhw-helper
+  installed system-wide (`/usr/lib/openhw`, `/usr/bin/openhw`, the helper service, the menu entry). Each release
+  ships one from now on.
+
 ## 0.5.0 — 2026-10-23
 
 **Alerts**

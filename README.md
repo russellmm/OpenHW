@@ -8,11 +8,24 @@ and now lives here, so changes to openfan-linux cannot break OpenHW.
 
 ## Install
 
+As a Debian package (app and root helper together, system-wide):
+
+```bash
+packaging/build-deb.sh                                   # builds dist/openhw_<version>_amd64.deb, no root
+sudo apt install ./dist/openhw_<version>_amd64.deb
+```
+
+The package installs the app in `/usr/lib/openhw`, `/usr/bin/openhw`, the menu entry and the `openhw-helper`
+service, creates the `openhw` group and adds the installing user to it (reboot once after the first install). It
+replaces a helper installed earlier with `install-helper.sh`. Remove with `sudo apt remove openhw`.
+
+For a quick per-user build while developing:
+
 ```bash
 packaging/install-app.sh
 ```
 
-Publishes a Release build to `~/.local/lib/openhw` (on the system drive, so it runs without the source tree),
+This one publishes a Release build to `~/.local/lib/openhw` (on the system drive, so it runs without the source tree),
 links `~/.local/bin/openhw`, and adds an "OpenHW" entry with icon to the app grid. No root; re-run to update.
 Drive health also needs the root helper — see [Root helper](#root-helper).
 
