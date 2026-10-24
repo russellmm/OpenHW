@@ -13,6 +13,7 @@
   <ItemGroup>
     <!-- Avalonia 11.2 pins Tmds.DBus.Protocol 0.20, which the tray code also uses. Upgrade them together. -->
     <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.2.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
@@ -30,8 +31,7 @@
   <!-- Stamp the git revision into InformationalVersion ("0.1.0+b8d3adf", "-dirty" with uncommitted changes) so the
        window footer shows exactly which build is running. Builds outside a git checkout keep the plain version. -->
   <Target Name="StampGitRevision" BeforeTargets="InitializeSourceControlInformation" Condition="'$(SourceRevisionId)' == ''">
-    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; describe --always --dirty --abbrev=7" ConsoleToMSBuild="true"
-          StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true" ContinueOnError="true">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; describe --always --dirty --abbrev=7" ConsoleToMSBuild="true" StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true" ContinueOnError="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="SourceRevisionId" />
       <Output TaskParameter="ExitCode" PropertyName="GitExitCode" />
     </Exec>

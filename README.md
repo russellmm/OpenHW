@@ -26,13 +26,17 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 ## Tray icons
 
 `src/OpenHW.App/Tray/` implements the StatusNotifierItem and dbusmenu D-Bus interfaces directly, so each
-icon is a picture we draw (value on a coloured tile, like HWiNFO). GNOME shows them through the
+icon is a picture we draw (value on a colored tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
-colours, are chosen in **File → Settings** (up to 8; default one CPU-temperature icon on red); tray sensors stay
+colors, are chosen in **File → Settings** (up to 8; default one CPU-temperature icon on red); tray sensors stay
 live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile.
 
 Each icon's right-click menu starts with its sensor: the reading, min/max/average, the device it belongs to and a
-plain-language explanation — then **Remove from tray** and a **Colour** submenu for that icon. GNOME's AppIndicator extension never shows tooltips, so that menu is where the
+plain-language explanation — then **Move left** / **Move right**, **Remove from tray** and a **Color** submenu
+(presets; a custom color shows ticked, and **Custom color…** opens Settings). The info lines update in place
+(dbusmenu `ItemsPropertiesUpdated`), so an open menu or submenu stays open. Icons appear in the panel in Settings'
+order, top = leftmost: GNOME's extension inserts each new icon left of the previous ones, so OpenHW registers them
+last-first. GNOME's AppIndicator extension never shows tooltips, so that menu is where the
 expanded information appears there; the same text is published as the icon's tooltip for hosts that show one
 (e.g. KDE). On GNOME the icon size is the extension's `icon-size` setting (22 px on the workstation).
 
@@ -43,7 +47,8 @@ Every sensor row's tooltip in the main window also starts with what the reading 
 
 **File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
 interval (1–10 s, default 2 s), start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
-optionally with `--tray` to start with only the tray icons), and the tray icons. The sensor picker is a search box:
+optionally with `--tray` to start with only the tray icons), and the tray icons — sensor, color (a preset or
+**Custom…**, a full color picker; any `#RRGGBB` is kept) and order (↑ / ↓ = left / right in the panel). The sensor picker is a search box:
 every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk"); Enter or double-click adds.
 Sensors already in the tray are listed grayed with "(in tray)" and can't be added twice (from Settings or a row's
 right-click menu); a settings file with duplicates keeps the first of each. OpenHW runs once per session: a

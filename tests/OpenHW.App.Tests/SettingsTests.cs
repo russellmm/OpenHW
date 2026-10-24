@@ -32,12 +32,13 @@ public sealed class SettingsTests
         File.WriteAllText(Path.Combine(dir, "openhw", "settings.json"), JsonSerializer.Serialize(new
         {
             PollSeconds = 0.01,
-            TrayIcons = Enumerable.Range(0, 20).Select(i => new { SensorId = $"hwmon:x:{i}", Colour = "#123456" }),
+            TrayIcons = Enumerable.Range(0, 20).Select(i => new { SensorId = $"hwmon:x:{i}", Colour = i == 0 ? "#123456" : "blue" }),
         }));
         var settings = AppSettings.Load();
         Assert.Equal(2, settings.PollSeconds);
         Assert.Equal(AppSettings.MaxTrayIcons, settings.TrayIcons.Count);
-        Assert.All(settings.TrayIcons, t => Assert.Equal(AppSettings.Colours[0].Hex, t.Colour));
+        Assert.Equal("#123456", settings.TrayIcons[0].Colour); // custom colors are kept…
+        Assert.All(settings.TrayIcons.Skip(1), t => Assert.Equal(AppSettings.Colours[0].Hex, t.Colour)); // …anything else isn't
     }
 
     [Fact]
@@ -144,6 +145,44 @@ public sealed class SensorSearchTests
     }
 }
 
+public sealed class ColorTests
+{
+    [Theory]
+    [InlineData("#C0392B", true)]
+    [InlineData("#a1b2c3", true)]
+    [InlineData("#12345", false)]
+    [InlineData("C0392B", false)]
+    [InlineData("#GGGGGG", false)]
+    [InlineData(null, false)]
+    public void OnlyRrGgBbIsAColor(string? hex, bool expected) => Assert.Equal(expected, AppSettings.IsColor(hex));
+
+    [Fact]
+    public void PresetsHaveNamesCustomColorsDont()
+    {
+        Assert.Equal("Teal", AppSettings.PresetName("#16a085"));
+        Assert.Null(AppSettings.PresetName("#123456"));
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void ACustomColorShowsAsItsOwnSwatchWithCustomAfterIt()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-colors-").FullName);
+        using var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var settings = AppSettings.Load();
+        settings.TrayIcons[0].Colour = "#123456";
+        var window = new SettingsWindow(settings, hub, () => { });
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var box = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ComboBox>()
+            .First(c => c.Items.OfType<Avalonia.Controls.ComboBoxItem>().Any(i => i.Tag is "custom"));
+        var tags = box.Items.OfType<Avalonia.Controls.ComboBoxItem>().Select(i => (string)i.Tag!).ToList();
+        Assert.Equal(AppSettings.Colours.Length + 2, tags.Count);
+        Assert.Equal(["#123456", "custom"], tags.TakeLast(2));
+        Assert.Equal("#123456", (string)((Avalonia.Controls.ComboBoxItem)box.SelectedItem!).Tag!);
+    }
+}
+
 public sealed class TrayDuplicateTests
 {
     [Avalonia.Headless.XUnit.AvaloniaFact]
@@ -193,5 +232,18 @@ public sealed class TrayDuplicateTests
         var icons = AppSettings.Load().TrayIcons;
         Assert.Equal(["hsmp:fclk", "hsmp:mclk"], icons.Select(t => t.SensorId));
         Assert.Equal("#2E86DE", icons[0].Colour); // the first one wins
+    }
+}
+
+public sealed class ColorDialogRenderTests
+{
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void RendersThePicker()
+    {
+        var dialog = new ColorDialog("#16A085");
+        dialog.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(dialog)?.Save(Path.Combine(Path.GetTempPath(), "openhw-color-dialog.png"));
+        Assert.Single(Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(dialog).OfType<Avalonia.Controls.ColorView>());
     }
 }

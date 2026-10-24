@@ -98,7 +98,7 @@ public sealed class SettingsWindow : Window
                     Heading("Tray icons"),
                     new TextBlock
                     {
-                        Text = $"Each icon shows one sensor's value on a coloured tile, and keeps that sensor live even when its group is collapsed. Up to {AppSettings.MaxTrayIcons}.",
+                        Text = $"Each icon shows one sensor's value on a colored tile, and keeps that sensor live even when its group is collapsed. Up to {AppSettings.MaxTrayIcons}.",
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
@@ -182,26 +182,13 @@ public sealed class SettingsWindow : Window
         {
             var index = i;
             var icon = _settings.TrayIcons[i];
-            var colour = new ComboBox { Width = 120 };
-            foreach (var (name, hex) in AppSettings.Colours)
-                colour.Items.Add(new ComboBoxItem
-                {
-                    Tag = hex,
-                    Content = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal, Spacing = 6,
-                        Children = { new Rectangle { Width = 14, Height = 14, Fill = new SolidColorBrush(Color.Parse(hex)) }, new TextBlock { Text = name } },
-                    },
-                });
-            colour.SelectedItem = colour.Items.OfType<ComboBoxItem>().First(c => ((string)c.Tag!).Equals(icon.Colour, StringComparison.OrdinalIgnoreCase));
-            colour.SelectionChanged += (_, _) =>
-            {
-                if (colour.SelectedItem is ComboBoxItem { Tag: string hex } && hex != icon.Colour) Save(() => icon.Colour = hex);
-            };
+            var colour = ColorBox(icon);
             var up = Button("↑", () => Move(index, -1));
             up.IsEnabled = index > 0;
+            ToolTip.SetTip(up, "Move left in the tray (the top of this list is leftmost)");
             var down = Button("↓", () => Move(index, 1));
             down.IsEnabled = index < _settings.TrayIcons.Count - 1;
+            ToolTip.SetTip(down, "Move right in the tray");
             var remove = Button("Remove", () => Save(() => _settings.TrayIcons.RemoveAt(index), rebuild: true));
             var label = new TextBlock { Text = LabelFor(icon.SensorId), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Width = 300 };
             ToolTip.SetTip(label, label.Text);
@@ -210,6 +197,39 @@ public sealed class SettingsWindow : Window
         if (_settings.TrayIcons.Count == 0)
             _trayRows.Children.Add(new TextBlock { Text = "No tray icons. Closing the window then leaves OpenHW running with nothing on screen: open it again from the app grid (it shows the running copy), or quit with File → Exit.", Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap });
         _add.IsEnabled = _settings.TrayIcons.Count < AppSettings.MaxTrayIcons;
+    }
+
+    // The presets, the icon's own custom color when it has one, and "Custom…" to pick any color.
+    private ComboBox ColorBox(TraySensor icon)
+    {
+        static ComboBoxItem Swatch(string label, string hex) => new()
+        {
+            Tag = hex,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 6,
+                Children = { new Rectangle { Width = 14, Height = 14, Fill = new SolidColorBrush(Color.Parse(hex)) }, new TextBlock { Text = label } },
+            },
+        };
+        var box = new ComboBox { Width = 130 };
+        foreach (var (name, hex) in AppSettings.Colours) box.Items.Add(Swatch(name, hex));
+        if (AppSettings.PresetName(icon.Colour) is null) box.Items.Add(Swatch(icon.Colour.ToUpperInvariant(), icon.Colour));
+        box.Items.Add(new ComboBoxItem { Content = "Custom…", Tag = "custom" });
+        var current = box.Items.OfType<ComboBoxItem>().First(c => ((string)c.Tag!).Equals(icon.Colour, StringComparison.OrdinalIgnoreCase));
+        box.SelectedItem = current;
+        box.SelectionChanged += async (_, _) =>
+        {
+            if (box.SelectedItem is not ComboBoxItem { Tag: string tag } || tag.Equals(icon.Colour, StringComparison.OrdinalIgnoreCase)) return;
+            if (tag != "custom")
+            {
+                Save(() => icon.Colour = tag, rebuild: true);
+                return;
+            }
+            var picked = await ColorDialog.PickAsync(this, icon.Colour);
+            if (picked is null) box.SelectedItem = current; // cancelled: back to what it was
+            else Save(() => icon.Colour = picked, rebuild: true);
+        };
+        return box;
     }
 
     private void AddSensor()

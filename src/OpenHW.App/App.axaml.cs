@@ -94,19 +94,35 @@ public sealed class App : Application
     }
 
     /// <summary>One icon per configured tray sensor, in order. Each has its own bus connection and the same menu.</summary>
+    private int _trayGeneration; // a newer rebuild abandons an older one still registering icons
+
+    /// <summary>
+    /// One icon per configured tray sensor, the first in the list leftmost. GNOME's AppIndicators extension inserts
+    /// each new icon at the same panel position, left of the ones before it, so icons are registered last-first, one
+    /// at a time with a pause for the panel to place each. Each has its own bus connection and menu.
+    /// </summary>
     private async Task RebuildTrayAsync()
     {
+        var generation = ++_trayGeneration;
         foreach (var (_, icon) in _trayIcons) icon.Dispose();
         _trayIcons.Clear();
-        var index = 0;
-        foreach (var config in _settings.TrayIcons)
+        for (var index = _settings.TrayIcons.Count - 1; index >= 0; index--)
         {
+            var config = _settings.TrayIcons[index];
             try
             {
-                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index++}", "OpenHW",
+                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index}", "OpenHW",
                     [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu]);
+                if (generation != _trayGeneration)
+                {
+                    icon.Dispose();
+                    return;
+                }
                 icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
-                _trayIcons.Add((config, icon));
+                _trayIcons.Insert(0, (config, icon));
+                UpdateTray(); // draw it now, not after the rest
+                await Task.Delay(TrayPlacementPause);
+                if (generation != _trayGeneration) return;
             }
             catch (Exception ex)
             {
@@ -116,6 +132,8 @@ public sealed class App : Application
         }
         UpdateTray();
     }
+
+    private static readonly TimeSpan TrayPlacementPause = TimeSpan.FromMilliseconds(250);
 
     private TrayState TrayStateOf(string sensorId)
     {
@@ -207,15 +225,45 @@ public sealed class App : Application
     // arrive on the D-Bus thread of the icon being changed, so the work is posted to the UI thread.
     private IEnumerable<TrayMenuItem> IconItems(TraySensor config) =>
     [
-        new("Remove from tray", () => Dispatcher.UIThread.Post(() => RemoveTrayIcon(config))),
-        new("Colour", null)
+        new("Move left", () => Dispatcher.UIThread.Post(() => MoveTrayIcon(config, -1)))
         {
-            Children = AppSettings.Colours.Select(c => new TrayMenuItem(c.Name, () => Dispatcher.UIThread.Post(() => SetTrayColour(config, c.Hex)))
-            {
-                Checked = () => config.Colour.Equals(c.Hex, StringComparison.OrdinalIgnoreCase),
-            }).ToList(),
+            Visible = () => _settings.TrayIcons.IndexOf(config) > 0,
+        },
+        new("Move right", () => Dispatcher.UIThread.Post(() => MoveTrayIcon(config, 1)))
+        {
+            Visible = () => _settings.TrayIcons.IndexOf(config) is var i && i >= 0 && i < _settings.TrayIcons.Count - 1,
+        },
+        new("Remove from tray", () => Dispatcher.UIThread.Post(() => RemoveTrayIcon(config))),
+        new("Color", null)
+        {
+            Children =
+            [
+                .. AppSettings.Colours.Select(c => new TrayMenuItem(c.Name, () => Dispatcher.UIThread.Post(() => SetTrayColour(config, c.Hex)))
+                {
+                    Checked = () => config.Colour.Equals(c.Hex, StringComparison.OrdinalIgnoreCase),
+                }),
+                // A custom color (picked in Settings) shows ticked; any color can be picked there.
+                new TrayMenuItem("", null)
+                {
+                    DynamicLabel = () => $"Custom ({config.Colour.ToUpperInvariant()})",
+                    Checked = () => true,
+                    Visible = () => AppSettings.PresetName(config.Colour) is null,
+                },
+                new("Custom color…", () => Dispatcher.UIThread.Post(ShowSettings)),
+            ],
         },
     ];
+
+    private void MoveTrayIcon(TraySensor config, int by)
+    {
+        var icons = _settings.TrayIcons;
+        var index = icons.IndexOf(config);
+        if (index < 0 || index + by < 0 || index + by >= icons.Count) return;
+        (icons[index], icons[index + by]) = (icons[index + by], icons[index]);
+        _settings.Save();
+        ApplySettings(); // re-registers the icons in the new order
+        _settingsWindow?.RefreshTrayRows();
+    }
 
     private void RemoveTrayIcon(TraySensor config)
     {
@@ -230,7 +278,9 @@ public sealed class App : Application
     {
         config.Colour = hex;
         _settings.Save();
-        UpdateTray(); // repaints the tile and refreshes the menu's tick
+        UpdateTray(); // repaints the tile
+        foreach (var (c, icon) in _trayIcons)
+            if (c == config) icon.RefreshMenu(); // moves the tick in its Color submenu (the menu has just closed)
         _settingsWindow?.RefreshTrayRows();
     }
 
@@ -264,6 +314,7 @@ public sealed class App : Application
         _hub.SetPinned(ids); // tray sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
+        var before = _trayInfo;
         _trayInfo = _trayIcons.ToDictionary(t => t.Config, t => SensorInfo(t.Config, groups));
         foreach (var (config, icon) in _trayIcons)
         {
@@ -272,7 +323,11 @@ public sealed class App : Application
             var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
             var info = CachedInfo(config);
             icon.Update(TrayIconRenderer.Render(TrayText(value), config.Colour), "OpenHW · " + info[0], string.Join("\n", info.Skip(1)));
-            icon.RefreshMenu(); // the info lines change every poll
+            // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
+            // place, so a menu or submenu the user has open stays open; a different number: rebuild the layout.
+            var old = before.TryGetValue(config, out var o) ? o : [];
+            if (old.Count != info.Count) icon.RefreshMenu();
+            else if (!old.SequenceEqual(info)) icon.RefreshMenuItems(Enumerable.Range(1, InfoLines));
         }
     }
 

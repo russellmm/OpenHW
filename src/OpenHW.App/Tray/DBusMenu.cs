@@ -140,7 +140,37 @@ public sealed class DBusMenu : DBusObject
 
     private bool IsItem(int id) => id >= 1 && id <= _nodes.Count;
 
-    /// <summary>State behind a label, radio or visibility changed: the panel re-reads the layout.</summary>
+    /// <summary>
+    /// These items' labels, radio state or visibility changed but the layout didn't: the panel updates them in place.
+    /// Use this for anything that changes often — a layout refresh makes GNOME rebuild the menu, closing any open
+    /// submenu under the pointer.
+    /// </summary>
+    public void UpdateItems(Connection connection, IEnumerable<int> ids)
+    {
+        var list = ids.Where(IsItem).ToArray();
+        if (list.Length == 0) return;
+        var writer = connection.GetMessageWriter(); // not `using`: it's passed by ref below
+        try
+        {
+            writer.WriteSignalHeader(destination: null, path: MenuPath, @interface: "com.canonical.dbusmenu", member: "ItemsPropertiesUpdated", signature: "a(ia{sv})a(ias)");
+            var changed = writer.WriteArrayStart(DBusType.Struct);
+            foreach (var id in list)
+            {
+                writer.WriteStructureStart();
+                writer.WriteInt32(id);
+                WriteItemProperties(ref writer, id);
+            }
+            writer.WriteArrayEnd(changed);
+            writer.WriteArrayEnd(writer.WriteArrayStart(DBusType.Struct)); // nothing removed
+            connection.TrySendMessage(writer.CreateMessage());
+        }
+        finally
+        {
+            writer.Dispose();
+        }
+    }
+
+    /// <summary>The menu's shape changed (items appear or disappear): the panel re-reads the layout.</summary>
     public void Invalidate(Connection connection)
     {
         var revision = Interlocked.Increment(ref _revision);

@@ -27,6 +27,14 @@ public sealed class AppSettings
         ("Blue", "#2E86DE"), ("Purple", "#8E44AD"), ("Grey", "#5D6D7E"), ("White", "#ECF0F1"),
     ];
 
+    /// <summary>A "#RRGGBB" tile color: one of <see cref="Colours"/> or a custom one picked in Settings.</summary>
+    public static bool IsColor(string? hex) =>
+        hex is { Length: 7 } && hex[0] == '#' && hex.Skip(1).All(Uri.IsHexDigit);
+
+    /// <summary>The preset's name, or null for a custom color.</summary>
+    public static string? PresetName(string hex) =>
+        Colours.FirstOrDefault(c => c.Hex.Equals(hex, StringComparison.OrdinalIgnoreCase)).Name;
+
     public double PollSeconds { get; set; } = 2;
     public bool StartAtLogin { get; set; }
     public bool StartInTray { get; set; } = true;
@@ -57,7 +65,7 @@ public sealed class AppSettings
         // One icon per sensor: a file from before duplicates were blocked keeps the first of each.
         TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
         foreach (var icon in TrayIcons)
-            if (!Colours.Any(c => c.Hex.Equals(icon.Colour, StringComparison.OrdinalIgnoreCase))) icon.Colour = Colours[0].Hex;
+            if (!IsColor(icon.Colour)) icon.Colour = Colours[0].Hex;
         StartAtLogin = File.Exists(AutostartPath); // the file is the truth: the user may have removed it elsewhere
     }
 

@@ -230,8 +230,11 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
         </interface>
         """;
 
-    /// <summary>Menu labels, radio state or visibility changed.</summary>
+    /// <summary>Menu items appeared or disappeared: the panel rebuilds the menu.</summary>
     public void RefreshMenu() => _menu.Invalidate(_connection);
+
+    /// <summary>These menu items' labels or state changed: updated in place, so an open menu stays open.</summary>
+    public void RefreshMenuItems(IEnumerable<int> ids) => _menu.UpdateItems(_connection, ids);
 
     public void Dispose()
     {
