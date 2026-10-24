@@ -235,10 +235,14 @@ public sealed class App : Application
 
     // Each icon's info lines, computed once per poll on the UI thread and read by the menu on the D-Bus thread:
     // replaced whole, never mutated.
-    private volatile IReadOnlyDictionary<TraySensor, IReadOnlyList<string>> _trayInfo = new Dictionary<TraySensor, IReadOnlyList<string>>();
+    private volatile IReadOnlyDictionary<TraySensor, TrayInfo> _trayInfo = new Dictionary<TraySensor, TrayInfo>();
+
+    /// <summary>The menu's lines (the explanation wrapped to menu width), and the same text for the tooltip, whose
+    /// host wraps it (OpenHW's hover extension on GNOME), so there the explanation is one paragraph and never cut.</summary>
+    private sealed record TrayInfo(IReadOnlyList<string> Lines, string Tooltip);
 
     private IReadOnlyList<string> CachedInfo(TraySensor config) =>
-        _trayInfo.TryGetValue(config, out var lines) ? lines : [];
+        _trayInfo.TryGetValue(config, out var info) ? info.Lines : [];
 
     // The first lines of each icon's own menu describe its sensor. GNOME's tray extension never shows tooltips, so
     // this is where the expanded information can be seen there; the same text is the tooltip on hosts that show one.
@@ -315,11 +319,11 @@ public sealed class App : Application
     }
 
     /// <summary>Name and reading, min/max/average, the device it belongs to, then what it measures (wrapped).</summary>
-    private IReadOnlyList<string> SensorInfo(TraySensor config, IReadOnlyList<SensorGroupView> groups)
+    private TrayInfo SensorInfo(TraySensor config, IReadOnlyList<SensorGroupView> groups)
     {
         var id = ResolveTrayId(config);
         var item = id is null ? null : _hub.Inventory.FirstOrDefault(i => i.Id == id);
-        if (item is null) return ["Sensor not present now"];
+        if (item is null) return new(["Sensor not present now"], "");
         var name = SensorPresentation.DisplayName(item);
         var stats = _hub.Get(item.Id);
         string F(double? v) => v is { } x ? SensorPresentation.Format(item, SensorPresentation.Scale(item, x)) : "–";
@@ -331,8 +335,9 @@ public sealed class App : Application
         var group = groups.FirstOrDefault(g => Flatten(g.Sensors).Any(v => v.Id == item.Id))?.Title;
         if (group is not null) lines.Add(group);
         var explanation = SensorExplanations.Explain(item, SensorPresentation.BuiltInName(item));
+        var tooltip = string.Join("\n", explanation.Length > 0 ? lines.Skip(1).Append(explanation) : lines.Skip(1));
         if (explanation.Length > 0) lines.AddRange(SensorPresentation.Wrap(explanation, 52).Split('\n'));
-        return lines.Take(InfoLines).ToList();
+        return new(lines.Take(InfoLines).ToList(), tooltip);
     }
 
     private static IEnumerable<SensorView> Flatten(IEnumerable<SensorView> views) =>
@@ -353,10 +358,10 @@ public sealed class App : Application
             var item = id is null ? null : items.GetValueOrDefault(id);
             var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
             var info = CachedInfo(config);
-            icon.Update(TrayIconRenderer.Render(TrayText(value), config.Colour), "OpenHW · " + info[0], string.Join("\n", info.Skip(1)));
+            icon.Update(TrayIconRenderer.Render(TrayText(value), config.Colour), "OpenHW · " + info[0], _trayInfo[config].Tooltip);
             // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
             // place, so a menu or submenu the user has open stays open; a different number: rebuild the layout.
-            var old = before.TryGetValue(config, out var o) ? o : [];
+            var old = before.TryGetValue(config, out var o) ? o.Lines : [];
             if (old.Count != info.Count) icon.RefreshMenu();
             else if (!old.SequenceEqual(info)) icon.RefreshMenuItems(Enumerable.Range(1, InfoLines));
         }

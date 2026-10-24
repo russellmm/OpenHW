@@ -1,0 +1,7 @@
+{
+    "uuid": "openhw-tray-hover@russellmm.github.io",
+    "name": "OpenHW tray hover",
+    "description": "Shows an OpenHW tray icon's reading, min/max/avg, device and explanation while the pointer is over it. GNOME's tray (Ubuntu AppIndicators) shows no tooltips of its own. Turned on and off from OpenHW's File → Tray Icons.",
+    "shell-version": ["48", "49", "50", "51"],
+    "url": "https://github.com/russellmm/OpenHW"
+}

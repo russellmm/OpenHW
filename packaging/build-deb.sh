@@ -3,6 +3,8 @@
 #   /usr/lib/openhw/app/          the published app            /usr/bin/openhw         command on PATH
 #   /usr/lib/openhw/helper/       the published helper         openhw-helper.service   systemd unit (enabled on install)
 #   menu entry + icon             "OpenHW" in the GNOME app grid
+#   /usr/share/gnome-shell/extensions/openhw-tray-hover@…   hover details for the tray icons (each user turns it
+#                                 on in File → Tray Icons; GNOME finds it at the next login)
 # Install with:  sudo apt install ./dist/openhw_<version>_amd64.deb
 # The version comes from Directory.Build.props; a commit other than the release tag gets "+git.<hash>" appended, so
 # test packages sort after the release they follow. Uses the system .NET 8 runtime (dotnet-runtime-8.0).
@@ -37,12 +39,14 @@ dotnet publish src/OpenHW.Helper/OpenHW.Helper.csproj -c Release -r linux-x64 --
     -o "$root/usr/lib/openhw/helper" --nologo -v quiet
 
 install -d "$root/usr/bin" "$root/usr/lib/systemd/system" "$root/usr/share/applications" \
-    "$root/usr/share/icons/hicolor/scalable/apps" "$root/usr/share/doc/openhw" "$root/DEBIAN"
+    "$root/usr/share/icons/hicolor/scalable/apps" "$root/usr/share/doc/openhw" "$root/usr/share/gnome-shell/extensions" \
+    "$root/DEBIAN"
 ln -s ../lib/openhw/app/openhw "$root/usr/bin/openhw"
 sed 's:^ExecStart=.*:ExecStart=/usr/lib/openhw/helper/openhw-helper:' packaging/openhw-helper.service \
     > "$root/usr/lib/systemd/system/openhw-helper.service"
 install -m 644 packaging/openhw.svg "$root/usr/share/icons/hicolor/scalable/apps/openhw.svg"
 install -m 644 CHANGELOG.md README.md "$root/usr/share/doc/openhw/"
+cp -r packaging/gnome-extension/. "$root/usr/share/gnome-shell/extensions/"
 
 cat > "$root/usr/share/applications/openhw.desktop" <<'DESKTOP'
 [Desktop Entry]
@@ -73,8 +77,9 @@ Installed-Size: $(du -sk --exclude=DEBIAN "$root" | cut -f1)
 Depends: dotnet-runtime-8.0, libsensors5, libfontconfig1, libx11-6, libice6, libsm6, libxi6, libxrandr2, libxcursor1
 Description: HWiNFO-style hardware sensor monitor
  Sensors Status window with current, minimum, maximum and average readings for CPU, GPU, board, drives and memory,
- plus tray icons, logging, alerts, power profiles, CPU frequency caps and CPU/GPU power limits. The openhw-helper
- service does the reads and writes that need root, through fixed, range-checked commands.
+ plus tray icons (with hover details on GNOME), logging, alerts, power profiles, CPU frequency caps and CPU/GPU
+ power limits. The openhw-helper service does the reads and writes that need root, through fixed, range-checked
+ commands.
 CONTROL
 
 install -m 755 /dev/stdin "$root/DEBIAN/postinst" <<'POSTINST'

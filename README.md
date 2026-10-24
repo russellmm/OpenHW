@@ -49,9 +49,17 @@ plain-language explanation — then **Move left** / **Move right**, **Remove fro
 (presets; a custom color shows ticked, and **Custom color…** opens Tray Icons). The info lines update in place
 (dbusmenu `ItemsPropertiesUpdated`), so an open menu or submenu stays open. Icons appear in the panel in the Tray Icons window's
 order, top = leftmost: GNOME's extension inserts each new icon left of the previous ones, so OpenHW registers them
-last-first. GNOME's AppIndicator extension never shows tooltips, so that menu is where the
-expanded information appears there; the same text is published as the icon's tooltip for hosts that show one
-(e.g. KDE). On GNOME the icon size is the extension's `icon-size` setting (22 px on the workstation).
+last-first. On GNOME the icon size is the extension's `icon-size` setting (22 px on the workstation).
+
+**Hover details.** The same information is the icon's tooltip (the SNI `ToolTip` property, re-sent after every
+poll). KDE shows it on hover by itself; GNOME's AppIndicator extension never shows tooltips, so OpenHW ships its own
+small GNOME Shell extension, `openhw-tray-hover@russellmm.github.io` (`packaging/gnome-extension/`, installed by the
+.deb in `/usr/share/gnome-shell/extensions`). It finds OpenHW's icons in the panel (SNI ids `openhw-tray-*`), and
+after a short delay shows the tooltip under the icon — the reading, min/max/avg, device and full explanation —
+updating live while the pointer stays and hiding when the icon's menu opens. Turn it on or off with **File → Tray
+Icons… → Hover**; the checkbox is GNOME's own extension state (the Extensions app shows the same switch). On Wayland,
+GNOME only finds a newly installed extension at login, so after the first install it needs one logout/login; ticking
+the box before that makes it start on at that login.
 
 Every sensor row's tooltip in the main window also starts with what the reading means and when it matters
 (`SensorExplanations`), before its source and id.
@@ -85,7 +93,8 @@ sensor, color and order (↑ / ↓ = left / right in the panel) — the **custom
 `1e90ff`, or with **Pick…**, a color dialog with a hex field kept in step with the wheel; offered after the presets in
 every icon's color list and tray Color submenu, labelled with their hex; ✕ removes one, icons using it keep it), and
 a searchable sensor list: every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk");
-Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" and can't be added twice.
+Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" and can't be added twice. **Hover**
+turns the tray icons' hover details on or off (see Tray icons).
 
 ## Sensors
 

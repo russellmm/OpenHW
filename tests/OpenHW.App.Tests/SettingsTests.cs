@@ -95,7 +95,7 @@ public sealed class SettingsWindowTests
         settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:active-limit", Colour = "#1E90FF" });
         settings.AddCustomColour("#1E90FF");
         settings.AddCustomColour("#FF6F61");
-        var window = new TrayIconsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { }, new FakeTrayHover());
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>()
@@ -127,7 +127,7 @@ public sealed class SensorSearchTests
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-search-").FullName);
         using var hub = new Sensors.SensorHub();
         hub.Sample();
-        var window = new TrayIconsWindow(AppSettings.Load(), hub, () => { });
+        var window = new TrayIconsWindow(AppSettings.Load(), hub, () => { }, new FakeTrayHover());
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
@@ -173,7 +173,7 @@ public sealed class ColorTests
         hub.Sample();
         var settings = AppSettings.Load();
         settings.TrayIcons[0].Colour = "#123456";
-        var window = new TrayIconsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { }, new FakeTrayHover());
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var box = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ComboBox>()
@@ -195,7 +195,7 @@ public sealed class TrayDuplicateTests
         hub.Sample();
         var settings = AppSettings.Load(); // default: the automatic CPU temperature
         settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:fclk", Colour = "#2E86DE" });
-        var window = new TrayIconsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { }, new FakeTrayHover());
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
@@ -283,7 +283,7 @@ public sealed class CustomColorTests
         using var hub = new Sensors.SensorHub();
         hub.Sample();
         var settings = AppSettings.Load();
-        var window = new TrayIconsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { }, new FakeTrayHover());
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var hex = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().Single(t => t.Watermark as string == "#RRGGBB");

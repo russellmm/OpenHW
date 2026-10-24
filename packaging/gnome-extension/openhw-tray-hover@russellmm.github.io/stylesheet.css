@@ -1,0 +1,14 @@
+/* Same colors as GNOME's dash labels, but a rounded box (not a pill) and left-aligned, since this holds several lines. */
+.openhw-tray-tooltip {
+    background-color: rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: white;
+    spacing: 4px;
+    max-width: 520px;
+}
+
+.openhw-tray-tooltip-title {
+    font-weight: bold;
+}

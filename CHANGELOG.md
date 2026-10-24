@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.7.0 — 2026-10-24
+
+**Tray hover**
+- Hovering over a tray icon on GNOME shows its sensor's details — reading, min/max/average, device and the full
+  explanation — updated live while the pointer stays; the menu still opens on a click and hides it. GNOME's tray
+  shows no tooltips, so the package now installs a small GNOME Shell extension,
+  `openhw-tray-hover@russellmm.github.io`, which shows the tooltip OpenHW already publishes.
+- File → Tray Icons… → Hover: on/off (GNOME's own extension switch; off until you tick it). After the first install,
+  log out and back in once — Wayland only finds new extensions at login; a box ticked before then is on at that login.
+- The tooltip's explanation is one paragraph (the menu keeps its short lines), so long explanations aren't cut off.
+
 ## 0.6.0 — 2026-10-24
 
 **Layout and values**

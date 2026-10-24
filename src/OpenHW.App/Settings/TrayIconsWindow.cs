@@ -5,14 +5,15 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using OpenHW.App.Sensors;
 using OpenHW.App.SensorWindow;
+using OpenHW.App.Tray;
 using OpenHW.Hardware;
 
 namespace OpenHW.App.Settings;
 
 /// <summary>
 /// File → Tray Icons (also the tray menu and a sensor's "Tray icon settings…"): which sensors get tray icons, their
-/// colors and order, the custom color palette, and a searchable list to add sensors. Every change is saved and applied
-/// at once; there is no OK/Cancel.
+/// colors and order, hover details, the custom color palette, and a searchable list to add sensors. Every change is
+/// saved and applied at once; there is no OK/Cancel.
 /// </summary>
 public sealed class TrayIconsWindow : Window
 {
@@ -31,17 +32,33 @@ public sealed class TrayIconsWindow : Window
     private readonly TextBox _newHex = new() { Width = 110, Watermark = "#RRGGBB", FontFamily = new FontFamily("monospace") };
     private readonly Border _newSwatch = new() { Width = 28, Height = 22, CornerRadius = new CornerRadius(3), BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1) };
     private readonly Button _addHex;
+    private readonly ITrayHover _hover;
+    private readonly CheckBox _hoverBox = new() { Content = "Show a sensor's details while the pointer is over its tray icon" };
+    private readonly TextBlock _hoverNote = new() { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
+    private bool _showingHover; // set while the box shows GNOME's state, so that isn't taken for a click
 
     private sealed record SensorChoice(string Id, string Group, string Name)
     {
         public string Label => Group.Length == 0 ? Name : $"{Group} › {Name}";
     }
 
-    public TrayIconsWindow(AppSettings settings, SensorHub hub, Action applied)
+    public TrayIconsWindow(AppSettings settings, SensorHub hub, Action applied, ITrayHover? hover = null)
     {
         _settings = settings;
         _hub = hub;
         _applied = applied;
+        _hover = hover ?? new GnomeTrayHover();
+        _hoverBox.IsCheckedChanged += async (_, _) =>
+        {
+            if (_showingHover) return;
+            _hoverBox.IsEnabled = false;
+            try { ShowHover(await _hover.SetAsync(_hoverBox.IsChecked == true)); }
+            catch (Exception ex) when (ex is Tmds.DBus.Protocol.DBusException or IOException or System.ComponentModel.Win32Exception)
+            {
+                _hoverNote.Text = $"Couldn't change it: {ex.Message}";
+                _hoverBox.IsEnabled = true;
+            }
+        };
         Title = "OpenHW Tray Icons";
         Width = 640;
         SizeToContent = SizeToContent.Height;
@@ -95,6 +112,9 @@ public sealed class TrayIconsWindow : Window
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
+                    Heading("Hover"),
+                    _hoverBox,
+                    _hoverNote,
                     Heading("Custom colors"),
                     new TextBlock
                     {
@@ -323,12 +343,38 @@ public sealed class TrayIconsWindow : Window
     }
 
     /// <summary>The sensor list changes as hardware comes and goes; refresh it each time the window opens.</summary>
-    protected override void OnOpened(EventArgs e)
+    protected override async void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
         FillPicker();
         RebuildTrayRows();
         _status.Text = "";
+        ShowHover(await _hover.GetAsync()); // the Extensions app may have changed it meanwhile
+    }
+
+    // GNOME's tray has no tooltips of its own, so hover is OpenHW's Shell extension; the box shows its real state.
+    private void ShowHover(TrayHoverStatus status)
+    {
+        _showingHover = true;
+        _hoverBox.IsChecked = status.State switch
+        {
+            TrayHoverState.On or TrayHoverState.Failed => true,
+            TrayHoverState.NeedsLogin => status.OnAtLogin,
+            _ => false,
+        };
+        _showingHover = false;
+        _hoverBox.IsEnabled = status.State is not (TrayHoverState.NotInstalled or TrayHoverState.NoShell);
+        _hoverNote.Text = status.State switch
+        {
+            TrayHoverState.On => "On: the reading, min/max/avg, device and explanation, updated live. A click still opens the icon's menu.",
+            TrayHoverState.Off => "Off: the details are in each icon's menu.",
+            TrayHoverState.NeedsLogin => "Log out and back in once: GNOME only finds a newly installed extension (OpenHW's hover) " +
+                                         $"at login. It will be {(status.OnAtLogin ? "on" : "off")} then.",
+            TrayHoverState.Failed => $"GNOME couldn't run OpenHW's hover extension: {status.Error}",
+            TrayHoverState.NotInstalled => "Needs OpenHW's GNOME extension, which the OpenHW package installs " +
+                                           $"(/usr/share/gnome-shell/extensions/{GnomeTrayHover.Uuid}).",
+            _ => "Only needed on GNOME, whose tray shows no tooltips; other desktops show the details on hover themselves.",
+        };
     }
 
     private static TextBlock Heading(string text) => new() { Text = text, FontWeight = FontWeight.SemiBold, FontSize = 14, Margin = new Thickness(0, 6, 0, 0) };

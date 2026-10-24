@@ -4,3 +4,4 @@ obj/
 .vs/
 .idea/
 dist/
+tools/tray-hover-test/out/
