@@ -28,13 +28,13 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 `src/OpenHW.App/Tray/` implements the StatusNotifierItem and dbusmenu D-Bus interfaces directly, so each
 icon is a picture we draw (value on a colored tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
-colors, are chosen in **File → Settings** (up to 8; default one CPU-temperature icon on red); tray sensors stay
+colors, are chosen in **File → Tray Icons…** (up to 8; default one CPU-temperature icon on red); tray sensors stay
 live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile.
 
 Each icon's right-click menu starts with its sensor: the reading, min/max/average, the device it belongs to and a
 plain-language explanation — then **Move left** / **Move right**, **Remove from tray** and a **Color** submenu
-(presets; a custom color shows ticked, and **Custom color…** opens Settings). The info lines update in place
-(dbusmenu `ItemsPropertiesUpdated`), so an open menu or submenu stays open. Icons appear in the panel in Settings'
+(presets; a custom color shows ticked, and **Custom color…** opens Tray Icons). The info lines update in place
+(dbusmenu `ItemsPropertiesUpdated`), so an open menu or submenu stays open. Icons appear in the panel in the Tray Icons window's
 order, top = leftmost: GNOME's extension inserts each new icon left of the previous ones, so OpenHW registers them
 last-first. GNOME's AppIndicator extension never shows tooltips, so that menu is where the
 expanded information appears there; the same text is published as the icon's tooltip for hosts that show one
@@ -43,21 +43,22 @@ expanded information appears there; the same text is published as the icon's too
 Every sensor row's tooltip in the main window also starts with what the reading means and when it matters
 (`SensorExplanations`), before its source and id.
 
-## Settings
-
-**File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
-interval (1–10 s, default 2 s), start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
-optionally with `--tray` to start with only the tray icons), and the tray icons — sensor, color and order (↑ / ↓ = left / right in the panel). **Custom colors**: add your own by typing a hex code
-(`#1E90FF` or `1e90ff`) or with **Pick…** (a color dialog with a hex field kept in step with the wheel); they are
-saved and offered after the presets in every icon's color list and tray Color submenu, labelled with their hex.
-Colors chosen through an icon's **Custom…** are added to the list too; ✕ removes one (icons using it keep it). The sensor picker is a search box:
-every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk"); Enter or double-click adds.
-Sensors already in the tray are listed grayed with "(in tray)" and can't be added twice (from Settings or a row's
-right-click menu); a settings file with duplicates keeps the first of each. OpenHW runs once per session: a
-second launch (app grid, or the command) shows the running window and exits.
-
 `Tmds.DBus.Protocol`'s `MessageWriter` is a `ref struct`: any helper that writes to it must take it by `ref`,
 or its output is silently lost and the bus disconnects the app for sending a malformed reply.
+
+## Settings and tray icons
+
+**File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
+interval (1–10 s, default 2 s) and start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
+optionally with `--tray` to start with only the tray icons). OpenHW runs once per session: a
+second launch (app grid, or the command) shows the running window and exits.
+
+**File → Tray Icons…** (also in the tray menu and a sensor's **Tray icon settings…**) has its own window: the icons —
+sensor, color and order (↑ / ↓ = left / right in the panel) — the **custom colors** (add by hex code, `#1E90FF` or
+`1e90ff`, or with **Pick…**, a color dialog with a hex field kept in step with the wheel; offered after the presets in
+every icon's color list and tray Color submenu, labelled with their hex; ✕ removes one, icons using it keep it), and
+a searchable sensor list: every word typed must appear in "Device › Sensor" ("gpu power", "6000 temp", "fclk");
+Enter or double-click adds. Sensors already in the tray are grayed "(in tray)" and can't be added twice.
 
 ## Sensors
 
@@ -101,13 +102,13 @@ Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
 - **Rename** (F2) — your name everywhere the sensor appears; the tooltip keeps the original.
 - **Hide** (Shift+Del) — View → **Show Hidden Sensors** brings hidden rows back marked "(hidden)" (right-click →
   Unhide), View → **Unhide All Sensors** clears them.
-- **Enable / Disable Logging** — which sensors the next CSV log includes.
+- **Enable / Disable Logging** — which sensors the next CSV log includes (opt-in: none until you enable them).
 - Layout settings, Customize values, OSD, RTSS, Alerts and LG LCD are grayed "To be implemented".
 
 These choices are kept in `~/.config/openhw/sensors.json`.
 
 **CSV logging**: File → **Start Logging…** asks where to save (default `~/Documents/OpenHW/openhw-<date>-<time>.csv`)
-and writes Date, Time and every monitored, logged sensor in window order ("Device: Sensor [unit]"), one row per poll,
+and writes Date, Time and every sensor you enabled logging for (still monitored), in window order ("Device: Sensor [unit]"), one row per poll,
 flushed as it goes; the footer shows "● Logging". Logged sensors are read every poll while logging. File → **Stop
 Logging** ends it.
 

@@ -24,6 +24,7 @@ public sealed class App : Application
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
+    private TrayIconsWindow? _trayIconsWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
     private volatile SensorLogger? _logger;
     private string[] _loggedIds = [];
@@ -44,6 +45,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
+                ShowTrayIcons = ShowTrayIcons,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             });
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
@@ -97,6 +99,7 @@ public sealed class App : Application
             new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)),
             new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
             TrayMenuItem.Separator,
+            new("Tray Icons…", () => Dispatcher.UIThread.Post(ShowTrayIcons)),
             new("Settings…", () => Dispatcher.UIThread.Post(ShowSettings)),
             new("Exit", () => Dispatcher.UIThread.Post(() => lifetime.Shutdown())),
         ];
@@ -163,7 +166,7 @@ public sealed class App : Application
         _settings.TrayIcons.Add(new TraySensor { SensorId = sensorId, Colour = colour });
         _settings.Save();
         ApplySettings();
-        _settingsWindow?.RefreshTrayRows();
+        _trayIconsWindow?.RefreshTrayRows();
     }
 
     private void RemoveFromTray(string sensorId)
@@ -171,7 +174,7 @@ public sealed class App : Application
         if (_settings.TrayIcons.RemoveAll(t => ResolveTrayId(t) == sensorId) == 0) return;
         _settings.Save();
         ApplySettings();
-        _settingsWindow?.RefreshTrayRows();
+        _trayIconsWindow?.RefreshTrayRows();
     }
 
     /// <summary>Settings changed: poll interval and tray icons take effect now.</summary>
@@ -261,7 +264,7 @@ public sealed class App : Application
                     Checked = () => true,
                     Visible = () => !_settings.AllColours().Any(c => c.Hex.Equals(config.Colour, StringComparison.OrdinalIgnoreCase)),
                 },
-                new("Custom color…", () => Dispatcher.UIThread.Post(ShowSettings)),
+                new("Custom color…", () => Dispatcher.UIThread.Post(ShowTrayIcons)),
             ],
         },
     ];
@@ -274,7 +277,7 @@ public sealed class App : Application
         (icons[index], icons[index + by]) = (icons[index + by], icons[index]);
         _settings.Save();
         ApplySettings(); // re-registers the icons in the new order
-        _settingsWindow?.RefreshTrayRows();
+        _trayIconsWindow?.RefreshTrayRows();
     }
 
     private void RemoveTrayIcon(TraySensor config)
@@ -282,7 +285,7 @@ public sealed class App : Application
         if (!_settings.TrayIcons.Remove(config)) return;
         _settings.Save();
         ApplySettings();
-        _settingsWindow?.RefreshTrayRows();
+        _trayIconsWindow?.RefreshTrayRows();
         if (_settings.TrayIcons.Count == 0) ShowWindow(); // with no icons left, the window is the only way back in
     }
 
@@ -293,7 +296,7 @@ public sealed class App : Application
         UpdateTray(); // repaints the tile
         foreach (var (c, icon) in _trayIcons)
             if (c == config) icon.RefreshMenu(); // moves the tick in its Color submenu (the menu has just closed)
-        _settingsWindow?.RefreshTrayRows();
+        _trayIconsWindow?.RefreshTrayRows();
     }
 
     /// <summary>Name and reading, min/max/average, the device it belongs to, then what it measures (wrapped).</summary>
@@ -369,6 +372,13 @@ public sealed class App : Application
     private async Task StartLoggingAsync()
     {
         if (_logger is not null || _window is null) return;
+        if (SensorLogger.ColumnsFor(_hub).Count == 0)
+        {
+            await InfoDialog.ShowAsync(_window, "Nothing to log",
+                "No sensors are set to be logged. Right-click each sensor you want in the log and choose " +
+                "Enable Logging, then File → Start Logging again. (Logging is opt-in so logs stay small.)");
+            return;
+        }
         var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) is { Length: > 0 } docs
             ? docs : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OpenHW");
         Directory.CreateDirectory(folder);
@@ -436,9 +446,16 @@ public sealed class App : Application
 
     private void ShowSettings()
     {
-        _settingsWindow ??= new SettingsWindow(_settings, _hub, ApplySettings);
+        _settingsWindow ??= new SettingsWindow(_settings, ApplySettings, ShowTrayIcons);
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    private void ShowTrayIcons()
+    {
+        _trayIconsWindow ??= new TrayIconsWindow(_settings, _hub, ApplySettings);
+        _trayIconsWindow.Show();
+        _trayIconsWindow.Activate();
     }
 
     private void ShowPowerLimits()

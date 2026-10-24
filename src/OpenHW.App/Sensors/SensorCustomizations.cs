@@ -4,15 +4,15 @@ namespace OpenHW.App.Sensors;
 
 /// <summary>
 /// The user's per-sensor choices, from the sensor right-click menu: new names, hidden rows, sensors whose monitoring
-/// is off, and sensors left out of CSV logs. Kept in ~/.config/openhw/sensors.json by sensor id, so they survive
-/// restarts and apply wherever the sensor appears (window, tray, Settings, graphs, logs).
+/// is off, and the sensors CSV logs include (opt-in: none until chosen, so logs stay small). Kept in
+/// ~/.config/openhw/sensors.json by sensor id, so they survive restarts and apply wherever the sensor appears.
 /// </summary>
 public sealed class SensorCustomizations
 {
     public Dictionary<string, string> Names { get; set; } = [];
     public HashSet<string> Hidden { get; set; } = [];
     public HashSet<string> Disabled { get; set; } = [];
-    public HashSet<string> NotLogged { get; set; } = [];
+    public HashSet<string> Logged { get; set; } = [];
 
     /// <summary>Something changed; raised on the thread that changed it (the UI thread).</summary>
     public event Action? Changed;
@@ -54,7 +54,7 @@ public sealed class SensorCustomizations
     public string? NameOf(string id) => Names.TryGetValue(id, out var name) ? name : null;
     public bool IsHidden(string id) => Hidden.Contains(id);
     public bool IsDisabled(string id) => Disabled.Contains(id);
-    public bool IsLogged(string id) => !NotLogged.Contains(id);
+    public bool IsLogged(string id) => Logged.Contains(id);
 
     /// <summary>A new name, or null/blank to go back to OpenHW's own.</summary>
     public void Rename(string id, string? name) => Change(() =>
@@ -65,7 +65,7 @@ public sealed class SensorCustomizations
 
     public void SetHidden(string id, bool hidden) => Change(() => { if (hidden) Hidden.Add(id); else Hidden.Remove(id); });
     public void SetDisabled(string id, bool disabled) => Change(() => { if (disabled) Disabled.Add(id); else Disabled.Remove(id); });
-    public void SetLogged(string id, bool logged) => Change(() => { if (logged) NotLogged.Remove(id); else NotLogged.Add(id); });
+    public void SetLogged(string id, bool logged) => Change(() => { if (logged) Logged.Add(id); else Logged.Remove(id); });
     public void UnhideAll() => Change(Hidden.Clear);
 
     private void Change(Action change)

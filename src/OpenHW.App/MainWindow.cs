@@ -25,6 +25,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     public Action<string>? AddToTray { get; init; }
     public Action<string>? RemoveFromTray { get; init; }
 
+    /// <summary>File → Tray Icons… and a sensor's "Tray icon settings…".</summary>
+    public Action? ShowTrayIcons { get; init; }
+
     /// <summary>Opens (or brings forward) a sensor's graph window.</summary>
     public Action<string>? ShowGraph { get; init; }
 
@@ -380,12 +383,12 @@ public sealed class MainWindow : Window
             row.HiddenByUser
                 ? Item("Unhide", () => _custom.SetHidden(row.Id, false), "Shift+Delete")
                 : Item("Hide", () => _custom.SetHidden(row.Id, true), "Shift+Delete"),
-            Item("Enable Logging", _custom.IsLogged(row.Id) ? null : () => _custom.SetLogged(row.Id, true), disabledTip: "Already logged (File → Start Logging)"),
-            Item("Disable Logging", _custom.IsLogged(row.Id) ? () => _custom.SetLogged(row.Id, false) : null, disabledTip: "Not logged"),
+            Item("Enable Logging", _custom.IsLogged(row.Id) ? null : () => _custom.SetLogged(row.Id, true), disabledTip: "Already in the log (File → Start Logging)"),
+            Item("Disable Logging", _custom.IsLogged(row.Id) ? () => _custom.SetLogged(row.Id, false) : null, disabledTip: "Not in the log — Enable Logging to add it"),
             new Separator(),
             Item("Layout settings…"),
             Item("Customize values…"),
-            Item("Tray icon settings…", _commands is { } c ? c.ShowSettings : null),
+            Item("Tray icon settings…", _commands?.ShowTrayIcons ?? _commands?.ShowSettings),
             Item("OSD settings…"),
             Item("OSD (RTSS) settings…"),
             Item("Alert settings…"),
@@ -605,6 +608,7 @@ public sealed class MainWindow : Window
         }
         if (_commands is { } c)
         {
+            if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());
             file.Items.Add(Item("E_xit OpenHW", c.Exit, "Ctrl+Q"));

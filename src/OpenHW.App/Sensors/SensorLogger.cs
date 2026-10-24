@@ -51,8 +51,8 @@ public sealed class SensorLogger : IDisposable
     }
 
     /// <summary>
-    /// The columns a new log gets: every sensor the window shows, in window order, except those with monitoring off
-    /// or logging switched off — headed "Device: Sensor [unit]" with the user's names.
+    /// The columns a new log gets: the sensors chosen with Enable Logging, in window order, except any whose
+    /// monitoring is off — headed "Device: Sensor [unit]" with the user's names.
     /// </summary>
     public static IReadOnlyList<LogColumn> ColumnsFor(SensorHub hub)
     {

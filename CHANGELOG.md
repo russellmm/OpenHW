@@ -3,6 +3,14 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.4.0 — 2026-10-23
+
+- Logging is opt-in: no sensor is logged until you choose Enable Logging on it, so logs only hold what you want.
+  Starting a log with none chosen explains how to pick sensors instead of writing an empty file.
+- Tray icons have their own window, File → Tray Icons… (also in the tray menu and a sensor's "Tray icon
+  settings…"): icons, order, colors, custom colors and the sensor search. Settings keeps the OpenHW-wide options
+  (poll interval, start at login).
+
 ## 0.3.1 — 2026-10-23
 
 - Fix: column header edges couldn't be dragged. The handles had no visual template, so they never received the

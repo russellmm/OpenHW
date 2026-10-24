@@ -30,38 +30,43 @@ public sealed class LoggingTests
     }
 
     [Fact]
-    public void LoggingCanBeSwitchedOffPerSensor()
+    public void LoggingIsOptInPerSensor()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-logchoice-").FullName);
         var custom = SensorCustomizations.Current;
+        Assert.False(custom.IsLogged("x")); // nothing is logged until chosen
+        custom.SetLogged("x", true);
         Assert.True(custom.IsLogged("x"));
+        Assert.Contains("x", System.Text.Json.JsonSerializer.Deserialize<SensorCustomizations>(
+            File.ReadAllText(Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")!, "openhw", "sensors.json")))!.Logged);
         custom.SetLogged("x", false);
         Assert.False(custom.IsLogged("x"));
-        Assert.Contains("x", System.Text.Json.JsonSerializer.Deserialize<SensorCustomizations>(
-            File.ReadAllText(Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")!, "openhw", "sensors.json")))!.NotLogged);
     }
 }
 
 public sealed class LogColumnTests
 {
     [Fact]
-    public void ColumnsFollowTheWindowAndLeaveOutWhatsSwitchedOff()
+    public void OnlyChosenSensorsBecomeColumnsInWindowOrder()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-logcols-").FullName);
         using var hub = new SensorHub();
         hub.Sample();
-        var all = SensorLogger.ColumnsFor(hub);
-        Assert.True(all.Count > 100);
-        var cpu = all.Single(c => c.Id == hub.CpuTemperatureId());
-        Assert.Equal("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced: CPU (Tctl/Tdie) [°C]", cpu.Header);
+        Assert.Empty(SensorLogger.ColumnsFor(hub)); // opt-in: nothing chosen, nothing logged
 
         var custom = SensorCustomizations.Current;
-        custom.SetLogged(all[0].Id, false);
-        custom.SetDisabled(all[1].Id, true);
-        custom.Rename(cpu.Id, "Threadripper");
+        var cpu = hub.CpuTemperatureId()!;
+        var fclk = hub.Inventory.First(i => i.Id == "hsmp:fclk").Id;
+        var gpuPower = hub.Inventory.First(i => i.Id.EndsWith(":metric:power", StringComparison.Ordinal)).Id;
+        foreach (var id in new[] { gpuPower, fclk, cpu }) custom.SetLogged(id, true);
+        var columns = SensorLogger.ColumnsFor(hub);
+        Assert.Equal([cpu, fclk, gpuPower], columns.Select(c => c.Id)); // window order: CPU group before the GPUs
+        Assert.Equal("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced: CPU (Tctl/Tdie) [°C]", columns[0].Header);
+
+        custom.SetDisabled(fclk, true);          // monitoring off: left out even though chosen
+        custom.Rename(cpu, "Threadripper");
         var after = SensorLogger.ColumnsFor(hub);
-        Assert.Equal(all.Count - 2, after.Count);
-        Assert.DoesNotContain(after, c => c.Id == all[0].Id || c.Id == all[1].Id);
-        Assert.EndsWith(": Threadripper [°C]", after.Single(c => c.Id == cpu.Id).Header);
+        Assert.Equal([cpu, gpuPower], after.Select(c => c.Id));
+        Assert.EndsWith(": Threadripper [°C]", after[0].Header);
     }
 }

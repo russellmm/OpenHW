@@ -95,7 +95,7 @@ public sealed class SettingsWindowTests
         settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:active-limit", Colour = "#1E90FF" });
         settings.AddCustomColour("#1E90FF");
         settings.AddCustomColour("#FF6F61");
-        var window = new SettingsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>()
@@ -119,7 +119,7 @@ public sealed class SensorSearchTests
     [InlineData("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced › CCD2 (Tdie)", "ccd2 tdie", true)]
     [InlineData("anything", "", true)]
     public void EveryWordMustMatch(string label, string query, bool expected) =>
-        Assert.Equal(expected, SettingsWindow.Matches(label, query));
+        Assert.Equal(expected, TrayIconsWindow.Matches(label, query));
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void TypingNarrowsTheList()
@@ -127,7 +127,7 @@ public sealed class SensorSearchTests
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-search-").FullName);
         using var hub = new Sensors.SensorHub();
         hub.Sample();
-        var window = new SettingsWindow(AppSettings.Load(), hub, () => { });
+        var window = new TrayIconsWindow(AppSettings.Load(), hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
@@ -173,7 +173,7 @@ public sealed class ColorTests
         hub.Sample();
         var settings = AppSettings.Load();
         settings.TrayIcons[0].Colour = "#123456";
-        var window = new SettingsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var box = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.ComboBox>()
@@ -195,7 +195,7 @@ public sealed class TrayDuplicateTests
         hub.Sample();
         var settings = AppSettings.Load(); // default: the automatic CPU temperature
         settings.TrayIcons.Add(new TraySensor { SensorId = "hsmp:fclk", Colour = "#2E86DE" });
-        var window = new SettingsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var search = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().First(t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal));
@@ -283,7 +283,7 @@ public sealed class CustomColorTests
         using var hub = new Sensors.SensorHub();
         hub.Sample();
         var settings = AppSettings.Load();
-        var window = new SettingsWindow(settings, hub, () => { });
+        var window = new TrayIconsWindow(settings, hub, () => { });
         window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var hex = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBox>().Single(t => t.Watermark as string == "#RRGGBB");
@@ -322,5 +322,25 @@ public sealed class CustomColorTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.Equal("#27AE60", hex.Text);
         Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(dialog)?.Save(Path.Combine(Path.GetTempPath(), "openhw-color-dialog.png"));
+    }
+}
+
+public sealed class GeneralSettingsTests
+{
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void SettingsHoldsGeneralOptionsAndPointsToTrayIcons()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-general-").FullName);
+        var opened = false;
+        var window = new SettingsWindow(AppSettings.Load(), () => { }, () => opened = true);
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var all = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).ToList();
+        Assert.Contains(all.OfType<Avalonia.Controls.CheckBox>(), c => c.Content as string == "Start OpenHW when I log in");
+        Assert.DoesNotContain(all.OfType<Avalonia.Controls.TextBox>(), t => (t.Watermark as string ?? "").StartsWith("Search", StringComparison.Ordinal)); // the tray parts moved out
+        all.OfType<Avalonia.Controls.Button>().Single(b => b.Content as string == "Tray Icons…")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.True(opened);
+        Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?.Save(Path.Combine(Path.GetTempPath(), "openhw-general-settings.png"));
     }
 }
