@@ -17,7 +17,7 @@ if (Native.geteuid() != 0)
 using var smart = new CachedSmartReader(new NativeNvmeSmartReader(), TimeSpan.FromSeconds(10));
 var socketPath = HelperSocket.Path;
 using var gpuPower = new GpuPowerLimits();
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits());
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader());
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
 var product = typeof(HelperSession).Assembly

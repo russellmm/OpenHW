@@ -23,11 +23,12 @@ public static class HelperSocket
 /// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value),
 /// and the boot-time limits: <c>cpupptboot &lt;mW|none&gt;</c> (hsmp-control's config, 100–300 W as it accepts) and
 /// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
+/// Root-only reads: <c>nvmesmart</c>, and <c>rapl</c> (the RAPL package and core energy counters).
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null)
 {
-    public const string Version = "5";
+    public const string Version = "6";
 
     public string HandleLine(string line)
     {
@@ -105,6 +106,11 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
             }
 
+            case "rapl" when parts.Length == 1: // read-only: the package and core energy counters
+                if (rapl is null) return "err RAPL unavailable";
+                var counters = rapl.Read();
+                return counters.Count == 0 ? "err no RAPL counters" : "ok " + RaplReader.Format(counters);
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -149,7 +155,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -200,7 +206,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl);
         try
         {
             using (client)
