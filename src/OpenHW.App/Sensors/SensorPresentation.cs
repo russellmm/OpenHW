@@ -112,7 +112,7 @@ public static partial class SensorPresentation
         if (key.StartsWith("net:", StringComparison.Ordinal)) return (200, $"Network: {key[4..]}");
         var chip = Chip(sample);
         if (chip.StartsWith("nct", StringComparison.OrdinalIgnoreCase) || chip.StartsWith("it8", StringComparison.OrdinalIgnoreCase))
-            return (5, $"{vendor} {machine.BoardName} ({SuperIoName(chip)})");
+            return (5, $"{vendor} {machine.BoardName} ({BoardProfiles.Known.FirstOrDefault(p => p.Matches(machine.BoardVendor, machine.BoardName, chip))?.ChipName ?? SuperIoName(chip)})");
         if (chip == "asusec") return (6, $"ASUS EC: {vendor}");
         return (300, sample.Group);
     }

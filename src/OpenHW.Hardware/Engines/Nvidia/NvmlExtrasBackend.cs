@@ -4,7 +4,9 @@ namespace OpenHW.Hardware;
 
 /// <summary>
 /// GPU readings HWiNFO shows that <see cref="NvmlBackend"/> does not publish: video clock, PCIe link speed /
-/// width / throughput, encoder and decoder load, P-state and performance limiters. Rows join each GPU's own
+/// width / throughput, encoder and decoder load, P-state, performance limiters, and NVML field values (1 s average
+/// power, PCIe error counters) where the card supports them. Hotspot and memory-junction temperatures are not in
+/// NVML's public interface (memory temperature, field 82, is "not supported" on the RTX 5060 Ti and RTX PRO 6000). Rows join each GPU's own
 /// group (same backend name and group label), so they appear under the matching "GPU [#n]" heading.
 /// </summary>
 internal sealed class NvmlExtrasBackend : ISensorEngine
@@ -19,6 +21,23 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
     ];
 
     private static readonly double[] GtPerSecond = [0, 2.5, 5, 8, 16, 32, 64]; // PCIe generation → GT/s per lane
+
+    // NVML field values (nvml.h NVML_FI_DEV_*): only those a card answers at discovery become rows.
+    private static readonly (string Key, uint Field, string Name, HardwareKind Kind, string Unit, double Scale)[] Fields =
+    [
+        ("power-average", 185, "GPU Power (1 s Average)", HardwareKind.Power, "W", 0.001),          // mW
+        ("pcie-correctable", 173, "GPU PCIe Correctable Errors", HardwareKind.Counter, "errors", 1),
+        ("pcie-nak-received", 174, "GPU PCIe NAKs Received", HardwareKind.Counter, "errors", 1),
+        ("pcie-receiver", 175, "GPU PCIe Receiver Errors", HardwareKind.Counter, "errors", 1),
+        ("pcie-bad-tlp", 176, "GPU PCIe Bad TLPs", HardwareKind.Counter, "errors", 1),
+        ("pcie-nak-sent", 177, "GPU PCIe NAKs Sent", HardwareKind.Counter, "errors", 1),
+        ("pcie-bad-dllp", 178, "GPU PCIe Bad DLLPs", HardwareKind.Counter, "errors", 1),
+        ("pcie-non-fatal", 179, "GPU PCIe Non-Fatal Errors", HardwareKind.Counter, "errors", 1),
+        ("pcie-fatal", 180, "GPU PCIe Fatal Errors", HardwareKind.Counter, "errors", 1),
+        ("pcie-unsupported", 181, "GPU PCIe Unsupported Requests", HardwareKind.Counter, "errors", 1),
+        ("pcie-lcrc", 182, "GPU PCIe LCRC Errors", HardwareKind.Counter, "errors", 1),
+    ];
+    private readonly Dictionary<string, (string Key, uint Field, string Name, HardwareKind Kind, string Unit, double Scale)[]> _fields = [];
 
     /// <summary>How often PCIe throughput is actually sampled.</summary>
     public static readonly TimeSpan PcieThroughputPeriod = TimeSpan.FromSeconds(10);
@@ -64,6 +83,12 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
             items.Add(Item("pcie-width", HardwareKind.Data, "lanes"));
             items.Add(Item("pcie-rx", HardwareKind.Data, "MB/s"));
             items.Add(Item("pcie-tx", HardwareKind.Data, "MB/s"));
+            if (_handles.TryGetValue(uuid, out var h))
+            {
+                if (!_fields.ContainsKey(uuid))
+                    _fields[uuid] = Fields.Where((f, i) => ReadFields(h, Fields)[i] is not null).ToArray(); // asked once per card
+                items.AddRange(_fields[uuid].Select(f => Item(f.Key, f.Kind, f.Unit)));
+            }
         }
         return items;
     }
@@ -79,7 +104,7 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
         "pcie-width" => "PCIe Link Width",
         "pcie-rx" => "GPU PCIe Rx Rate",
         "pcie-tx" => "GPU PCIe Tx Rate",
-        _ => Limiters.FirstOrDefault(l => l.Key == key).Name,
+        _ => Limiters.FirstOrDefault(l => l.Key == key).Name ?? Fields.FirstOrDefault(f => f.Key == key).Name,
     };
 
     public void ReadInto(IDictionary<string, double?> readings, IReadOnlySet<string>? requested)
@@ -116,7 +141,35 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
                 readings[prefix + "pcie-rx"] = last.Rx;
                 readings[prefix + "pcie-tx"] = last.Tx;
             }
+            if (_fields.TryGetValue(uuid, out var fields) && fields.Length > 0)
+            {
+                var values = ReadFields(handle, fields); // one NVML call for all of this card's fields
+                for (var i = 0; i < fields.Length; i++) readings[prefix + fields[i].Key] = values[i] * fields[i].Scale;
+            }
         }
+    }
+
+    // nvmlFieldValue_t.valueType → the union member to read (nvml.h nvmlValueType_t).
+    private static double?[] ReadFields(nint handle, IReadOnlyList<(string Key, uint Field, string Name, HardwareKind Kind, string Unit, double Scale)> fields)
+    {
+        var request = fields.Select(f => new Native.FieldValue { FieldId = f.Field }).ToArray();
+        var result = new double?[fields.Count];
+        if (Native.nvmlDeviceGetFieldValues(handle, request.Length, request) != Native.Success) return result;
+        for (var i = 0; i < request.Length; i++)
+        {
+            var v = request[i];
+            if (v.Return != Native.Success) continue;
+            result[i] = v.ValueType switch
+            {
+                0 => BitConverter.Int64BitsToDouble((long)v.Value),
+                1 => (uint)v.Value,
+                2 or 3 => v.Value,
+                4 => (long)v.Value,
+                5 => (int)(uint)v.Value,
+                _ => null,
+            };
+        }
+        return result;
     }
 
     public void Dispose()
@@ -141,5 +194,19 @@ internal sealed class NvmlExtrasBackend : ISensorEngine
         [DllImport(Dll)] public static extern int nvmlDeviceGetCurrPcieLinkGeneration(nint device, out uint generation);
         [DllImport(Dll)] public static extern int nvmlDeviceGetCurrPcieLinkWidth(nint device, out uint width);
         [DllImport(Dll)] public static extern int nvmlDeviceGetPcieThroughput(nint device, int counter, out uint kiloBytesPerSec);
+        [DllImport(Dll)] public static extern int nvmlDeviceGetFieldValues(nint device, int count, [In, Out] FieldValue[] values);
+
+        /// <summary>nvmlFieldValue_t (nvml.h): 40 bytes; the value is an 8-byte union read by <see cref="ValueType"/>.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct FieldValue
+        {
+            public uint FieldId;
+            public uint ScopeId;
+            public long Timestamp;
+            public long LatencyUsec;
+            public int ValueType;
+            public int Return;
+            public ulong Value;
+        }
     }
 }

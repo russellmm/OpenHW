@@ -60,6 +60,18 @@ public sealed partial class SystemEngine : ISensorEngine
             clocks.Add(FullId($"cpu:clock:{core}"));
         }
         items.Add(Item("cpu:clock:max", "Max Core Clock", HardwareKind.Frequency, "MHz", CpuGroup));
+        // Effective clocks: the kernel's APERF/MPERF average over the last tick (cpuinfo_avg_freq, no root), which counts
+        // idle time — what the core really delivered, not the clock it would run at.
+        var effective = new List<string>();
+        if (_cores.Count > 0 && File.Exists($"/sys/devices/system/cpu/cpu{_cores[0].Threads[0]}/cpufreq/cpuinfo_avg_freq"))
+        {
+            items.Add(Item("cpu:effective", "Average Effective Clock", HardwareKind.Frequency, "MHz", CpuGroup));
+            foreach (var (core, _) in _cores)
+            {
+                items.Add(Item($"cpu:effective:{core}", $"Core {core} Effective Clock", HardwareKind.Frequency, "MHz", CpuGroup));
+                effective.Add(FullId($"cpu:effective:{core}"));
+            }
+        }
         items.Add(Item("cpu:usage", "Core Usage", HardwareKind.Load, "%", CpuGroup));
         foreach (var (core, threads) in _cores)
             for (var t = 0; t < threads.Count; t++)
@@ -73,6 +85,7 @@ public sealed partial class SystemEngine : ISensorEngine
         var children = new Dictionary<string, IReadOnlyList<string>>
         {
             [FullId("cpu:clock")] = clocks,
+            [FullId("cpu:effective")] = effective,
             [FullId("cpu:usage")] = usages,
         };
 
@@ -102,6 +115,7 @@ public sealed partial class SystemEngine : ISensorEngine
         if (Wants("mem:", "swap:")) ReadMemory(readings);
         if (Wants("psi:", "loadavg:")) ReadPressure(readings);
         if (Wants("cpu:clock")) ReadClocks(readings);
+        if (Wants("cpu:effective")) ReadEffectiveClocks(readings);
         if (Wants("cpu:usage")) ReadUsage(readings);
         else _previousTimes.Clear();
         if (Wants("cstate:")) ReadCStates(readings);
@@ -231,6 +245,19 @@ public sealed partial class SystemEngine : ISensorEngine
         }
         readings[FullId("cpu:clock")] = clocks.Count > 0 ? clocks.Average() : null;
         readings[FullId("cpu:clock:max")] = clocks.Count > 0 ? clocks.Max() : null;
+    }
+
+    // A core is busy whenever either SMT thread is, so its effective clock is the higher of its threads'.
+    private void ReadEffectiveClocks(IDictionary<string, double?> readings)
+    {
+        var all = new List<double>();
+        foreach (var (core, threads) in _cores)
+        {
+            var mhz = threads.Select(t => ReadNumber($"/sys/devices/system/cpu/cpu{t}/cpufreq/cpuinfo_avg_freq") / 1000).OfType<double>().ToList();
+            readings[FullId($"cpu:effective:{core}")] = mhz.Count > 0 ? mhz.Max() : null;
+            all.AddRange(mhz);
+        }
+        readings[FullId("cpu:effective")] = all.Count > 0 ? all.Average() : null;
     }
 
     // Busy % per logical CPU from /proc/stat deltas since the previous poll; the first poll has no delta.

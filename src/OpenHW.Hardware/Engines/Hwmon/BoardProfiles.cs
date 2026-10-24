@@ -9,7 +9,9 @@ namespace OpenHW.Hardware;
 public sealed record RailMapping(string Name, double Scale = 1, bool Confirmed = true, bool Hidden = false, string Note = "");
 
 /// <summary>A board's rail map for one Super I/O chip family, matched on the DMI board vendor and name.</summary>
-public sealed record BoardProfile(string VendorPrefix, string Board, string ChipPrefix, IReadOnlyDictionary<string, RailMapping> Inputs)
+/// <param name="ChipName">The chip as the board really carries it (HWiNFO's name), when the Linux driver reports a
+/// relative — e.g. the nct6799 driver drives this board's NCT6701D.</param>
+public sealed record BoardProfile(string VendorPrefix, string Board, string ChipPrefix, IReadOnlyDictionary<string, RailMapping> Inputs, string? ChipName = null)
 {
     public bool Matches(string vendor, string board, string chip) =>
         vendor.StartsWith(VendorPrefix, StringComparison.OrdinalIgnoreCase) &&
@@ -80,7 +82,7 @@ public static class BoardProfiles
             ["fan4"] = new("Chassis 3"),
             ["fan5"] = new("Chassis 4"),
             ["fan6"] = new("Water Pump+"),
-        }),
+        }, ChipName: "Nuvoton NCT6701D"),
     ];
 
     private static readonly Dictionary<string, HardwareKind> InputKinds = new()

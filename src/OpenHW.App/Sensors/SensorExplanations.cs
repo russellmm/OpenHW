@@ -67,6 +67,13 @@ public static partial class SensorExplanations
         R(@"Core Clocks|Core \d+ Clock", "Current clock of the core (both of its threads share one clock), as the kernel " +
             "reports it. Idle cores drop to their lowest clock to save power."),
         R(@"Max Core Clock", "The highest current clock among all cores — what the busiest core is running at."),
+        R(@"Average Effective Clock|Core \d+ Effective Clock", "The clock the core actually delivered over the last moment, " +
+            "counting time asleep (the kernel's APERF/MPERF average). An idle core reads low even if it boosts to full " +
+            "speed for bursts — this is what work really got, unlike the plain clock."),
+        R(@"CPU Package Power \(RAPL\)", "Package power from the CPU's RAPL energy counter (read through openhw-helper): " +
+            "the energy used since the last poll divided by the time. Should track CPU Package Power from the SMU."),
+        R(@"CPU Cores Power \(RAPL\)", "Power used by all CPU cores together (RAPL core domain), without the I/O die, " +
+            "memory controller and Infinity Fabric — the rest of the package power is the SoC."),
         R(@"Core Usage|Core \d+ T\d+ Usage", "Share of time a thread was busy over the last poll (both SMT threads of a " +
             "core are listed)."),
         R(@"Total CPU Usage", "Share of all CPU threads' time spent busy over the last poll."),
@@ -143,6 +150,12 @@ public static partial class SensorExplanations
         R(@"GPU Performance Limit - Utilization", "Yes when the card is at lower clocks simply because there isn't enough work."),
         R(@"GPU Video Encoder Load|GPU Video Decoder Load", "Use of the GPU's dedicated video encoder/decoder (NVENC/NVDEC)."),
         R(@"GPU PCIe Rx Rate|GPU PCIe Tx Rate", "Data moving over PCIe to (Rx) or from (Tx) the card."),
+        R(@"GPU Power \(1 s Average\)", "The card's power averaged over the last second (NVML), steadier than the instant GPU Power."),
+        R(@"GPU PCIe Correctable Errors|GPU PCIe NAKs Received|GPU PCIe NAKs Sent|GPU PCIe Receiver Errors|GPU PCIe Bad TLPs|GPU PCIe Bad DLLPs|GPU PCIe LCRC Errors",
+            "PCIe link errors the hardware detected and recovered from (by retrying). A few are harmless; a count that keeps " +
+            "rising points to a marginal link — riser cable, slot or PCIe generation set too high in BIOS."),
+        R(@"GPU PCIe Non-Fatal Errors|GPU PCIe Fatal Errors|GPU PCIe Unsupported Requests", "Uncorrectable PCIe errors on the " +
+            "card's link. Should be 0; any count deserves a look (cabling, slot, BIOS PCIe settings, driver)."),
         R(@"PCIe Link Speed|PCIe Link Width", "The negotiated PCIe link. Idle cards drop to a lower speed to save power."),
         // ── Drives ─────────────────────────────────────────────────────────────────────────────────────────────
         R(@"Drive Temperature", "The SSD's temperature. NVMe drives throttle around 70–80 °C."),
