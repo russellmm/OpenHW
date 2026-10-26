@@ -103,6 +103,9 @@ if [ -f /etc/systemd/system/nvidia-power-limit.service ]; then
     install -d -m 755 /etc/systemd/system/nvidia-power-limit.service.d
 fi
 
+# The card filter's list (/etc/openhw/card-filter.json): the sandbox can write there but can't create the directory.
+install -d -m 755 /etc/openhw
+
 # The user who ran sudo (or pkexec, for graphical installers) gets the group that may talk to the helper.
 user="${SUDO_USER:-}"
 [ -z "$user" ] && [ -n "${PKEXEC_UID:-}" ] && user="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"

@@ -3,6 +3,22 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.13.0 — 2026-10-25
+
+**Card filter (GPU lending, step 2) — built and tested, off until the switch-over**
+- openhw-helper can now keep one NVIDIA card away from listed programs, as RTXinVM's guard does today, but with an
+  editable list instead of "everyone except rtxgpu": a small eBPF cgroup device program (assembled in C#, ported
+  from RTXinVM) refuses opens of that card's device nodes to listed programs; everything else — terminals, vLLM,
+  llama.cpp, nvidia-smi — keeps seeing it. A program that starts before the helper has looked at it is refused
+  until it has, so hiding is airtight; new apps are classified within about 60 ms (inotify on the cgroup tree).
+- The list starts with the GNOME desktop, the login screen and OpenHW's own window, each "hide from boot"; entries
+  can also be hidden or shown just until reboot ("now"). The filter stays in force across helper restarts.
+- Helper protocol 9: `cardfilter [on|off]`, `cardselect <pci|none>`, `cardhide|cardshow <pattern> <now|boot|both>
+  [name]`, `cardforget <pattern>`; the status lists every process holding the card and the entry that covers it.
+- `openhw-helper --selftest-card-filter <pci>` (root) checks it all in a throwaway cgroup beside the desktop: 11 of 11
+  pass on this machine. It is **not enabled** here: RTXinVM's guard keeps protecting the card until OpenHW can also
+  lend it (step 4). The setup page (step 3) comes next.
+
 ## 0.12.1 — 2026-10-25
 
 - Fixed: **Exit (tray menu) crashed OpenHW** on the way out — an unhandled exception, sometimes an abort (exit code

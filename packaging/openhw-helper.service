@@ -7,13 +7,17 @@ Type=simple
 ExecStart=/usr/local/lib/openhw/openhw-helper
 # /run/openhw is created on start and removed on stop; the socket inside is 0660 root:openhw.
 RuntimeDirectory=openhw
+# Kept across stop/start (until reboot): the card filter's "hide now" list lives here, and RTXinVM's switch stops
+# and starts this service around a Windows start.
+RuntimeDirectoryPreserve=yes
 Restart=on-failure
 RestartSec=2
 
 # It needs the NVMe admin ioctl (CAP_SYS_ADMIN), to hand its socket to the group, and two writable sysfs trees, both
 # root-owned 0644 (so no DAC override): cpufreq's scaling_max_freq, and amd_hsmp_hwmon's power1_cap under the HSMP
-# platform device. GPU power limits go through NVML, which opens the NVIDIA control and card devices.
-CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN
+# platform device. GPU power limits go through NVML, which opens the NVIDIA control and card devices. The card filter
+# loads an eBPF cgroup device program (CAP_BPF) and attaches it to user.slice (CAP_NET_ADMIN for cgroup attach).
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_BPF CAP_NET_ADMIN
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/sys/devices/system/cpu
@@ -22,6 +26,10 @@ ReadWritePaths=-/sys/devices/platform
 # nvidia-power-limit.service (install-helper.sh creates that directory; the unit file itself is never written).
 ReadWritePaths=-/etc/hsmp-control
 ReadWritePaths=-/etc/systemd/system/nvidia-power-limit.service.d
+# Card filter: its list (/etc/openhw) and its pinned eBPF program and maps (bpffs). Attaching needs only an open
+# cgroup directory, which ProtectControlGroups' read-only mount allows.
+ReadWritePaths=-/etc/openhw
+ReadWritePaths=/sys/fs/bpf
 ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true

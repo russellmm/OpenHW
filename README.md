@@ -254,7 +254,8 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, the read-only
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
-`ddr5`, `vr`, `rapl`, and the boot
+`ddr5`, `vr`, `rapl`, the card filter (`cardfilter`, `cardselect`, `cardhide`, `cardshow`, `cardforget` — see
+ROADMAP "GPU lending to a VM"; off unless turned on), and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`; read-only
 filesystem except `/sys/devices/system/cpu`, `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control` and

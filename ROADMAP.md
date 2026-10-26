@@ -12,8 +12,14 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
 1. [x] **The window reads all GPUs through openhw-helper** (0.12.0; RTXinVM no longer launches OpenHW) (a system service, never blocked by a device filter).
    The app then never opens a card, runs as plain `/usr/bin/openhw --tray`, and keeps running through a handoff
    (the lent card's rows go stale, then return). Saves the app the NVIDIA driver's memory.
-2. [ ] **Card filter in openhw-helper** (RTXinVM's eBPF cgroup device filter): blocks *new* opens of the chosen
-   card's nodes (`/dev/nvidiaN`, `/dev/dri/cardN`, `renderD*`) for listed programs. Granularity = how programs are
+2. [x] **Card filter in openhw-helper** (0.13.0; built and self-tested, **off** until the switch-over in step 4/5 —
+   RTXinVM's guard keeps doing the job until then): blocks *new* opens of the chosen
+   card's nodes (`/dev/nvidiaN`, `/dev/dri/cardN`, `renderD*`) for listed programs. Unlike RTXinVM's allow-list, the
+   program refuses any cgroup without a verdict and the helper marks every *leaf unit* not on the list allowed the
+   moment it appears (inotify on cgroupfs + 2 s rescan) — so hiding is airtight and everything else still sees the
+   card. Helper protocol 9: `cardfilter [on|off]`, `cardselect`, `cardhide|cardshow <pattern> <now|boot|both> [name]`,
+   `cardforget`. Root self-test: `openhw-helper --selftest-card-filter <pci>` (throwaway cgroup beside user.slice).
+   Still to do at switch-over: start the helper before the login screen (unit ordering + `Type=notify`). Granularity = how programs are
    launched: an app from the grid/dock (`app-<id>-*.scope`), the GNOME desktop (`org.gnome.Shell@*.service`, which
    includes Xwayland), a terminal window's scope. A program that already has the card keeps it until it exits.
 3. [ ] **Setup page** (from the gear's settings menu / Power menu): the GPU to lend and the VM; **what's using it

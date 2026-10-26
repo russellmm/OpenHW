@@ -16,22 +16,33 @@ if (Native.geteuid() != 0)
     return 1;
 }
 
+// `openhw-helper --selftest-card-filter <pci>`: the card filter's kernel side, in a throwaway cgroup tree (as root).
+if (args is ["--selftest-card-filter", var testCard])
+    return CardFilterSelfTest.Run(testCard, Console.Out);
+
 using var smart = new CachedSmartReader(new NativeNvmeSmartReader(), TimeSpan.FromSeconds(10));
 var socketPath = HelperSocket.Path;
 var smbus = new LinuxSmbusProvider();
 var ddr5 = new Ddr5Reader(smbus);
 var vr = new BoardVrReader(smbus, BoardVrs.ForThisBoard());
 using var gpus = new SharedGpuEngine();
+using var card = new CardFilter();
 
 if (args is ["--once", .. var command] && command.Length > 0)
 {
     using var limits = new GpuPowerLimits();
-    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus).HandleLine(string.Join(' ', command)));
+    // Only the card filter's status: changing it from a process that exits at once would leave the kernel filter
+    // without the daemon that classifies new cgroups.
+    var cardRead = command is ["cardfilter"] ? card : null;
+    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead).HandleLine(string.Join(' ', command)));
     return 0;
 }
 
 using var gpuPower = new GpuPowerLimits();
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus);
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card);
+// The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect.
+try { card.Start(); }
+catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"openhw-helper: card filter: {ex.Message}"); }
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
 var product = typeof(HelperSession).Assembly

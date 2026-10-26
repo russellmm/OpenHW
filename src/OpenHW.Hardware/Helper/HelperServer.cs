@@ -28,11 +28,14 @@ public static class HelperSocket
 /// board's known PMBus VR, reads only) — neither takes arguments: buses and addresses come from sysfs and fixed
 /// tables — and the NVIDIA GPUs for the window, so the app never opens a card: <c>gpus</c> (the rows),
 /// <c>gpuread</c> (their values) and <c>gpulimits</c> (the Power Limits window's list), as <see cref="GpuWire"/>.
+/// The card filter (<see cref="CardFilter"/>): <c>cardfilter</c> (status, holders), <c>cardfilter on|off</c>,
+/// <c>cardselect &lt;pci|none&gt;</c>, <c>cardhide|cardshow &lt;pattern&gt; &lt;now|boot|both&gt; [name]</c>,
+/// <c>cardforget &lt;pattern&gt;</c> — patterns are cgroup unit names with * wildcards, PCI addresses must be listed cards.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null)
 {
-    public const string Version = "8";
+    public const string Version = "9";
 
     public string HandleLine(string line)
     {
@@ -137,6 +140,12 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "gpulimits" when parts.Length == 1:
                 return gpuPower is null ? "err GPU power limits unavailable" : "ok " + GpuWire.Encode(gpuPower.Read());
 
+            case "cardfilter" or "cardselect" or "cardhide" or "cardshow" or "cardforget":
+                if (card is null) return "err card filter unavailable";
+                try { return CardCommand(card, parts, line); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -148,6 +157,35 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
         }
     }
 
+    private static string CardCommand(CardFilter card, string[] parts, string line)
+    {
+        switch (parts[0], parts.Length)
+        {
+            case ("cardfilter", 1):
+                return "ok " + GpuWire.Encode(card.Status());
+            case ("cardfilter", 2) when parts[1] is "on" or "off":
+                card.SetEnabled(parts[1] == "on");
+                return "ok " + parts[1];
+            case ("cardselect", 2):
+                if (parts[1] != "none" && !PciAddress().IsMatch(parts[1])) return "err invalid PCI address";
+                return "ok " + card.SelectCard(parts[1] == "none" ? null : parts[1]);
+            case ("cardhide" or "cardshow", >= 3) when parts[2] is "now" or "boot" or "both":
+            {
+                // Optional name: the rest of the line, printable ASCII, at most 60 characters.
+                var name = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : null;
+                if (name is not null && (name.Length > 60 || name.Any(c => c < 0x20 || c > 0x7e))) return "err invalid name";
+                card.SetHidden(parts[1], parts[2] != "boot", parts[2] != "now", parts[0] == "cardhide", name);
+                return "ok " + parts[1];
+            }
+            case ("cardforget", 2):
+                if (!CardPatterns.IsValid(parts[1])) return "err invalid pattern";
+                card.Forget(parts[1]);
+                return "ok " + parts[1];
+        }
+        return "err unknown command";
+    }
+
+    [GeneratedRegex(@"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$", RegexOptions.CultureInvariant)] private static partial Regex PciAddress();
     [GeneratedRegex(@"^nvme[0-9]{1,8}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeController();
     [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
     [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();
@@ -181,7 +219,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -232,7 +270,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card);
         try
         {
             using (client)
