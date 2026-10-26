@@ -3,6 +3,18 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.16.0 — 2026-10-26
+
+**Ready to replace RTXinVM (GPU lending, step 5 — code)**
+- openhw-helper now starts before the login screen and tells systemd when it's ready (`Type=notify`). With the card
+  filter on, it first waits (up to 60 s) for the lent card's device files, so the filter is in force before GNOME
+  starts — "hide from boot" is airtight from the first login. With the filter off, it's ready at once; it always
+  reports ready, even after an error, so it can never hold up the login screen.
+- GPU Lending: **Close and reopen when lending**, per app. An app holding the card no longer has to be closed by
+  hand: tick it (e.g. OpenFan's window) and lending closes it gracefully (by stopping its app scope), reopens it
+  with the same command once the card is handed over, and again when the card comes back. The new scope is named
+  like the original, so the list entry covering it still does. Apps that aren't ticked still block the lend.
+
 ## 0.15.1 — 2026-10-25
 
 First real lend (Windows-10-LTSC on the RTX 6000) worked; two fixes from it:

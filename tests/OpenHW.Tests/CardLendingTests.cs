@@ -49,7 +49,9 @@ public sealed class CardLendingTests : IDisposable
         var s = Lending().Status();
         Assert.Equal(["openfan-helper.service"], s.SystemServices);
         Assert.Equal(["rtxgpu-openfan.service"], s.UserServices);
-        Assert.Contains(s.Problems, p => p.StartsWith("chrome (300) has the card open: close it, or hide it", StringComparison.Ordinal));
+        var chrome = Assert.Single(s.Apps);                         // the user's app: the page closes it if ticked
+        Assert.Equal((300, "app-com.google.Chrome-*.scope"), (chrome.Pid, chrome.Pattern));
+        Assert.Empty(s.Problems);
         Assert.DoesNotContain(s.Problems, p => p.Contains("openhw-helper")); // the helper releases itself
         Assert.Throws<ArgumentException>(() => Lending().Lend());
 

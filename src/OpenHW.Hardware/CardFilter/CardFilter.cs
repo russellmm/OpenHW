@@ -161,9 +161,27 @@ public sealed class CardFilter : IDisposable
     }
 
     /// <summary>Called at helper start: puts the filter in force if it is enabled (reusing the pinned program).</summary>
-    public void Start()
+    public void Start(TimeSpan? waitForCard = null)
     {
-        lock (_gate) if (_settings.Enabled && _settings.Card is not null) Engage();
+        lock (_gate)
+        {
+            if (!_settings.Enabled || _settings.Card is not { } card) return;
+            // At boot the helper runs before the login screen: let the card's nodes appear first (nvidia_drm creates
+            // card/renderD a moment after the driver binds), so the filter knows what to refuse before GNOME starts.
+            var deadline = DateTime.UtcNow + (waitForCard ?? TimeSpan.Zero);
+            while (DateTime.UtcNow < deadline && CardStillComingUp(card)) Thread.Sleep(250);
+            Engage();
+        }
+    }
+
+    // On the PCI bus and not lent (VFIO), but its driver or any of its three nodes isn't there yet.
+    private bool CardStillComingUp(string card)
+    {
+        var device = Path.Combine(_sysRoot, "bus", "pci", "devices", card);
+        if (!Directory.Exists(device)) return false; // not in this machine: nothing to wait for
+        var driver = new DirectoryInfo(Path.Combine(device, "driver"));
+        if (driver.Exists && (driver.ResolveLinkTarget(true) ?? driver).Name == "vfio-pci") return false;
+        return CardDevices.Nodes(card, _procRoot, _sysRoot).Count < 3;
     }
 
     // ── commands ───────────────────────────────────────────────────────────────────────────────────────────────

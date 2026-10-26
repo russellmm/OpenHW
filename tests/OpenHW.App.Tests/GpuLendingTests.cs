@@ -25,16 +25,20 @@ public sealed class GpuLendingTests
          new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false),
          new(2786, "nvidia-persiste", "/system.slice/nvidia-persistenced.service", null, false)]);
 
-    private static LendStatus Lend(params string[] problems) => new("Windows-10-LTSC", "shut off", false, "idle", null, 0, problems,
-        ["openfan-helper.service"], ["rtxgpu-openfan.service"]);
+    private static readonly CardHolder Chrome = new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false);
+    private static readonly CardHolder OpenFan = new(4242, "openfan", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-openfan-4200.scope", "app-gnome-openfan-*.scope", false);
 
-    private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false, LendStatus? lend = null, List<(string, string)>? ran = null)
+    private static LendStatus Lend(params CardHolder[] apps) => new("Windows-10-LTSC", "shut off", false, "idle", null, 0, [],
+        ["openfan-helper.service"], ["rtxgpu-openfan.service"], apps);
+
+    private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false, LendStatus? lend = null, List<(string, string)>? ran = null,
+        Settings.AppSettings? settings = null)
     {
         var sent = new List<string>();
         string Request(string line)
         {
             if (line == "cardfilter") return GpuWire.Encode(Status(enabled));
-            if (line == "lendstatus") return GpuWire.Encode(lend ?? Lend("chrome (15004) has the card open: close it, or hide it and restart it."));
+            if (line == "lendstatus") return GpuWire.Encode(lend ?? Lend(Chrome));
             if (line == "cardvms") return GpuWire.Encode(new List<LendVm> { new("Windows-10-LTSC", "shut off", true), new("ubuntu-test", "shut off", false) });
             sent.Add(line);
             return "x";
@@ -45,7 +49,7 @@ public sealed class GpuLendingTests
             // As systemd reports a systemd-run unit: a FragmentPath under /run/…/transient, and Transient=yes.
             return (0, args.Contains("show") ? "ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no }\nSlice=rtxgpu.slice\nDescription=RTXinVM app openfan\nFragmentPath=/run/user/1000/systemd/transient/rtxgpu-openfan.service\nTransient=yes" : "");
         }, Path.Combine(Directory.CreateTempSubdirectory("openhw-lend-").FullName, "lend-paused.json"));
-        var window = new GpuLendingWindow(Request, rtxinvmGuarding: () => true, lending: coordinator);
+        var window = new GpuLendingWindow(Request, rtxinvmGuarding: () => true, lending: coordinator, settings: settings ?? new Settings.AppSettings());
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return (window, sent);
@@ -139,7 +143,7 @@ public sealed class GpuLendingTests
         var lend = Button(window, "Lend to Windows-10-LTSC");
         Assert.False(lend.IsEnabled);
         var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
-        Assert.Contains("chrome (15004) has the card open: close it, or hide it and restart it.", texts);
+        Assert.Contains("Chrome has the card open: close it, or tick \"Close and reopen when lending\" below.", texts);
         Assert.Contains("Paused for the handoff and started again afterwards: openfan-helper.service, rtxgpu-openfan.service.", texts);
         var vm = window.GetVisualDescendants().OfType<ComboBox>().Last();
         Assert.Equal(["None", "Windows-10-LTSC"], vm.Items.OfType<ComboBoxItem>().Select(i => (string)i.Content!)); // only VMs with the card
@@ -181,5 +185,53 @@ public sealed class GpuLendingTests
         coordinator.Follow(stage with { Stage = "returned", Sequence = 2 });
         Assert.Equal(["systemctl --user stop rtxgpu-openfan.service", Recreate], ran); // restarted to list the card again
         Assert.Null(coordinator.Current);
+    }
+
+    [AvaloniaFact]
+    public void ATickedAppIsClosedAndReopenedInsteadOfBlocking()
+    {
+        var settings = new Settings.AppSettings { LendReopen = ["app-gnome-openfan-*.scope"] };
+        var (window, _) = Open(lend: Lend(OpenFan), settings: settings);
+        Assert.True(Button(window, "Lend to Windows-10-LTSC").IsEnabled);
+        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("Paused for the handoff and started again afterwards: openfan-helper.service, rtxgpu-openfan.service, Openfan.", texts);
+
+        var (other, _) = Open(lend: Lend(OpenFan, Chrome), settings: settings); // Chrome isn't ticked: it blocks
+        Assert.False(Button(other, "Lend to Windows-10-LTSC").IsEnabled);
+    }
+
+    [Fact]
+    public void TheCoordinatorClosesAndReopensATickedApp()
+    {
+        var root = Directory.CreateTempSubdirectory("openhw-reopen-").FullName;
+        var scopeDir = Directory.CreateDirectory(Path.Combine(root, "cgroup", "user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-openfan-4200.scope")).FullName;
+        File.WriteAllText(Path.Combine(scopeDir, "cgroup.procs"), "4245\n4242\n");
+        var proc = Directory.CreateDirectory(Path.Combine(root, "proc", "4242")).FullName;
+        File.WriteAllText(Path.Combine(proc, "cmdline"), "/opt/openfan/app/openfan\0--tray\0");
+        File.CreateSymbolicLink(Path.Combine(proc, "cwd"), "/home/russellm");
+        var ran = new List<string>();
+        var launched = new List<string>();
+        var coordinator = new LendCoordinator(_ => "lending", (program, args) => { ran.Add(program + " " + string.Join(' ', args)); return (0, ""); },
+            Path.Combine(root, "lend-paused.json"), argv => launched.Add(string.Join(' ', argv)), Path.Combine(root, "proc"), Path.Combine(root, "cgroup"));
+        var status = Lend(OpenFan) with { UserServices = [] };
+
+        coordinator.Lend(status, ["app-gnome-openfan-*.scope"]);
+        Assert.Equal(["systemctl --user stop app-gnome-openfan-4200.scope"], ran); // closed gracefully, through its scope
+
+        coordinator.Follow(status with { Stage = "lent", Sequence = 1, Lent = true });
+        var reopen = Assert.Single(launched);
+        Assert.Matches(@"^systemd-run --user --quiet --collect --scope --slice=app.slice --unit=app-gnome-openfan-\d+\.scope --working-directory=/home/russellm -- /opt/openfan/app/openfan --tray$", reopen);
+        Assert.Matches(@"^app-gnome-openfan-\d+\.scope$", coordinator.Current!.Apps![0].Scope);
+        Assert.True(CardPatterns.Matches("app-gnome-openfan-*.scope", coordinator.Current!.Apps![0].Scope)); // the same entry covers it
+
+        ran.Clear();
+        var scope = coordinator.Current.Apps[0].Scope;
+        coordinator.Follow(status with { Stage = "returned", Sequence = 2 });
+        Assert.Equal([$"systemctl --user stop {scope}"], ran);
+        Assert.Equal(2, launched.Count);               // reopened again: it lists the returned card
+        Assert.Null(coordinator.Current);
+
+        Assert.Throws<IOException>(() => coordinator.Lend(Lend(Chrome) with { UserServices = [] }, ["app-gnome-openfan-*.scope"])); // not ticked
+        Directory.Delete(root, recursive: true);
     }
 }

@@ -1,9 +1,15 @@
 [Unit]
 Description=OpenHW privileged helper (NVMe SMART, DIMM and VR sensors, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
+# The card filter (GPU Lending) must be in force before the login screen and the desktop can open the lent card.
+# With the filter off the helper is ready at once; with it on, it waits (≤60 s) for the card's device nodes.
+After=systemd-modules-load.service nvidia-persistenced.service
+Before=display-manager.service systemd-user-sessions.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=90
 ExecStart=/usr/local/lib/openhw/openhw-helper
 # /run/openhw is created on start and removed on stop; the socket inside is 0660 root:openhw.
 RuntimeDirectory=openhw

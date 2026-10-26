@@ -37,9 +37,14 @@ public sealed class ProcessRunner : ICommandRunner
 /// <summary>A VM on the system libvirt connection, and whether the lent card is assigned to it.</summary>
 public sealed record LendVm(string Name, string State, bool HasCard);
 
-/// <summary>What the page shows: the VM, the stage of a lend or return, and what stands in the way of lending.</summary>
+/// <summary>
+/// What the page shows: the VM, the stage of a lend or return, what stands in the way of lending, and what can be
+/// paused: system services (by the helper), the user's services (by OpenHW's window), and the user's apps holding the
+/// card — which also block the lend until closed, unless the owner ticked "Close and reopen when lending" for them.
+/// </summary>
 public sealed record LendStatus(string? Vm, string VmState, bool Lent, string Stage, string? Error, int Sequence,
-    IReadOnlyList<string> Problems, IReadOnlyList<string> SystemServices, IReadOnlyList<string> UserServices);
+    IReadOnlyList<string> Problems, IReadOnlyList<string> SystemServices, IReadOnlyList<string> UserServices,
+    IReadOnlyList<CardHolder> Apps);
 
 /// <summary>
 /// Root side of lending the card to a VM (ROADMAP "GPU lending to a VM", step 4), after RTXinVM's switch: the libvirt
@@ -115,9 +120,9 @@ public sealed partial class CardLending : IDisposable
         var (card, vm) = _filter.Target;
         var state = vm is null ? "" : VmState(vm);
         var holders = card is null ? [] : _filter.HoldersOf(LendNodes(card));
-        var (problems, system, user) = Assess(card, vm, state, holders);
+        var (problems, system, user, apps) = Assess(card, vm, state, holders);
         lock (_gate)
-            return new LendStatus(vm, state, state == "running" && Driver(card) == "vfio-pci", _stage, _error, _sequence, problems, system, user);
+            return new LendStatus(vm, state, state == "running" && Driver(card) == "vfio-pci", _stage, _error, _sequence, problems, system, user, apps);
     }
 
     /// <summary>Starts lending in the background; the page follows it through <see cref="Status"/>.</summary>
@@ -128,6 +133,7 @@ public sealed partial class CardLending : IDisposable
             if (_work is { IsCompleted: false }) throw new ArgumentException("a lend or return is already under way");
             var s = Status();
             if (s.Problems.Count > 0) throw new ArgumentException(s.Problems[0]);
+            if (s.Apps.Count > 0) throw new ArgumentException($"{s.Apps[0].Program} ({s.Apps[0].Pid}) still has the card open");
             (_stage, _error) = ("starting", null);
             _work = Task.Run(LendSteps);
         }
@@ -272,12 +278,13 @@ public sealed partial class CardLending : IDisposable
     /// What stands in the way (problems), and what a lend would pause: system services (by the helper) and the
     /// desktop user's services (by OpenHW's window, before it asks). Apps can't be paused: close or hide them.
     /// </summary>
-    private (List<string> Problems, List<string> System, List<string> User) Assess(string? card, string? vm, string state, IReadOnlyList<CardHolder> holders)
+    private (List<string> Problems, List<string> System, List<string> User, List<CardHolder> Apps) Assess(string? card, string? vm, string state, IReadOnlyList<CardHolder> holders)
     {
         var problems = new List<string>();
         var system = new List<string>();
         var user = new List<string>();
-        if (card is null) { problems.Add("Choose the card to lend."); return (problems, system, user); }
+        var apps = new List<CardHolder>();
+        if (card is null) { problems.Add("Choose the card to lend."); return (problems, system, user, apps); }
         if (vm is null) problems.Add("Choose the VM to lend it to.");
         else if (state == "running") problems.Add($"{vm} is running.");
         else if (state != "shut off") problems.Add($"{vm} isn't fully off ({state}).");
@@ -306,9 +313,14 @@ public sealed partial class CardLending : IDisposable
             {
                 if (!user.Contains(unit)) user.Add(unit);
             }
+            else if (h.Cgroup.Contains("/user@", StringComparison.Ordinal) && h.Cgroup.Contains("/app.slice/", StringComparison.Ordinal)
+                     && unit.EndsWith(".scope", StringComparison.Ordinal))
+                apps.Add(h); // the user's app: the page closes it if ticked, else asks the owner to
+            else if (h.Cgroup.Contains("/session.slice/", StringComparison.Ordinal))
+                problems.Add($"{h.Program} ({h.Pid}), part of the desktop, has the card open: log out once to free it.");
             else problems.Add($"{h.Program} ({h.Pid}) has the card open: close it{(h.Pattern is null ? "" : ", or hide it and restart it")}.");
         }
-        return (problems, system, user);
+        return (problems, system, user, apps);
     }
 
     /// <summary>The card's device files and its audio function's (the hook refuses while either is open).</summary>

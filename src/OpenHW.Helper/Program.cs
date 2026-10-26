@@ -42,10 +42,12 @@ using var gpuPower = new GpuPowerLimits();
 // Lending the card to a VM: both NVML users let go of every card for the handoff, and open again afterwards.
 using var lending = new CardLending(card, () => { gpus.Suspend(); gpuPower.Suspend(); }, () => { gpus.Resume(); gpuPower.Resume(); });
 var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending);
-// The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect.
-try { card.Start(); }
-catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"openhw-helper: card filter: {ex.Message}"); }
-server.Start();
+// The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
+// boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
+try { card.Start(TimeSpan.FromSeconds(60)); }
+catch (Exception ex) { Console.Error.WriteLine($"openhw-helper: card filter: {ex.Message}"); } // never stops the helper starting
+try { server.Start(); }
+finally { SdNotify.Ready(); } // always: a failed start must not hold the login screen until the unit's timeout
 var shared = server.RestrictToGroup(HelperSocket.Group);
 var product = typeof(HelperSession).Assembly
     .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
@@ -60,6 +62,24 @@ stopping.Wait();
 
 await server.DisposeAsync();
 return 0;
+
+/// <summary>systemd's readiness notification (Type=notify): one datagram, "READY=1", to $NOTIFY_SOCKET.</summary>
+internal static class SdNotify
+{
+    public static void Ready()
+    {
+        var address = Environment.GetEnvironmentVariable("NOTIFY_SOCKET");
+        if (string.IsNullOrEmpty(address)) return;
+        try
+        {
+            using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix, System.Net.Sockets.SocketType.Dgram, System.Net.Sockets.ProtocolType.Unspecified);
+            // "@name" is an abstract socket: a leading NUL byte.
+            socket.Connect(new System.Net.Sockets.UnixDomainSocketEndPoint(address[0] == '@' ? "\0" + address[1..] : address));
+            socket.Send("READY=1"u8);
+        }
+        catch (System.Net.Sockets.SocketException ex) { Console.Error.WriteLine($"openhw-helper: sd_notify: {ex.Message}"); }
+    }
+}
 
 internal static class Native
 {

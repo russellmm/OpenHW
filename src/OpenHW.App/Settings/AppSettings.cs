@@ -66,6 +66,12 @@ public sealed class AppSettings
     /// <summary>Draw windows without OpenGL (applies at the next start). Saves the GPU driver's memory, costs some CPU.</summary>
     public bool SoftwareRendering { get; set; }
 
+    /// <summary>
+    /// GPU Lending: list patterns of apps ("app-gnome-openfan-*.scope") that are closed before the card is lent and
+    /// reopened afterwards (and again when it comes back), instead of blocking the lend until closed by hand.
+    /// </summary>
+    public List<string> LendReopen { get; set; } = [];
+
     /// <summary>Size of every OpenHW window in percent; 0 = Automatic (the desktop's scale). Applies at the next start.</summary>
     public int WindowScale { get; set; }
     public List<TraySensor> TrayIcons { get; set; } = [new()];

@@ -30,7 +30,8 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
 4. [x] **Lend to Windows / Return** (0.15.0; `CardLending` in the helper, `LendCoordinator` in the app) (owner's rule: the VM does not start while anything still has the card open; the
    page names what). Optional: pause OpenFan if it's installed (independence rule: optional, no dependency). The
    libvirt hook keeps doing the handoff; return refreshes the helper's GPU list.
-5. [ ] **Retire RTXinVM**: `rtxinvm uninstall` restores OpenHW's own autostart/menu entries.
+5. [ ] **Retire RTXinVM** (0.16.0 has the code: helper before the login screen with `Type=notify` and a wait for
+      the card's nodes; "Close and reopen when lending" for apps such as OpenFan's window; then the switch-over): `rtxinvm uninstall` restores OpenHW's own autostart/menu entries.
 
 ## Write capabilities (via openhw-helper)
 

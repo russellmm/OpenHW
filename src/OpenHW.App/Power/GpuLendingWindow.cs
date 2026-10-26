@@ -40,8 +40,12 @@ public sealed class GpuLendingWindow : Window
     private CardFilterStatus? _now;
     private bool _showing, _busy;
 
-    public GpuLendingWindow(Func<string, string>? request = null, Func<bool>? rtxinvmGuarding = null, LendCoordinator? lending = null)
+    private readonly Settings.AppSettings _settings;
+
+    public GpuLendingWindow(Func<string, string>? request = null, Func<bool>? rtxinvmGuarding = null, LendCoordinator? lending = null,
+        Settings.AppSettings? settings = null)
     {
+        _settings = settings ?? Settings.AppSettings.Load();
         _request = request ?? (line => HelperClient.Request(line, receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes));
         _rtxinvmGuarding = rtxinvmGuarding ?? (() => File.Exists("/run/rtxinvm/status.json"));
         _lending = lending ?? new LendCoordinator(_request);
@@ -188,11 +192,16 @@ public sealed class GpuLendingWindow : Window
         if (l.Error is not null) _lendState.Text += $" Last attempt failed: {l.Error}";
         foreach (var p in l.Problems.Where(p => !(l.Lent && p.EndsWith(" is running.", StringComparison.Ordinal)) && !(l.Lent && p == "The card is lent already.")))
             _lendNotes.Children.Add(Footnote(p, Bad));
-        if (!l.Lent && (l.SystemServices.Count > 0 || l.UserServices.Count > 0))
+        // Apps holding the card block the lend, unless ticked "Close and reopen when lending".
+        var blocking = l.Apps.Where(a => a.Pattern is null || !_settings.LendReopen.Contains(a.Pattern)).GroupBy(a => a.Pattern ?? a.Cgroup).ToList();
+        foreach (var app in blocking)
+            _lendNotes.Children.Add(Footnote($"{EntryName(app.Key, app)} has the card open: close it, or tick \"Close and reopen when lending\" below.", Bad));
+        var reopened = l.Apps.Where(a => a.Pattern is not null && _settings.LendReopen.Contains(a.Pattern)).GroupBy(a => a.Pattern!).Select(g => EntryName(g.Key, g)).ToList();
+        if (!l.Lent && (l.SystemServices.Count > 0 || l.UserServices.Count > 0 || reopened.Count > 0))
             _lendNotes.Children.Add(Footnote("Paused for the handoff and started again afterwards: " +
-                string.Join(", ", l.SystemServices.Concat(l.UserServices)) + "."));
+                string.Join(", ", l.SystemServices.Concat(l.UserServices).Concat(reopened)) + "."));
         _lend.Content = l.Vm is null ? "Lend" : $"Lend to {l.Vm}";
-        _lend.IsEnabled = !busy && !l.Lent && l.Problems.Count == 0;
+        _lend.IsEnabled = !busy && !l.Lent && l.Problems.Count == 0 && blocking.Count == 0;
         _return.IsEnabled = !busy && l.Lent;
     }
 
@@ -203,7 +212,8 @@ public sealed class GpuLendingWindow : Window
         Show($"Lending the card to {status.Vm}…", Palette.Footnote);
         try
         {
-            await Task.Run(() => _lending.Lend(status));
+            var reopen = _settings.LendReopen.ToList();
+            await Task.Run(() => _lending.Lend(status, reopen));
             Show($"Lending to {status.Vm}: follow the steps above.", Good);
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException)
@@ -279,6 +289,22 @@ public sealed class GpuLendingWindow : Window
                         TextButton("Hide from boot", () => _ = RunAsync($"cardhide {pattern} both {name}", $"{name}: hidden now and from every boot; restart it to let go of the card.")),
                     },
                 };
+                // The user's own apps can be closed and reopened around a lend instead of being closed by hand.
+                if (group.Any(h => h.Cgroup.Contains("/app.slice/", StringComparison.Ordinal) && h.Cgroup.EndsWith(".scope", StringComparison.Ordinal)))
+                {
+                    var reopen = new CheckBox { Content = "Close and reopen when lending", IsChecked = _settings.LendReopen.Contains(pattern), VerticalAlignment = VerticalAlignment.Center };
+                    ToolTip.SetTip(reopen, $"Lending closes {name} gracefully, reopens it once the card is handed over, and again when the card comes back.");
+                    reopen.IsCheckedChanged += (_, _) =>
+                    {
+                        if (_showing) return;
+                        _settings.LendReopen.Remove(pattern);
+                        if (reopen.IsChecked == true) _settings.LendReopen.Add(pattern);
+                        _settings.Save();
+                        Show(reopen.IsChecked == true ? $"{name} will be closed and reopened when lending." : $"{name} must be closed by hand before lending.", Good);
+                        Draw();
+                    };
+                    buttons.Children.Insert(0, reopen);
+                }
                 Grid.SetColumn(buttons, 1);
                 row.Children.Add(buttons);
             }

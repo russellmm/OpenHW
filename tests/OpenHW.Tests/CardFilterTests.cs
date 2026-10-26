@@ -131,4 +131,30 @@ public sealed class CardFilterTests : IDisposable
         public byte[] Read(string controller, string identity) => throw new IOException("no drives");
         public void Dispose() { }
     }
+
+    [Fact]
+    public void AtBootTheFilterWaitsForTheCardsNodesButNotForALentOrMissingCard()
+    {
+        // The card is on the bus with the NVIDIA driver bound, but nvidia_drm hasn't made card/renderD yet.
+        var device = Directory.CreateDirectory(Path.Combine(_root, "sys", "bus", "pci", "devices", "0000:e1:00.0")).FullName;
+        foreach (var d in new[] { "nvidia", "vfio-pci" }) Directory.CreateDirectory(Path.Combine(_root, "sys", "bus", "pci", "drivers", d));
+        File.CreateSymbolicLink(Path.Combine(device, "driver"), Path.Combine(_root, "sys", "bus", "pci", "drivers", "nvidia"));
+        var filter = Filter();
+        filter.SelectCard("0000:e1:00.0");
+        File.WriteAllText(Path.Combine(_root, "etc", "card-filter.json"), File.ReadAllText(Path.Combine(_root, "etc", "card-filter.json")).Replace("\"Enabled\": false", "\"Enabled\": true"));
+        double Start()
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try { Filter().Start(TimeSpan.FromMilliseconds(600)); } catch (IOException) { } // attaching needs root; the wait comes first
+            return sw.Elapsed.TotalMilliseconds;
+        }
+        Assert.InRange(Start(), 550, 3000);          // waited for the nodes
+
+        File.Delete(Path.Combine(device, "driver"));
+        File.CreateSymbolicLink(Path.Combine(device, "driver"), Path.Combine(_root, "sys", "bus", "pci", "drivers", "vfio-pci"));
+        Assert.InRange(Start(), 0, 400);             // lent to the VM at boot: nothing to wait for
+
+        Directory.Delete(device, recursive: true);
+        Assert.InRange(Start(), 0, 400);             // not in this machine
+    }
 }

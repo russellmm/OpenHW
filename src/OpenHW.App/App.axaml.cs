@@ -581,7 +581,7 @@ public sealed class App : Application
 
     private void ShowGpuLending()
     {
-        _gpuLending ??= new GpuLendingWindow(lending: _lend);
+        _gpuLending ??= new GpuLendingWindow(lending: _lend, settings: _settings);
         _gpuLending.Show();
         _gpuLending.Activate();
     }
