@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.10.1 — 2026-10-25
+
+**Works with RTXinVM's launcher**
+- Fixed: saving any setting rewrote OpenHW's login entry, replacing a launcher another tool had put there — RTXinVM's
+  `rtxgpu --app openhw`, which starts OpenHW in the slice that can see the VM's GPU and lets RTXinVM stop it before
+  switching the card. OpenHW now keeps such an entry and never rewrites it; "Start OpenHW when I log in" turns it
+  off and on in place, and Settings shows the command it runs.
+- Fixed: Settings → Restart OpenHW now, under a systemd user service such as `rtxgpu-openhw.service`, would have
+  closed OpenHW for good (systemd stops the unit and kills what's left in it when the main process exits). A small
+  waiter outside the unit now starts the same unit again — same name, slice and description — once it has stopped.
+
 ## 0.10.0 — 2026-10-25
 
 **DIMM and VR sensors** (helper protocol 7 — install the .deb)

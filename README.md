@@ -75,8 +75,12 @@ or its output is silently lost and the bus disconnects the app for sending a mal
 
 **File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
 interval (1–10 s, default 2 s) and start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
-optionally with `--tray` to start with only the tray icons). OpenHW runs once per session: a
-second launch (app grid, or the command) shows the running window and exits.
+optionally with `--tray` to start with only the tray icons). If another tool has put its own launcher in that
+entry — e.g. RTXinVM's `rtxgpu --app openhw`, which starts OpenHW in the GPU slice that can see its card — OpenHW
+keeps it: the box only turns the entry on or off (`X-GNOME-Autostart-enabled`/`Hidden`), and Settings names the
+command. **Restart OpenHW now** works under such a launcher too: when OpenHW runs as a systemd user service, a
+small waiter starts the same unit again (same name and slice) once the old one has stopped. OpenHW runs once per
+session: a second launch (app grid, or the command) shows the running window and exits.
 
 - **Pause sensors while the window is hidden** (off by default): while the window is hidden or minimized, only
   sensors in the tray, with an alert, being logged or with a graph open are read — as if every group were

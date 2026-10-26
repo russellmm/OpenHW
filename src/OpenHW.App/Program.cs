@@ -38,11 +38,54 @@ internal static class Program
     private static void Restart(string[] args)
     {
         if (Environment.ProcessPath is not { } exe) return;
-        var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
-        if (Path.GetFileNameWithoutExtension(exe) == "dotnet") start.ArgumentList.Add(Environment.GetCommandLineArgs()[0]);
-        foreach (var arg in args.Where(a => a != "--tray")) start.ArgumentList.Add(arg);
+        var command = new List<string> { exe };
+        if (Path.GetFileNameWithoutExtension(exe) == "dotnet") command.Add(Environment.GetCommandLineArgs()[0]);
+        command.AddRange(args.Where(a => a != "--tray"));
+        // Started as a systemd user service (e.g. RTXinVM's `rtxgpu --app openhw`, which runs OpenHW in its GPU
+        // slice): when this process exits, systemd stops the unit and kills everything left in it, a child included.
+        // So a small waiter outside the unit starts it again, same name and slice, once this one has finished.
+        var start = SystemdRestart(File.ReadAllText("/proc/self/cgroup"), command, Description) is { } waiter
+            ? new System.Diagnostics.ProcessStartInfo("systemd-run", waiter)
+            : new System.Diagnostics.ProcessStartInfo(command[0], command.Skip(1));
+        start.UseShellExecute = false;
         try { System.Diagnostics.Process.Start(start)?.Dispose(); }
         catch (System.ComponentModel.Win32Exception ex) { Console.Error.WriteLine($"openhw: could not restart ({ex.Message})"); }
+    }
+
+    private static string Description(string unit)
+    {
+        try
+        {
+            var show = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("systemctl",
+                ["--user", "show", "--property=Description", "--value", unit]) { RedirectStandardOutput = true, UseShellExecute = false });
+            var text = show?.StandardOutput.ReadToEnd().Trim() ?? "";
+            show?.WaitForExit(2000);
+            return text.Length > 0 ? text : "OpenHW";
+        }
+        catch (System.ComponentModel.Win32Exception) { return "OpenHW"; }
+    }
+
+    // The waiter gives up after 20 s, in case the unit never stops.
+    private const string Waiter = """
+        u=$1 s=$2 d=$3; shift 3; n=0
+        while systemctl --user is-active --quiet "$u" && [ $n -lt 100 ]; do sleep 0.2; n=$((n+1)); done
+        exec systemd-run --user --quiet --collect --unit="$u" --slice="$s" --description="$d" -- "$@"
+        """;
+
+    /// <summary>
+    /// systemd-run arguments for a waiter that restarts this process's user service once it has stopped; null when
+    /// OpenHW isn't a user service (a desktop launch runs in a scope, where a child outlives its parent).
+    /// </summary>
+    public static IReadOnlyList<string>? SystemdRestart(string cgroup, IReadOnlyList<string> command, Func<string, string> description)
+    {
+        // "0::/user.slice/user-1000.slice/user@1000.service/rtxgpu.slice/rtxgpu-openhw.service"
+        var path = cgroup.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(l => l.StartsWith("0::", StringComparison.Ordinal))?[3..];
+        var parts = path?.Split('/', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        var manager = Array.FindIndex(parts, p => p.StartsWith("user@", StringComparison.Ordinal) && p.EndsWith(".service", StringComparison.Ordinal));
+        if (manager < 0 || parts.Length < manager + 3 || !parts[^1].EndsWith(".service", StringComparison.Ordinal)) return null;
+        var (unit, slice) = (parts[^1], parts[^2]);
+        if (!slice.EndsWith(".slice", StringComparison.Ordinal)) return null;
+        return ["--user", "--quiet", "--collect", $"--slice={slice}", "--", "/bin/sh", "-c", Waiter, "sh", unit, slice, description(unit), .. command];
     }
 
     /// <summary>

@@ -416,3 +416,111 @@ public sealed class WindowScaleTests
         Assert.False(restart.IsVisible); // back to what this run uses
     }
 }
+
+public sealed class ForeignAutostartTests
+{
+    // RTXinVM's reroute, as its setup.py writes it on the owner's machine.
+    private const string Rtxgpu = """
+        [Desktop Entry]
+        Type=Application
+        Name=OpenHW
+        Comment=Hardware monitor
+        Exec=/home/russellm/.local/bin/rtxgpu --app openhw
+        Icon=openhw
+        Terminal=false
+        X-GNOME-Autostart-enabled=true
+
+        """;
+
+    private static void Isolate(string? entry)
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-autostart-").FullName);
+        if (entry is null) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(AppSettings.AutostartPath)!);
+        File.WriteAllText(AppSettings.AutostartPath, entry);
+    }
+
+    [Fact]
+    public void AnotherLaunchersEntryIsKeptOnEverySave()
+    {
+        Isolate(Rtxgpu);
+        Assert.Equal("/home/russellm/.local/bin/rtxgpu --app openhw", AppSettings.ForeignAutostart());
+        var settings = AppSettings.Load();
+        Assert.True(settings.StartAtLogin);
+        var before = File.GetLastWriteTimeUtc(AppSettings.AutostartPath);
+        settings.PollSeconds = 5;
+        settings.StartInTray = false;
+        settings.Save();
+        Assert.Equal(Rtxgpu, File.ReadAllText(AppSettings.AutostartPath)); // not even rewritten
+        Assert.Equal(before, File.GetLastWriteTimeUtc(AppSettings.AutostartPath));
+    }
+
+    [Fact]
+    public void TurningLoginStartOffAndOnKeepsTheOtherLaunchersCommand()
+    {
+        Isolate(Rtxgpu);
+        var settings = AppSettings.Load();
+        settings.StartAtLogin = false;
+        settings.Save();
+        var off = File.ReadAllText(AppSettings.AutostartPath);
+        Assert.Contains("Exec=/home/russellm/.local/bin/rtxgpu --app openhw", off);
+        Assert.Contains("Hidden=true", off);
+        Assert.False(AppSettings.Load().StartAtLogin);
+
+        settings.StartAtLogin = true;
+        settings.Save();
+        var on = File.ReadAllText(AppSettings.AutostartPath);
+        Assert.Contains("Exec=/home/russellm/.local/bin/rtxgpu --app openhw", on);
+        Assert.DoesNotContain("Hidden=true", on);
+        Assert.Contains("X-GNOME-Autostart-enabled=true", on);
+        Assert.True(AppSettings.Load().StartAtLogin);
+    }
+
+    [Fact]
+    public void OpenHwsOwnEntryIsStillItsToRewrite()
+    {
+        Isolate("[Desktop Entry]\nExec=\"/usr/bin/openhw\" --tray\n");
+        Assert.Null(AppSettings.ForeignAutostart());
+        var settings = AppSettings.Load();
+        settings.StartInTray = false;
+        settings.Save();
+        Assert.DoesNotContain("--tray", File.ReadAllText(AppSettings.AutostartPath));
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void SettingsSaysWhoStartsOpenHwAtLogin()
+    {
+        Isolate(Rtxgpu);
+        var window = new SettingsWindow(AppSettings.Load(), () => { }, () => { });
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var all = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).ToList();
+        Assert.Contains(all.OfType<Avalonia.Controls.TextBlock>(), t => t.IsVisible && (t.Text ?? "").Contains("rtxgpu --app openhw"));
+        Assert.False(all.OfType<Avalonia.Controls.CheckBox>().Single(c => (c.Content as string ?? "").StartsWith("…with only")).IsEnabled);
+        Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?.Save(Path.Combine(Path.GetTempPath(), "openhw-login-entry.png"));
+    }
+}
+
+public sealed class RestartTests
+{
+    [Fact]
+    public void AUserServiceIsRestartedByAWaiterOutsideTheUnit()
+    {
+        const string Rtxgpu = "0::/user.slice/user-1000.slice/user@1000.service/rtxgpu.slice/rtxgpu-openhw.service\n";
+        var args = Program.SystemdRestart(Rtxgpu, ["/usr/lib/openhw/app/openhw"], _ => "RTXinVM app openhw");
+        Assert.NotNull(args);
+        Assert.Equal(["--user", "--quiet", "--collect", "--slice=rtxgpu.slice", "--", "/bin/sh", "-c"], args.Take(7));
+        Assert.Equal(["sh", "rtxgpu-openhw.service", "rtxgpu.slice", "RTXinVM app openhw", "/usr/lib/openhw/app/openhw"], args.Skip(8));
+        // For the live check in the handoff: the same argv for a throwaway unit running `sleep`.
+        var probe = Program.SystemdRestart("0::/user.slice/user-1000.slice/user@1000.service/ohwtest.slice/ohw-restart-test.service\n",
+            ["/usr/bin/sleep", "300"], _ => "OpenHW restart test");
+        File.WriteAllLines(Path.Combine(Path.GetTempPath(), "openhw-restart-argv.txt"), probe!.Select(a => a.Replace("\n", "\\n")));
+    }
+
+    [Theory]
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-openhw-12244.scope\n")] // desktop launch
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.anthropic.Claude-23722.scope\n")]
+    [InlineData("0::/system.slice/openhw.service\n")] // not a user service
+    public void OtherLaunchesStartTheNewProcessDirectly(string cgroup) =>
+        Assert.Null(Program.SystemdRestart(cgroup, ["/usr/bin/openhw"], _ => ""));
+}

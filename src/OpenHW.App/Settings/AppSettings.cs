@@ -102,7 +102,7 @@ public sealed class AppSettings
             if (!IsColor(icon.Colour)) icon.Colour = Colours[0].Hex;
         CustomColours = CustomColours.Where(IsColor).Select(h => h.ToUpperInvariant()).Where(h => PresetName(h) is null)
             .Distinct().TakeLast(MaxCustomColours).ToList();
-        StartAtLogin = File.Exists(AutostartPath); // the file is the truth: the user may have removed it elsewhere
+        StartAtLogin = AutostartEnabled(); // the file is the truth: the user may have removed or disabled it elsewhere
     }
 
     public void Save()
@@ -119,8 +119,46 @@ public sealed class AppSettings
         }
     }
 
+    /// <summary>
+    /// The command of a login entry another tool wrote in OpenHW's place — e.g. RTXinVM's
+    /// <c>rtxgpu --app openhw</c>, which starts OpenHW in its own slice — or null when the entry is OpenHW's own (a
+    /// quoted launcher path, optionally <c>--tray</c>) or there is none. OpenHW leaves such an entry as it is.
+    /// </summary>
+    public static string? ForeignAutostart()
+    {
+        string[] lines;
+        try { lines = File.ReadAllLines(AutostartPath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        var exec = lines.FirstOrDefault(l => l.StartsWith("Exec=", StringComparison.Ordinal))?[5..].Trim();
+        if (exec is null) return null;
+        return System.Text.RegularExpressions.Regex.IsMatch(exec, @"^""[^""]+""( --tray)?$") ? null : exec;
+    }
+
+    // GNOME skips an entry with Hidden=true or X-GNOME-Autostart-enabled=false.
+    private static bool AutostartEnabled()
+    {
+        try
+        {
+            var lines = File.ReadAllLines(AutostartPath);
+            return !lines.Contains("Hidden=true") && !lines.Contains("X-GNOME-Autostart-enabled=false");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     private void WriteAutostart()
     {
+        // Another launcher's entry (e.g. RTXinVM's rtxgpu, which starts OpenHW in its GPU slice) is kept: turning
+        // login start off disables it in place and turning it on re-enables it, so its command is never lost.
+        if (ForeignAutostart() is not null)
+        {
+            if (AutostartEnabled() == StartAtLogin) return; // already as asked: leave the other tool's file untouched
+            var lines = File.ReadAllLines(AutostartPath)
+                .Where(l => !l.StartsWith("Hidden=", StringComparison.Ordinal) && !l.StartsWith("X-GNOME-Autostart-enabled=", StringComparison.Ordinal))
+                .Append($"X-GNOME-Autostart-enabled={(StartAtLogin ? "true" : "false")}");
+            if (!StartAtLogin) lines = lines.Append("Hidden=true");
+            File.WriteAllLines(AutostartPath, lines);
+            return;
+        }
         if (!StartAtLogin)
         {
             if (File.Exists(AutostartPath)) File.Delete(AutostartPath);

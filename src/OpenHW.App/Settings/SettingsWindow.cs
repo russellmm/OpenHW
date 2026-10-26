@@ -16,6 +16,8 @@ public sealed class SettingsWindow : Window
     private readonly Action _applied;
     private readonly TextBlock _status = new() { Foreground = Palette.Footnote, Margin = new Thickness(0, 6, 0, 0) };
     private readonly ComboBox _scale = new() { Width = 220 };
+    private readonly CheckBox _startInTray;
+    private readonly TextBlock _loginNote;
     private readonly Button _restart;
 
     public SettingsWindow(AppSettings settings, Action applied, Action showTrayIcons, Action? restart = null)
@@ -39,16 +41,18 @@ public sealed class SettingsWindow : Window
         };
 
         var startAtLogin = new CheckBox { Content = "Start OpenHW when I log in", IsChecked = settings.StartAtLogin };
-        var startInTray = new CheckBox
+        var startInTray = _startInTray = new CheckBox
         {
             Content = "…with only the tray icons (window hidden)", IsChecked = settings.StartInTray,
             IsEnabled = settings.StartAtLogin, Margin = new Thickness(24, 0, 0, 0),
         };
+        _loginNote = Note("");
         startAtLogin.IsCheckedChanged += (_, _) =>
         {
-            startInTray.IsEnabled = startAtLogin.IsChecked == true;
             Save(() => _settings.StartAtLogin = startAtLogin.IsChecked == true);
+            ShowLoginEntry();
         };
+        ShowLoginEntry();
         startInTray.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = startInTray.IsChecked == true);
 
         var pauseWhenHidden = new CheckBox { Content = "Pause sensors while the window is hidden", IsChecked = settings.PauseWhenHidden };
@@ -109,7 +113,7 @@ public sealed class SettingsWindow : Window
                            "OpenHW window and menu after a restart.",
                     Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(98, -4, 0, 4),
                 },
-                startAtLogin, startInTray,
+                startAtLogin, startInTray, _loginNote,
                 pauseWhenHidden,
                 Note("Only sensors in the tray, with an alert, being logged or with a graph open keep reading, as if " +
                      "every group were collapsed. Saves the most when groups are left expanded. Statistics of the " +
@@ -137,6 +141,17 @@ public sealed class SettingsWindow : Window
         base.OnOpened(e);
         if (WindowScale.Fixed is null && _scale.Items[0] is ComboBoxItem automatic)
             automatic.Content = $"Automatic (now {Math.Round(RenderScaling * 100):0} %)";
+    }
+
+    // An entry another launcher wrote (e.g. RTXinVM's rtxgpu) decides how OpenHW starts, so "with only the tray
+    // icons" isn't OpenHW's to set; say whose entry it is.
+    private void ShowLoginEntry()
+    {
+        var foreign = AppSettings.ForeignAutostart();
+        _startInTray.IsEnabled = _settings.StartAtLogin && foreign is null;
+        _loginNote.IsVisible = foreign is not null;
+        _loginNote.Text = $"Started at login through another launcher: {foreign}. OpenHW keeps that command; " +
+                          "this box only turns the entry on or off.";
     }
 
     private void Save(Action change, string status = "Saved.")
