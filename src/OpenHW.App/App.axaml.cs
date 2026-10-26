@@ -73,6 +73,7 @@ public sealed class App : Application
             {
                 _exiting = true; // work already posted to the UI thread (power, tray updates) finds nothing to do
                 _window?.SaveWindowState();
+                WindowPlaces.Flush();
                 _poll?.Dispose();
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
                 _logger?.Dispose();
@@ -527,7 +528,7 @@ public sealed class App : Application
 
     private void ShowAlerts()
     {
-        _alertsWindow ??= new AlertsWindow(_alerts, _hub, ShowAlertSettings);
+        if (_alertsWindow is null) WindowPlaces.Track(_alertsWindow = new AlertsWindow(_alerts, _hub, ShowAlertSettings), "alerts");
         _alertsWindow.Show();
         _alertsWindow.Activate();
     }
@@ -539,6 +540,7 @@ public sealed class App : Application
         {
             if (_hub.Inventory.FirstOrDefault(i => i.Id == sensorId) is not { } item) return;
             dialog = new AlertDialog(_alerts, _hub, item);
+            WindowPlaces.Track(dialog, "alert-settings");
             dialog.Closed += (_, _) => _alertDialogs.Remove(sensorId);
             _alertDialogs[sensorId] = dialog;
         }
@@ -553,6 +555,7 @@ public sealed class App : Application
         {
             if (_hub.Inventory.FirstOrDefault(i => i.Id == sensorId) is not { } item) return;
             graph = new SensorGraphWindow(_hub, item);
+            WindowPlaces.Track(graph, "graph:" + sensorId);
             graph.Closed += (_, _) =>
             {
                 _graphs.Remove(sensorId);
@@ -567,7 +570,7 @@ public sealed class App : Application
 
     private void ShowSettings()
     {
-        _settingsWindow ??= new SettingsWindow(_settings, ApplySettings, ShowTrayIcons, Restart);
+        if (_settingsWindow is null) WindowPlaces.Track(_settingsWindow = new SettingsWindow(_settings, ApplySettings, ShowTrayIcons, Restart), "settings");
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -599,14 +602,14 @@ public sealed class App : Application
 
     private void ShowTrayIcons()
     {
-        _trayIconsWindow ??= new TrayIconsWindow(_settings, _hub, ApplySettings);
+        if (_trayIconsWindow is null) WindowPlaces.Track(_trayIconsWindow = new TrayIconsWindow(_settings, _hub, ApplySettings), "tray-icons");
         _trayIconsWindow.Show();
         _trayIconsWindow.Activate();
     }
 
     private void ShowLayout(string? sensorId)
     {
-        _layoutWindow ??= new LayoutWindow(_hub);
+        if (_layoutWindow is null) WindowPlaces.Track(_layoutWindow = new LayoutWindow(_hub), "layout");
         _layoutWindow.ShowFor(sensorId);
     }
 
@@ -622,21 +625,21 @@ public sealed class App : Application
 
     private void ShowGpuLending()
     {
-        _gpuLending ??= new GpuLendingWindow(lending: _lend, settings: _settings);
+        if (_gpuLending is null) WindowPlaces.Track(_gpuLending = new GpuLendingWindow(lending: _lend, settings: _settings), "gpu-lending");
         _gpuLending.Show();
         _gpuLending.Activate();
     }
 
     private void ShowPowerLimits()
     {
-        _powerLimits ??= new PowerLimitsWindow(_gpuPower, new CpuPowerLimits());
+        if (_powerLimits is null) WindowPlaces.Track(_powerLimits = new PowerLimitsWindow(_gpuPower, new CpuPowerLimits()), "power-limits");
         _powerLimits.Show();
         _powerLimits.Activate();
     }
 
     private void ShowCpuFrequency()
     {
-        _cpuFrequency ??= new CpuFrequencyWindow(_power);
+        if (_cpuFrequency is null) WindowPlaces.Track(_cpuFrequency = new CpuFrequencyWindow(_power), "cpu-frequency");
         _cpuFrequency.Show();
         _cpuFrequency.Activate();
     }

@@ -590,11 +590,20 @@ public sealed class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.Manual;
             Position = new PixelPoint(x, y);
         }
+        else if (Screens.Primary is { } primary) // nothing saved yet: the primary monitor, not the desktop's (0, 0)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = primary.WorkingArea.Position;
+        }
         if (_view.Maximized) WindowState = WindowState.Maximized;
+        var firstOpen = true;
         Opened += (_, _) =>
         {
-            // Saved on a monitor that's gone: start centred on the primary screen instead.
-            if (Screens.ScreenFromPoint(Position) is null && Screens.Primary is { } screen)
+            // Nothing saved, or saved on a monitor that's gone: start centred on the primary screen instead.
+            if (!firstOpen) return; // reopened from the tray: it stays where it was hidden
+            firstOpen = false;
+            var saved = _view.WindowX is not null && _view.WindowY is not null;
+            if ((!saved ||Screens.ScreenFromPoint(Position) is null) && WindowState == WindowState.Normal && Screens.Primary is { } screen)
                 Position = new PixelPoint(screen.WorkingArea.X + (int)Math.Max(0, (screen.WorkingArea.Width - Width * screen.Scaling) / 2),
                                           screen.WorkingArea.Y + (int)Math.Max(0, (screen.WorkingArea.Height - Height * screen.Scaling) / 2));
         };

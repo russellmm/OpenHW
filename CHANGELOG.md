@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.17.2 — 2026-10-26
+
+- Fixed: **OpenHW's windows opened in the top-left corner of the secondary monitor**, and forgot where you had put
+  them when OpenHW restarted. Every window — Settings, Tray Icons, Alerts and each sensor's alert settings, sensor
+  graphs, Layout Settings, CPU Frequency, Power Limits, GPU Lending — now opens where it was last time
+  (`~/.config/openhw/window-places.json`; size too for windows you resize freely, such as graphs). With nothing saved,
+  or saved on a monitor that's no longer there, a window opens centred on the primary monitor; so does the main window
+  the first time. Dialogs still open centred on the window that opened them.
+
 ## 0.17.1 — 2026-10-26
 
 - Fixed: **all tray icons disappeared after the screen was locked and unlocked** (and whenever GNOME's AppIndicator
