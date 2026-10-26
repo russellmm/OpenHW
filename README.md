@@ -256,7 +256,8 @@ without logging out, and gets it back — the job RTXinVM did before, folded int
   is **Hide now** (until reboot) and/or **Hide from boot** (the helper starts before the login screen and puts the
   filter in force first). Hiding stops a program opening the card; one that already has it keeps it until restarted.
 - **Using the card now** lists every process holding the card, with the list entry that would cover it. When a new
-  app opens the card, OpenHW asks once (a notification): hide it, close and reopen it when lending, or leave it.
+  app opens the card, OpenHW asks once (a notification): hide it, close and reopen it when lending, or leave it. An app
+  that splits itself across two scopes (Chrome and other Chromium/Electron apps) counts as one app.
   Don't hide an app that launches other programs (a terminal, the Claude app): what it starts is hidden with it.
 - **Lend to <VM> / Return.** Lend refuses while anything stands in the way (VM not off, a monitor plugged into the
   card, an app holding it…) and says what. System services and your own services holding the card are paused and

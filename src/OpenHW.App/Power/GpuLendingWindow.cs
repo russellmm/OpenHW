@@ -193,10 +193,11 @@ public sealed class GpuLendingWindow : Window
         foreach (var p in l.Problems.Where(p => !(l.Lent && p.EndsWith(" is running.", StringComparison.Ordinal)) && !(l.Lent && p == "The card is lent already.")))
             _lendNotes.Children.Add(Footnote(p, Bad));
         // Apps holding the card block the lend, unless ticked "Close and reopen when lending".
-        var blocking = l.Apps.Where(a => a.Pattern is null || !_settings.LendReopen.Contains(a.Pattern)).GroupBy(a => a.Pattern ?? a.Cgroup).ToList();
+        var blockingApps = _lending.Blocking(l.Apps, _settings.LendReopen);
+        var blocking = blockingApps.GroupBy(a => a.Pattern ?? a.Cgroup).ToList();
         foreach (var app in blocking)
             _lendNotes.Children.Add(Footnote($"{EntryName(app.Key, app)} has the card open: close it, or tick \"Close and reopen when lending\" below.", Bad));
-        var reopened = l.Apps.Where(a => a.Pattern is not null && _settings.LendReopen.Contains(a.Pattern)).GroupBy(a => a.Pattern!).Select(g => EntryName(g.Key, g)).ToList();
+        var reopened = l.Apps.Except(blockingApps).GroupBy(a => a.Pattern ?? a.Cgroup).Select(g => EntryName(g.Key, g)).Distinct().ToList();
         if (!l.Lent && (l.SystemServices.Count > 0 || l.UserServices.Count > 0 || reopened.Count > 0))
             _lendNotes.Children.Add(Footnote("Paused for the handoff and started again afterwards: " +
                 string.Join(", ", l.SystemServices.Concat(l.UserServices).Concat(reopened)) + "."));

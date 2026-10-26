@@ -11,7 +11,8 @@ namespace OpenHW.App.Power;
 /// started again (they then see the other cards), and when the card comes back they're restarted so they list it.
 /// Apps the owner ticked "Close and reopen when lending" for (e.g. OpenFan's window, once it runs as a plain app) are
 /// closed the same way — gracefully, by stopping their app scope — and reopened with the same command in a scope
-/// named like the original, so the list entry that covers them still does.
+/// named like the original, so the list entry that covers them still does. An app whose launch spans several scopes
+/// (Chrome: see AppLaunches) is covered when any of them is ticked, and all of them are closed, but it's opened once.
 /// The record lives in ~/.config/openhw/lend-paused.json, so this survives OpenHW restarting in between.
 /// </summary>
 public sealed class LendCoordinator(Func<string, string>? request = null, Func<string, IReadOnlyList<string>, (int Code, string Output)>? run = null,
@@ -21,11 +22,12 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
     private readonly Func<string, IReadOnlyList<string>, (int, string)> _run = run ?? Run;
     private readonly Action<IReadOnlyList<string>> _launch = launch ?? Launch;
     private readonly string _statePath = statePath ?? Path.Combine(Settings.AppSettings.ConfigDir, "lend-paused.json");
+    private readonly AppLaunches _launches = new(procRoot, cgroupRoot);
 
     /// <summary>A paused user service and how to start it again.</summary>
     public sealed record PausedUnit(string Unit, string[] Argv, string Slice, string Description, bool HasFile);
-    /// <summary>A closed app: its scope now (updated when reopened), command and working folder.</summary>
-    public sealed record PausedApp(string Scope, string[] Argv, string Cwd);
+    /// <summary>A closed app: its scope now (updated when reopened), command, working folder and the slice it's in.</summary>
+    public sealed record PausedApp(string Scope, string[] Argv, string Cwd, string? Parent = null);
     public sealed record Record(int Sequence, string Phase, List<PausedUnit> Units, List<PausedApp>? Apps = null);
 
     public Record? Current => Load();
@@ -37,7 +39,7 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
     public void Lend(LendStatus status, IReadOnlyCollection<string>? reopen = null)
     {
         reopen ??= [];
-        var blocking = status.Apps.FirstOrDefault(a => a.Pattern is null || !reopen.Contains(a.Pattern));
+        var blocking = Blocking(status.Apps, reopen).FirstOrDefault();
         if (blocking is not null) throw new IOException($"{blocking.Program} ({blocking.Pid}) has the card open: close it, or tick \"Close and reopen when lending\"");
         var paused = new List<PausedUnit>();
         var apps = new List<PausedApp>();
@@ -49,12 +51,15 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
             if (code != 0) { Undo(); throw new IOException($"stopping {unit}: {output}"); }
             paused.Add(described);
         }
-        foreach (var scope in status.Apps.Select(a => a.Cgroup).Distinct())
+        var closed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var launch in status.Apps.Select(a => _launches.Of(a.Cgroup)).Where(l => !closed.Contains(l[0])))
         {
-            var app = DescribeApp(scope);
+            var app = DescribeApp(launch[0]);
             var (code, output) = _run("systemctl", ["--user", "stop", app.Scope]); // SIGTERM, and waits for it to exit
             if (code != 0) { Undo(); throw new IOException($"closing {app.Scope}: {output}"); }
             apps.Add(app);
+            closed.UnionWith(launch);
+            StopRest(launch);
         }
         Save(new Record(status.Sequence, "lending", paused, apps));
         try { _request("lend"); }
@@ -84,7 +89,11 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
             case ("returned", _):
                 foreach (var u in record.Units) _run("systemctl", ["--user", "stop", u.Unit]);
                 StartAll(record.Units);                     // a fresh start lists the returned card
-                foreach (var a in record.Apps ?? []) _run("systemctl", ["--user", "stop", a.Scope]);
+                foreach (var a in record.Apps ?? [])
+                {
+                    _run("systemctl", ["--user", "stop", a.Scope]);
+                    if (a.Parent is not null) StopRest(_launches.Of(a.Parent + "/" + a.Scope));
+                }
                 Reopen(record.Apps ?? []);
                 Clear();
                 break;
@@ -92,6 +101,21 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
                 Save(record with { Sequence = status.Sequence });
                 break;
         }
+    }
+
+    /// <summary>The apps holding the card that aren't covered by a ticked list entry (any scope of their launch).</summary>
+    public IReadOnlyList<CardHolder> Blocking(IEnumerable<CardHolder> apps, IReadOnlyCollection<string> reopen)
+    {
+        var covered = new Dictionary<string, bool>(StringComparer.Ordinal);
+        return apps.Where(a => !(a.Pattern is not null && reopen.Contains(a.Pattern)) && !(covered.TryGetValue(a.Cgroup, out var c)
+            ? c : covered[a.Cgroup] = AppLaunches.Patterns(_launches.Of(a.Cgroup)).Any(reopen.Contains))).ToList();
+    }
+
+    // The launch's other scopes, after its main one (usually gone with it by then).
+    private void StopRest(IReadOnlyList<string> launch)
+    {
+        foreach (var other in launch.Skip(1))
+            if (Directory.Exists(Path.Combine(cgroupRoot, other.TrimStart('/')))) _run("systemctl", ["--user", "stop", other.Split('/')[^1]]);
     }
 
     private PausedUnit Describe(string unit)
@@ -107,17 +131,16 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
             props.GetValueOrDefault("FragmentPath", "").Length > 0 && props.GetValueOrDefault("Transient", "no") != "yes");
     }
 
-    // The app's own process is the scope's first (lowest) PID: its command line and working folder start it again.
+    // The app's own process (the one the scope is named after, else its first PID): its command line and working
+    // folder start it again.
     private PausedApp DescribeApp(string cgroup)
     {
         var scope = cgroup.Split('/')[^1];
-        var pids = File.ReadAllLines(Path.Combine(cgroupRoot, cgroup.TrimStart('/'), "cgroup.procs"))
-            .Select(l => int.TryParse(l, out var p) ? p : int.MaxValue).Where(p => p != int.MaxValue).Order().ToList();
-        if (pids.Count == 0) throw new IOException($"{scope} has no process");
-        var proc = Path.Combine(procRoot, pids[0].ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (_launches.MainPid(cgroup) is not { } pid) throw new IOException($"{scope} has no process");
+        var proc = Path.Combine(procRoot, pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
         var argv = File.ReadAllText(Path.Combine(proc, "cmdline")).Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var cwd = new FileInfo(Path.Combine(proc, "cwd")).LinkTarget ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return new PausedApp(scope, argv, cwd);
+        return new PausedApp(scope, argv, cwd, cgroup[..cgroup.LastIndexOf('/')]);
     }
 
     // A scope named like the original ("app-gnome-openfan-12345.scope" → "app-gnome-openfan-<now>.scope"), so the list

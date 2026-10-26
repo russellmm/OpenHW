@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.16.3 — 2026-10-26
+
+- Fixed: **an app running in two scopes got two notifications, and lending treated it as two apps.** Chrome (and
+  Electron apps such as Claude) moves its main process into a scope of its own (`app-com.google.Chrome-<pid>.scope`),
+  while the processes it already started, including its GPU process, stay in the scope GNOME launched it in
+  (`app-gnome-google\x2dchrome-<pid>.scope`). OpenHW now treats scopes from one launch as one app: one question, and
+  the answer covers all of them. Ticking either scope is enough to lend; lending closes them all and opens the app
+  once, with its own command (before, the second scope blocked the lend, or would have "reopened" Chrome's crash
+  handler). Overlapping checks can no longer ask twice.
+
 ## 0.16.2 — 2026-10-26
 
 - GPU Lending: **a notification when a new app opens the lent card.** With the filter on, any app that isn't on the

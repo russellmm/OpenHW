@@ -28,7 +28,7 @@ public sealed class GpuLendingTests
     private static readonly CardHolder Chrome = new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false);
     private static readonly CardHolder OpenFan = new(4242, "openfan", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-openfan-4200.scope", "app-gnome-openfan-*.scope", false);
 
-    private static LendStatus Lend(params CardHolder[] apps) => new("Windows-10-LTSC", "shut off", false, "idle", null, 0, [],
+    internal static LendStatus Lend(params CardHolder[] apps) => new("Windows-10-LTSC", "shut off", false, "idle", null, 0, [],
         ["openfan-helper.service"], ["rtxgpu-openfan.service"], apps);
 
     private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false, LendStatus? lend = null, List<(string, string)>? ran = null,
@@ -296,5 +296,98 @@ public sealed class CardHolderWatchTests
         var status = Status(false, new CardHolder(1, "chrome", App + "app-com.google.Chrome-1.scope", "app-com.google.Chrome-*.scope", false));
         new CardHolderWatch(_ => GpuWire.Encode(status), new OpenHW.App.Settings.AppSettings(), notify).Check();
         Assert.Empty(notify.Asked);
+    }
+
+    [Fact]
+    public void AnAppSplitAcrossTwoScopesIsOneQuestionAndOneAnswer()
+    {
+        using var tree = new ChromeTree();
+        var settings = new OpenHW.App.Settings.AppSettings();
+        var status = Status(true,
+            new(37042, "chrome", ChromeTree.Gnome, @"app-gnome-google\x2dchrome-*.scope", false),
+            new(37026, "chrome", ChromeTree.Own, "app-com.google.Chrome-*.scope", false));
+        var notify = new FakeNotify();
+        var watch = new CardHolderWatch(_ => GpuWire.Encode(status), settings, notify, tree.Launches);
+        watch.Check();
+        var (_, answer) = Assert.Single(notify.Asked);              // was two notifications, one per scope
+        answer("reopen");
+        Assert.Equal(["app-com.google.Chrome-*.scope", @"app-gnome-google\x2dchrome-*.scope"], settings.LendReopen.Order(StringComparer.Ordinal));
+
+        // The owner's answer from before this fix (only Chrome's own scope ticked) covers the launch: not asked again.
+        var earlier = new FakeNotify();
+        new CardHolderWatch(_ => GpuWire.Encode(status), new OpenHW.App.Settings.AppSettings { LendReopen = ["app-com.google.Chrome-*.scope"] }, earlier, tree.Launches).Check();
+        Assert.Empty(earlier.Asked);
+    }
+
+    [Fact]
+    public void TheCoordinatorClosesEveryScopeOfALaunchAndOpensItOnce()
+    {
+        using var tree = new ChromeTree();
+        var ran = new List<string>();
+        var launched = new List<string>();
+        var coordinator = new LendCoordinator(_ => "lending", (program, args) => { ran.Add(program + " " + string.Join(' ', args)); return (0, ""); },
+            Path.Combine(tree.Root, "lend-paused.json"), argv => launched.Add(string.Join(' ', argv)), tree.Proc, tree.Cgroup);
+        var zygote = new CardHolder(37042, "chrome", ChromeTree.Gnome, @"app-gnome-google\x2dchrome-*.scope", false);
+        var status = GpuLendingTests.Lend(zygote) with { UserServices = [] };
+
+        Assert.Empty(coordinator.Blocking(status.Apps, ["app-com.google.Chrome-*.scope"]));   // ticked through its other scope
+        Assert.Single(coordinator.Blocking(status.Apps, ["app-gnome-openfan-*.scope"]));
+        coordinator.Lend(status, ["app-com.google.Chrome-*.scope"]);
+        Assert.Equal(["systemctl --user stop app-com.google.Chrome-37026.scope", @"systemctl --user stop app-gnome-google\x2dchrome-37026.scope"], ran);
+
+        coordinator.Follow(status with { Stage = "lent", Sequence = 1, Lent = true });
+        var reopen = Assert.Single(launched);                        // Chrome itself, not its crashpad handler
+        Assert.Matches(@"--unit=app-com\.google\.Chrome-\d+\.scope --working-directory=/home/russellm -- /opt/google/chrome/chrome$", reopen);
+    }
+
+    [Fact]
+    public void AppsStartedByAnotherAppArentPartOfItsLaunch()
+    {
+        using var tree = new ChromeTree();
+        Assert.Equal([ChromeTree.Own, ChromeTree.Gnome], tree.Launches.Of(ChromeTree.Gnome));
+        Assert.Equal([ChromeTree.Own, ChromeTree.Gnome], tree.Launches.Of(ChromeTree.Own));
+        Assert.Equal([ChromeTree.Reopened], tree.Launches.Of(ChromeTree.Reopened)); // OpenFan, reopened by OpenHW
+        Assert.Equal([ChromeTree.OpenHW], tree.Launches.Of(ChromeTree.OpenHW));
+        Assert.Equal(37026, tree.Launches.MainPid(ChromeTree.Own));
+    }
+
+    // Chrome as found on the owner's machine (2026-10-26), plus OpenHW (autostarted, so its scope has its PID) and
+    // an OpenFan it reopened, whose first process OpenHW started.
+    private sealed class ChromeTree : IDisposable
+    {
+        private const string Slice = "/user.slice/user-1000.slice/user@1000.service/app.slice/";
+        public const string Gnome = Slice + @"app-gnome-google\x2dchrome-37026.scope";
+        public const string Own = Slice + "app-com.google.Chrome-37026.scope";
+        public const string OpenHW = Slice + "app-gnome-openhw-6000.scope";
+        public const string Reopened = Slice + "app-gnome-openfan-1793034000000.scope";
+        public readonly string Root = Directory.CreateTempSubdirectory("openhw-launch-").FullName;
+        public string Proc => Path.Combine(Root, "proc");
+        public string Cgroup => Path.Combine(Root, "cgroup");
+        public AppLaunches Launches => new(Proc, Cgroup);
+
+        public ChromeTree()
+        {
+            Scope(Gnome, (37034, 4841, "chrome_crashpad_handler"), (37042, 37026, "chrome"), (37043, 37026, "chrome"));
+            Scope(Own, (37026, 4841, "chrome"), (37784, 37026, "chrome"));
+            Scope(OpenHW, (6000, 4841, "openhw"));
+            Scope(Reopened, (7000, 6000, "openfan"), (7001, 7000, "openfan"));
+            var chrome = Path.Combine(Proc, "37026");
+            File.WriteAllText(Path.Combine(chrome, "cmdline"), "/opt/google/chrome/chrome\0");
+            File.CreateSymbolicLink(Path.Combine(chrome, "cwd"), "/home/russellm");
+            var crashpad = Path.Combine(Proc, "37034");
+            File.WriteAllText(Path.Combine(crashpad, "cmdline"), "/opt/google/chrome/chrome_crashpad_handler\0--monitor-self\0");
+            File.CreateSymbolicLink(Path.Combine(crashpad, "cwd"), "/home/russellm");
+        }
+
+        private void Scope(string cgroup, params (int Pid, int Parent, string Comm)[] procs)
+        {
+            var dir = Directory.CreateDirectory(Path.Combine(Cgroup, cgroup.TrimStart('/'))).FullName;
+            File.WriteAllLines(Path.Combine(dir, "cgroup.procs"), procs.Select(p => p.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            foreach (var (pid, parent, comm) in procs)
+                File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(Proc, pid.ToString(System.Globalization.CultureInfo.InvariantCulture))).FullName, "stat"),
+                    $"{pid} ({comm}) S {parent} {pid} {pid} 0 -1");
+        }
+
+        public void Dispose() => Directory.Delete(Root, recursive: true);
     }
 }

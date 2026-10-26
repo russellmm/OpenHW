@@ -9,9 +9,14 @@ namespace OpenHW.App.Power;
 /// not answered "Leave it" before — holds the card, one notification offers: Hide it (now and from boot), Close and
 /// reopen when lending, or Leave it (it may use the card; stop asking). A click on the bubble opens GPU Lending.
 /// Each app is asked about at most once per OpenHW run, and "Leave it" is remembered (AppSettings.LendKnownApps).
+/// An app whose launch spans several scopes (Chrome: see AppLaunches) is one question, and the answer covers them all;
+/// it counts as decided once any of them is ticked or left.
 /// </summary>
-public sealed class CardHolderWatch(Func<string, string> request, Settings.AppSettings settings, CardHolderWatch.INotify notify)
+public sealed class CardHolderWatch(Func<string, string> request, Settings.AppSettings settings, CardHolderWatch.INotify notify,
+    AppLaunches? launches = null)
 {
+    private readonly AppLaunches _launches = launches ?? new AppLaunches();
+
     /// <summary>The notification and what the owner's answer does; implemented by the App over DesktopNotifier.</summary>
     public interface INotify
     {
@@ -25,6 +30,13 @@ public sealed class CardHolderWatch(Func<string, string> request, Settings.AppSe
     /// <summary>One check (any thread): asks about apps holding the card that nobody has decided on yet.</summary>
     public void Check()
     {
+        if (!Monitor.TryEnter(_asked)) return; // the last check is still waiting on the helper
+        try { CheckNow(); }
+        finally { Monitor.Exit(_asked); }
+    }
+
+    private void CheckNow()
+    {
         CardFilterStatus? status;
         try { status = GpuWire.Decode<CardFilterStatus>(request("cardfilter")); }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException) { return; }
@@ -36,30 +48,39 @@ public sealed class CardHolderWatch(Func<string, string> request, Settings.AppSe
                      .GroupBy(h => h.Pattern!))
         {
             var pattern = app.Key;
-            if (listed.Contains(pattern) || settings.LendReopen.Contains(pattern) || settings.LendKnownApps.Contains(pattern)) continue;
-            if (!_asked.Add(pattern)) continue;
+            if (Decided(pattern, listed) || _asked.Contains(pattern)) continue;
+            var patterns = AppLaunches.Patterns(_launches.Of(app.First().Cgroup)).Append(pattern).Distinct(StringComparer.Ordinal).ToList();
+            _asked.UnionWith(patterns);
+            if (patterns.Any(p => settings.LendReopen.Contains(p) || settings.LendKnownApps.Contains(p))) continue;
+            var undecided = patterns.Where(p => !Decided(p, listed)).ToList();
             var name = Name(app.First().Program);
             notify.Ask("card-holder:" + pattern, $"{name} opened the {cardName}",
                 $"While it has the card open, the card can't be lent to a VM. {name} draws on your other GPUs either way.",
                 [("default", "GPU Lending…"), ("hide", "Hide it"), ("reopen", "Close & reopen when lending"), ("leave", "Leave it")],
-                answer => Answer(answer, pattern, name));
+                answer => Answer(answer, undecided, name));
         }
     }
 
-    private void Answer(string answer, string pattern, string name)
+    private bool Decided(string pattern, HashSet<string> listed) =>
+        listed.Contains(pattern) || settings.LendReopen.Contains(pattern) || settings.LendKnownApps.Contains(pattern);
+
+    private void Answer(string answer, IReadOnlyList<string> patterns, string name)
     {
         switch (answer)
         {
             case "hide":
-                try { request($"cardhide {pattern} both {name}"); }
-                catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException) { _asked.Remove(pattern); }
+                foreach (var pattern in patterns)
+                {
+                    try { request($"cardhide {pattern} both {name}"); }
+                    catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException) { lock (_asked) _asked.Remove(pattern); }
+                }
                 break;
             case "reopen":
-                if (!settings.LendReopen.Contains(pattern)) settings.LendReopen.Add(pattern);
+                foreach (var pattern in patterns.Where(p => !settings.LendReopen.Contains(p))) settings.LendReopen.Add(pattern);
                 notify.Save();
                 break;
             case "leave":
-                if (!settings.LendKnownApps.Contains(pattern)) settings.LendKnownApps.Add(pattern);
+                foreach (var pattern in patterns.Where(p => !settings.LendKnownApps.Contains(p))) settings.LendKnownApps.Add(pattern);
                 notify.Save();
                 break;
             default:
