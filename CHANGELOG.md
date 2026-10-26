@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.16.2 — 2026-10-26
+
+- GPU Lending: **a notification when a new app opens the lent card.** With the filter on, any app that isn't on the
+  list can open the card just by drawing with the GPU — and then the card can't be lent. The first time an app
+  nobody has decided on holds it, OpenHW asks once: **Hide it** (now and from boot), **Close & reopen when
+  lending**, or **Leave it** (it may use the card; no more questions). A click on the notification opens GPU Lending.
+- Fixed: Hide didn't work for apps whose unit name systemd escapes (e.g. a "weather-widget" app runs as
+  `app-gnome-weather\x2dwidget-….scope`): the helper refused the backslash.
+
 ## 0.16.1 — 2026-10-26
 
 - Fixed: the card filter couldn't be turned on by the installed helper — its sandbox (`ProtectKernelTunables`) left

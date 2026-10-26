@@ -72,6 +72,9 @@ public sealed class AppSettings
     /// </summary>
     public List<string> LendReopen { get; set; } = [];
 
+    /// <summary>GPU Lending: apps the owner answered "Leave it" for (they may use the lent card; no more questions).</summary>
+    public List<string> LendKnownApps { get; set; } = [];
+
     /// <summary>Size of every OpenHW window in percent; 0 = Automatic (the desktop's scale). Applies at the next start.</summary>
     public int WindowScale { get; set; }
     public List<TraySensor> TrayIcons { get; set; } = [new()];

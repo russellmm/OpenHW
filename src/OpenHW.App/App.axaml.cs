@@ -25,6 +25,9 @@ public sealed class App : Application
     // whether or not the GPU Lending window is open (it checks only while a lend is recorded).
     private readonly LendCoordinator _lend = new();
     private readonly DispatcherTimer _lendFollow = new() { Interval = TimeSpan.FromSeconds(5) };
+    // A new app opening the lent card: one notification offering to hide it, close & reopen it, or leave it.
+    private CardHolderWatch? _holderWatch;
+    private readonly DispatcherTimer _holderTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly HelperGpuPowerLimits _gpuPower = new(); // read by the helper: the app never opens a card
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
@@ -90,6 +93,10 @@ public sealed class App : Application
                 });
             };
             _lendFollow.Start();
+            _holderWatch = new CardHolderWatch(line => HelperClient.Request(line, receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes),
+                _settings, new HolderNotifications(this));
+            _holderTimer.Tick += (_, _) => { var watch = _holderWatch; _ = Task.Run(() => watch?.Check()); };
+            _holderTimer.Start();
 
             _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
             SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
@@ -577,6 +584,16 @@ public sealed class App : Application
     {
         _layoutWindow ??= new LayoutWindow(_hub);
         _layoutWindow.ShowFor(sensorId);
+    }
+
+    // CardHolderWatch's notifications go through the alerts' notifier; answers come back on D-Bus threads.
+    private sealed class HolderNotifications(App app) : CardHolderWatch.INotify
+    {
+        public void Ask(string key, string summary, string body, IReadOnlyList<(string Key, string Label)> actions, Action<string> answer) =>
+            _ = app._notifier.NotifyAsync(key, summary, body, critical: false, actions,
+                choice => Dispatcher.UIThread.Post(() => answer(choice)));
+        public void Save() => app._settings.Save();
+        public void OpenPage() => Dispatcher.UIThread.Post(app.ShowGpuLending);
     }
 
     private void ShowGpuLending()

@@ -235,3 +235,66 @@ public sealed class GpuLendingTests
         Directory.Delete(root, recursive: true);
     }
 }
+
+public sealed class CardHolderWatchTests
+{
+    private const string App = "/user.slice/user-1000.slice/user@1000.service/app.slice/";
+
+    private sealed class FakeNotify : CardHolderWatch.INotify
+    {
+        public readonly List<(string Summary, Action<string> Answer)> Asked = [];
+        public int Saves, Pages;
+        public void Ask(string key, string summary, string body, IReadOnlyList<(string Key, string Label)> actions, Action<string> answer)
+        {
+            Assert.Equal(["default", "hide", "reopen", "leave"], actions.Select(a => a.Key));
+            Asked.Add((summary, answer));
+        }
+        public void Save() => Saves++;
+        public void OpenPage() => Pages++;
+    }
+
+    private static CardFilterStatus Status(bool enabled, params CardHolder[] holders) => new(enabled, enabled, "0000:e1:00.0",
+        [new("0000:e1:00.0", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition")], [],
+        [new("session.slice", "GNOME desktop", true, true)], holders);
+
+    [Fact]
+    public void AsksOnceAboutEachUndecidedAppAndActsOnTheAnswer()
+    {
+        var settings = new OpenHW.App.Settings.AppSettings { LendReopen = ["app-gnome-openfan-*.scope"], LendKnownApps = ["app-com.anthropic.Claude-*.scope"] };
+        var status = Status(true,
+            new(1, "chrome", App + "app-com.google.Chrome-1.scope", "app-com.google.Chrome-*.scope", false),
+            new(2, "chrome", App + "app-com.google.Chrome-1.scope", "app-com.google.Chrome-*.scope", false),
+            new(3, "openfan", App + "app-gnome-openfan-3.scope", "app-gnome-openfan-*.scope", false),          // ticked
+            new(4, "claude", App + "app-com.anthropic.Claude-4.scope", "app-com.anthropic.Claude-*.scope", false), // "Leave it"
+            new(5, "openfan-helper", "/system.slice/openfan-helper.service", null, false),                       // a service
+            new(6, "gnome-shell", "/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@ubuntu.service", "session.slice", true));
+        var sent = new List<string>();
+        var notify = new FakeNotify();
+        var watch = new CardHolderWatch(line => { if (line == "cardfilter") return GpuWire.Encode(status); sent.Add(line); return "ok"; }, settings, notify);
+
+        watch.Check();
+        var (summary, answer) = Assert.Single(notify.Asked);       // Chrome, once for its two processes
+        Assert.Equal("Chrome opened the RTX PRO 6000 Blackwell Workstation Edition", summary);
+        watch.Check();
+        Assert.Single(notify.Asked);                               // not again this run
+
+        answer("hide");
+        Assert.Equal(["cardhide app-com.google.Chrome-*.scope both Chrome"], sent);
+        answer("reopen");
+        Assert.Contains("app-com.google.Chrome-*.scope", settings.LendReopen);
+        answer("leave");
+        Assert.Contains("app-com.google.Chrome-*.scope", settings.LendKnownApps);
+        Assert.Equal(2, notify.Saves);
+        answer("default");
+        Assert.Equal(1, notify.Pages);
+    }
+
+    [Fact]
+    public void NothingIsAskedWhileTheFilterIsOff()
+    {
+        var notify = new FakeNotify();
+        var status = Status(false, new CardHolder(1, "chrome", App + "app-com.google.Chrome-1.scope", "app-com.google.Chrome-*.scope", false));
+        new CardHolderWatch(_ => GpuWire.Encode(status), new OpenHW.App.Settings.AppSettings(), notify).Check();
+        Assert.Empty(notify.Asked);
+    }
+}
