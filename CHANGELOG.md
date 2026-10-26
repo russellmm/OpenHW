@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.15.1 — 2026-10-25
+
+First real lend (Windows-10-LTSC on the RTX 6000) worked; two fixes from it:
+- Fixed: a user service started with `systemd-run` (e.g. OpenFan's window under RTXinVM) wasn't started again after
+  the lend. systemd reports a FragmentPath even for transient units, so it was taken for a unit file and only
+  `systemctl start`ed — but a stopped transient unit is gone. Transient units (`Transient=yes`) are now recreated
+  with the same command, slice and description, after the lend and after the return.
+- Fixed: while the card was lent, the page showed the libvirt hook's handoff record as a problem; the hook keeps it
+  on purpose until the return.
+
 ## 0.15.0 — 2026-10-25
 
 **Lend the card to a VM (GPU lending, step 4)**

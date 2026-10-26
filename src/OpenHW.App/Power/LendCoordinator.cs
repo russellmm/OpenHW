@@ -70,13 +70,15 @@ public sealed class LendCoordinator(Func<string, string>? request = null, Func<s
 
     private PausedUnit Describe(string unit)
     {
-        var (_, output) = _run("systemctl", ["--user", "show", unit, "--property=ExecStart,Slice,Description,FragmentPath"]);
+        var (_, output) = _run("systemctl", ["--user", "show", unit, "--property=ExecStart,Slice,Description,FragmentPath,Transient"]);
         var props = output.Split('\n').Select(l => l.Split('=', 2)).Where(p => p.Length == 2).ToDictionary(p => p[0], p => p[1]);
         // ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no ; … }
         var exec = props.GetValueOrDefault("ExecStart", "");
         var argv = exec.Split(" ; ").FirstOrDefault(f => f.StartsWith("argv[]=", StringComparison.Ordinal))?[7..].Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        // A transient unit (systemd-run) reports a FragmentPath under /run/…/transient, but it's gone once stopped:
+        // only a real unit file can simply be started again.
         return new PausedUnit(unit, argv, props.GetValueOrDefault("Slice", "app.slice"), props.GetValueOrDefault("Description", unit),
-            props.GetValueOrDefault("FragmentPath", "").Length > 0);
+            props.GetValueOrDefault("FragmentPath", "").Length > 0 && props.GetValueOrDefault("Transient", "no") != "yes");
     }
 
     private void StartAll(IEnumerable<PausedUnit> units)

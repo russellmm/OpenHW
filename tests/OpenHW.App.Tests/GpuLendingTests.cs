@@ -42,7 +42,8 @@ public sealed class GpuLendingTests
         var coordinator = new LendCoordinator(Request, (program, args) =>
         {
             ran?.Add((program, string.Join(' ', args)));
-            return (0, args.Contains("show") ? "ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no }\nSlice=rtxgpu.slice\nDescription=RTXinVM app openfan\nFragmentPath=" : "");
+            // As systemd reports a systemd-run unit: a FragmentPath under /run/…/transient, and Transient=yes.
+            return (0, args.Contains("show") ? "ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no }\nSlice=rtxgpu.slice\nDescription=RTXinVM app openfan\nFragmentPath=/run/user/1000/systemd/transient/rtxgpu-openfan.service\nTransient=yes" : "");
         }, Path.Combine(Directory.CreateTempSubdirectory("openhw-lend-").FullName, "lend-paused.json"));
         var window = new GpuLendingWindow(Request, rtxinvmGuarding: () => true, lending: coordinator);
         window.Show();
@@ -156,5 +157,29 @@ public sealed class GpuLendingTests
         Assert.Contains(("systemctl", "--user stop rtxgpu-openfan.service"), ran);
         Assert.Equal("lend", sent.Last());
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending-lend.png"));
+    }
+
+    [Fact]
+    public void ATransientServiceIsRecreatedAfterTheLendAndAfterTheReturn()
+    {
+        var ran = new List<string>();
+        var stage = Lend();
+        var coordinator = new LendCoordinator(_ => "lending", (program, args) =>
+        {
+            ran.Add(program + " " + string.Join(' ', args));
+            return (0, args.Contains("show") ? "ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no }\nSlice=rtxgpu.slice\nDescription=RTXinVM app openfan\nFragmentPath=/run/user/1000/systemd/transient/rtxgpu-openfan.service\nTransient=yes" : "");
+        }, Path.Combine(Directory.CreateTempSubdirectory("openhw-lend-").FullName, "lend-paused.json"));
+        coordinator.Lend(stage);
+        Assert.Contains("systemctl --user stop rtxgpu-openfan.service", ran);
+        const string Recreate = "systemd-run --user --quiet --collect --unit=rtxgpu-openfan.service --slice=rtxgpu.slice --description=RTXinVM app openfan -- /usr/bin/openfan";
+
+        ran.Clear();
+        coordinator.Follow(stage with { Stage = "lent", Sequence = 1, Lent = true });
+        Assert.Equal([Recreate], ran);                 // not "systemctl start": a stopped transient unit is gone
+
+        ran.Clear();
+        coordinator.Follow(stage with { Stage = "returned", Sequence = 2 });
+        Assert.Equal(["systemctl --user stop rtxgpu-openfan.service", Recreate], ran); // restarted to list the card again
+        Assert.Null(coordinator.Current);
     }
 }

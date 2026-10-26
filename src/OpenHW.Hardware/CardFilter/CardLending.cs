@@ -281,7 +281,8 @@ public sealed partial class CardLending : IDisposable
         if (vm is null) problems.Add("Choose the VM to lend it to.");
         else if (state == "running") problems.Add($"{vm} is running.");
         else if (state != "shut off") problems.Add($"{vm} isn't fully off ({state}).");
-        if (File.Exists(_handoffRecord)) problems.Add($"A previous handoff left its record ({_handoffRecord}); recover it first.");
+        // While the card is lent the hook keeps its record on purpose (it restores the card's settings on return).
+        if (File.Exists(_handoffRecord) && state != "running") problems.Add($"A previous handoff left its record ({_handoffRecord}); recover it first.");
         var driver = Driver(card);
         if (driver != "nvidia") problems.Add(driver == "vfio-pci" ? "The card is lent already." : $"The card isn't on the NVIDIA driver ({driver ?? "none"}).");
         var device = Path.Combine(_sysRoot, "bus", "pci", "devices", card);
