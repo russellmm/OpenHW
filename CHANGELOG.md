@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.14.1 — 2026-10-25
+
+- Fixed: the GPU Lending page still couldn't see the desktop user's programs holding the card — listing another
+  user's `/proc/<pid>/fd` (mode 0500) needs `CAP_DAC_READ_SEARCH` as well as `CAP_SYS_PTRACE`; the unit grants both.
+- Programs outside the desktop session are listed one per program, so OpenHW's own helper and other services each
+  get their own line.
+
 ## 0.14.0 — 2026-10-25
 
 **GPU Lending page (GPU lending, step 3)**

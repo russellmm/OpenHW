@@ -61,7 +61,8 @@ public sealed class GpuLendingTests
         Assert.Contains(texts, t => t.StartsWith("Off. RTXinVM's guard is protecting this card", StringComparison.Ordinal));
         Assert.Contains("gnome-shell (12040), Xwayland (12725)", texts);             // one row for the whole desktop
         Assert.Contains("Hidden, but the desktop still has the card open: log out once to free it.", texts);
-        Assert.Contains("System services can't be hidden; stop them before lending the card.", texts);
+        Assert.Contains("nvidia-persiste (outside the desktop session)", texts);
+        Assert.Contains("A system service: it can't be hidden, so it has to let go of the card (or be stopped) for the handoff.", texts);
         Assert.Contains("Login screen", texts);
         Assert.Contains("app-*openhw*.scope", texts);
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending.png"));

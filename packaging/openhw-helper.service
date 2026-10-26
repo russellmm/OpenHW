@@ -17,8 +17,9 @@ RestartSec=2
 # root-owned 0644 (so no DAC override): cpufreq's scaling_max_freq, and amd_hsmp_hwmon's power1_cap under the HSMP
 # platform device. GPU power limits go through NVML, which opens the NVIDIA control and card devices. The card filter
 # loads an eBPF cgroup device program (CAP_BPF) and attaches it to user.slice (CAP_NET_ADMIN for cgroup attach), and
-# lists which processes have the lent card open: reading another user's /proc/<pid>/fd links needs CAP_SYS_PTRACE.
-CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_BPF CAP_NET_ADMIN CAP_SYS_PTRACE
+# lists which processes have the lent card open: listing another user's /proc/<pid>/fd (0500) needs
+# CAP_DAC_READ_SEARCH, and reading its links needs CAP_SYS_PTRACE.
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_BPF CAP_NET_ADMIN CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/sys/devices/system/cpu

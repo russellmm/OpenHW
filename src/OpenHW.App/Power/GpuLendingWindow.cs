@@ -149,27 +149,29 @@ public sealed class GpuLendingWindow : Window
         _holders.Children.Clear();
         if (s?.Card is null) { _holders.Children.Add(Footnote("No card chosen.")); return; }
         if (s.Holders.Count == 0) { _holders.Children.Add(Footnote("Nothing has the card open.")); return; }
-        foreach (var group in s.Holders.GroupBy(h => h.Pattern ?? "").OrderBy(g => g.Key == "" ? 1 : 0).ThenBy(g => EntryName(g.Key, g), StringComparer.OrdinalIgnoreCase))
+        // Desktop programs group by the list entry that covers them; ones outside the desktop session, by program.
+        foreach (var group in s.Holders.GroupBy(h => h.Pattern ?? "service:" + h.Program).OrderBy(g => g.Key.StartsWith("service:", StringComparison.Ordinal) ? 1 : 0)
+                     .ThenBy(g => EntryName(g.Key, g), StringComparer.OrdinalIgnoreCase))
         {
-            var pattern = group.Key;
+            var pattern = group.Key.StartsWith("service:", StringComparison.Ordinal) ? "" : group.Key;
             var programs = string.Join(", ", group.GroupBy(h => h.Program).Select(p => p.Count() == 1 ? $"{p.Key} ({p.First().Pid})" : $"{p.Key} ×{p.Count()}"));
             // Text on the left (name, programs, any warning under them); buttons on the right only when there's an action.
             var text = new StackPanel
             {
                 Children =
                 {
-                    new TextBlock { Text = pattern == "" ? "Not in the desktop session" : EntryName(pattern, group), FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = pattern == "" ? $"{group.First().Program} (outside the desktop session)" : EntryName(pattern, group), FontWeight = FontWeight.SemiBold },
                     new TextBlock { Text = programs, Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap },
                 },
             };
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { text } };
-            if (pattern == "" && group.All(h => h.Program == "openhw-helper"))
+            if (pattern == "" && group.Key == "service:openhw-helper")
             {
                 ((TextBlock)text.Children[0]).Text = "OpenHW's helper (reads the GPU sensors)";
                 text.Children.Add(Footnote("Lets go of the card for the handoff and picks it up again afterwards."));
             }
             else if (pattern == "")
-                text.Children.Add(Footnote("System services can't be hidden; stop them before lending the card.", Warn));
+                text.Children.Add(Footnote("A system service: it can't be hidden, so it has to let go of the card (or be stopped) for the handoff.", Warn));
             else if (group.All(h => h.Hidden))
                 text.Children.Add(Footnote(pattern == "session.slice"
                     ? "Hidden, but the desktop still has the card open: log out once to free it."
