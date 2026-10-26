@@ -524,3 +524,19 @@ public sealed class RestartTests
     public void OtherLaunchesStartTheNewProcessDirectly(string cgroup) =>
         Assert.Null(Program.SystemdRestart(cgroup, ["/usr/bin/openhw"], _ => ""));
 }
+
+public sealed class ExitTests
+{
+    // App.CloseAvaloniaDBus reaches Avalonia's own session connection by reflection; an Avalonia upgrade that renames
+    // it would bring back the crash on exit (tools/tray-exit-test reproduces it), so the field must still be there.
+    [Fact]
+    public void AvaloniasDBusConnectionFieldIsWhereTheExitFixLooksForIt()
+    {
+        var helper = Type.GetType("Avalonia.FreeDesktop.DBusHelper, Avalonia.FreeDesktop");
+        Assert.NotNull(helper);
+        var field = helper.GetField("s_defaultConntection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+        Assert.Equal("Tmds.DBus.Protocol.Connection", field.FieldType.FullName);
+        App.CloseAvaloniaDBus(); // harmless when no connection was made (tests have none)
+    }
+}

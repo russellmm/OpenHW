@@ -38,6 +38,7 @@ public sealed class App : Application
     private Timer? _poll;
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
     private int _polls;
+    private volatile bool _exiting;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -62,6 +63,7 @@ public sealed class App : Application
 
             lifetime.Exit += (_, _) =>
             {
+                _exiting = true; // work already posted to the UI thread (power, tray updates) finds nothing to do
                 _window?.SaveWindowState();
                 _poll?.Dispose();
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
@@ -70,6 +72,7 @@ public sealed class App : Application
                 Program.Instance?.Dispose();
                 _power.Dispose();
                 _hub.Dispose();
+                CloseAvaloniaDBus();
             };
 
             _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
@@ -344,6 +347,7 @@ public sealed class App : Application
 
     private void UpdateTray()
     {
+        if (_exiting) return;
         var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds)
             .Concat(_alerts.WatchedSensors).ToArray();
         _hub.SetPinned(ids); // tray, graphed, logged and alerted sensors stay live even inside a collapsed group
@@ -394,6 +398,7 @@ public sealed class App : Application
 
     private void PowerChanged()
     {
+        if (_exiting) return;
         _window?.RefreshPower();
         _cpuFrequency?.RefreshFromController();
         foreach (var (_, icon) in _trayIcons) icon.RefreshMenu();
@@ -517,6 +522,23 @@ public sealed class App : Application
         _settingsWindow ??= new SettingsWindow(_settings, ApplySettings, ShowTrayIcons, Restart);
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    /// <summary>
+    /// Avalonia's own session-bus connection (its settings-portal watcher subscribes from the UI thread, so it reports
+    /// back through the UI thread) is never closed by Avalonia. When it drops after the UI thread has stopped, that
+    /// report throws on a pool thread and kills the process mid-exit (seen on Exit from the tray menu; it also beat
+    /// Restart now). Closed here, on the UI thread while it still runs, the report happens inline.
+    /// Internal field of Avalonia.FreeDesktop 11.3.x; if it isn't there, nothing happens (tools/tray-exit-test checks).
+    /// </summary>
+    internal static void CloseAvaloniaDBus()
+    {
+        var helper = Type.GetType("Avalonia.FreeDesktop.DBusHelper, Avalonia.FreeDesktop");
+        var field = helper?.GetField("s_defaultConntection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        if (field?.GetValue(null) is not IDisposable connection) return;
+        try { connection.Dispose(); }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException) { }
+        field.SetValue(null, null);
     }
 
     // Settings → Restart now (window scale): a normal exit, then Program.Main starts OpenHW again.

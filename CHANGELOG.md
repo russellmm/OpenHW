@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.12.1 — 2026-10-25
+
+- Fixed: **Exit (tray menu) crashed OpenHW** on the way out — an unhandled exception, sometimes an abort (exit code
+  134) — which could also stop Settings → Restart OpenHW now from starting the new instance. Two causes: Avalonia's
+  own session-bus connection (its settings watcher) reported its closing to a UI thread that had already stopped,
+  and a queued power-mode update tried to refresh tray menus that had just been removed. OpenHW now closes that
+  connection while the UI thread still runs, and late tray updates are dropped. Checked with a new test,
+  `tools/tray-exit-test/run.sh` (private display and session bus, Exit clicked over D-Bus as GNOME does): 14 of 14
+  runs failed before, 12 of 12 exit cleanly now.
+- Avalonia's global-menu export over D-Bus is off (GNOME doesn't show it; the menu bar is in the window).
+
 ## 0.12.0 — 2026-10-25
 
 **The window no longer opens any GPU** (helper protocol 8 — install the .deb)

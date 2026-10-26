@@ -22,9 +22,11 @@ internal static class Program
         var settings = Settings.AppSettings.Load();
         Settings.WindowScale.Apply(settings.WindowScale);
         var builder = BuildAvaloniaApp();
+        // No global-menu export over D-Bus (GNOME doesn't show one; OpenHW's menu bar is in the window).
+        var x11 = new X11PlatformOptions { UseDBusMenu = false };
         // Settings → "Draw the window in software": no OpenGL context, so no GPU driver mappings in this process.
-        if (settings.SoftwareRendering)
-            builder = builder.With(new X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] });
+        if (settings.SoftwareRendering) x11.RenderingMode = [X11RenderingMode.Software];
+        builder = builder.With(x11);
         var exit = builder.StartWithClassicDesktopLifetime(args);
         if (RestartRequested) Restart(args);
         return exit;

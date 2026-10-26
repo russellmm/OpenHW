@@ -92,6 +92,7 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
     /// <summary>Replace the picture and tooltip. Hosts only re-read on a signal, so unchanged values emit nothing.</summary>
     public void Update(IconPixmap[] icon, string title, string tooltip)
     {
+        if (_disposed) return;
         bool iconChanged, tooltipChanged;
         lock (_gate)
         {
@@ -231,13 +232,23 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
         """;
 
     /// <summary>Menu items appeared or disappeared: the panel rebuilds the menu.</summary>
-    public void RefreshMenu() => _menu.Invalidate(_connection);
+    public void RefreshMenu()
+    {
+        if (!_disposed) _menu.Invalidate(_connection);
+    }
 
     /// <summary>These menu items' labels or state changed: updated in place, so an open menu stays open.</summary>
-    public void RefreshMenuItems(IEnumerable<int> ids) => _menu.UpdateItems(_connection, ids);
+    public void RefreshMenuItems(IEnumerable<int> ids)
+    {
+        if (!_disposed) _menu.UpdateItems(_connection, ids);
+    }
+
+    // Updates queued on the UI thread can still arrive after Exit disposed the icon; they're dropped, not sent.
+    private volatile bool _disposed;
 
     public void Dispose()
     {
+        _disposed = true;
         _watcherMatch?.Dispose();
         _connection.Dispose(); // dropping the bus name is what removes the icon from the panel
     }
