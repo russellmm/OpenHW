@@ -39,7 +39,9 @@ if (args is ["--once", .. var command] && command.Length > 0)
 }
 
 using var gpuPower = new GpuPowerLimits();
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card);
+// Lending the card to a VM: both NVML users let go of every card for the handoff, and open again afterwards.
+using var lending = new CardLending(card, () => { gpus.Suspend(); gpuPower.Suspend(); }, () => { gpus.Resume(); gpuPower.Resume(); });
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect.
 try { card.Start(); }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"openhw-helper: card filter: {ex.Message}"); }

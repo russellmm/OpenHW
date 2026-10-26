@@ -23,6 +23,13 @@ public sealed class GpuLendingWindow : Window
 
     private readonly Func<string, string> _request;
     private readonly Func<bool> _rtxinvmGuarding;
+    private readonly LendCoordinator _lending;
+    private readonly ComboBox _vm = new() { MinWidth = 300, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _lendState = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly StackPanel _lendNotes = new() { Spacing = 2 };
+    private readonly Button _lend, _return;
+    private LendStatus? _lendNow;
+    private IReadOnlyList<LendVm> _vms = [];
     private readonly ComboBox _card = new() { MinWidth = 420, VerticalAlignment = VerticalAlignment.Center };
     private readonly CheckBox _enabled = new() { Content = "Keep this card away from the hidden programs" };
     private readonly TextBlock _filterState = new() { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
@@ -33,10 +40,18 @@ public sealed class GpuLendingWindow : Window
     private CardFilterStatus? _now;
     private bool _showing, _busy;
 
-    public GpuLendingWindow(Func<string, string>? request = null, Func<bool>? rtxinvmGuarding = null)
+    public GpuLendingWindow(Func<string, string>? request = null, Func<bool>? rtxinvmGuarding = null, LendCoordinator? lending = null)
     {
         _request = request ?? (line => HelperClient.Request(line, receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes));
         _rtxinvmGuarding = rtxinvmGuarding ?? (() => File.Exists("/run/rtxinvm/status.json"));
+        _lending = lending ?? new LendCoordinator(_request);
+        _lend = TextButton("Lend", () => _ = LendAsync());
+        _return = TextButton("Return", () => _ = RunAsync("vmreturn", "Asked the VM to shut down; the card comes back when it's off."));
+        _vm.SelectionChanged += (_, _) =>
+        {
+            if (_showing || _vm.SelectedItem is not ComboBoxItem { Tag: string name }) return;
+            if (name != (_lendNow?.Vm ?? "none")) _ = RunAsync($"cardvm {name}", name == "none" ? "No VM chosen." : $"{name} chosen.");
+        };
         Title = "OpenHW GPU Lending";
         Width = 760;
         SizeToContent = SizeToContent.Height;
@@ -77,6 +92,17 @@ public sealed class GpuLendingWindow : Window
                             _enabled, _filterState,
                         },
                     }),
+                    Section("Lend", new StackPanel
+                    {
+                        Spacing = 6,
+                        Children =
+                        {
+                            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = "To VM", VerticalAlignment = VerticalAlignment.Center }, _vm } },
+                            _lendState, _lendNotes,
+                            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _lend, _return } },
+                            Footnote("Leave the card's monitor unplugged until the VM is running, and unplug it again before shutting the VM down."),
+                        },
+                    }),
                     Section("Using the card now", _holders),
                     Section("Hidden programs", _entries),
                     _status,
@@ -92,7 +118,13 @@ public sealed class GpuLendingWindow : Window
     public void Refresh()
     {
         if (_busy) return;
-        try { _now = GpuWire.Decode<CardFilterStatus>(_request("cardfilter")); }
+        try
+        {
+            _now = GpuWire.Decode<CardFilterStatus>(_request("cardfilter"));
+            _lendNow = GpuWire.Decode<LendStatus>(_request("lendstatus"));
+            if (_lendNow is not null) _lending.Follow(_lendNow);
+            if (_vms.Count == 0 || _now?.Card is not null && _lendNow?.Vm is null) _vms = GpuWire.Decode<List<LendVm>>(_request("cardvms")) ?? [];
+        }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException)
         {
             _now = null;
@@ -124,8 +156,65 @@ public sealed class GpuLendingWindow : Window
             _filterState.Foreground = s is { Enabled: true, Attached: false } ? Bad : Palette.Footnote;
             DrawHolders(s);
             DrawEntries(s);
+            DrawLend(s, _lendNow);
         }
         finally { _showing = false; }
+    }
+
+    private void DrawLend(CardFilterStatus? s, LendStatus? l)
+    {
+        var choices = _vms.Where(v => v.HasCard).ToList();
+        if (_vm.Items.Count != choices.Count + 1)
+        {
+            _vm.Items.Clear();
+            _vm.Items.Add(new ComboBoxItem { Content = "None", Tag = "none" });
+            foreach (var v in choices) _vm.Items.Add(new ComboBoxItem { Content = v.Name, Tag = v.Name });
+        }
+        _vm.SelectedItem = _vm.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == (l?.Vm ?? "none"));
+        _lendNotes.Children.Clear();
+        if (s?.Card is null || l is null)
+        {
+            _lendState.Text = s?.Card is null ? "Choose the card first." : "";
+            _lend.IsEnabled = _return.IsEnabled = false;
+            return;
+        }
+        if (choices.Count == 0) _lendNotes.Children.Add(Footnote("No VM has this card assigned (a PCI hostdev in its libvirt definition)."));
+        var busy = l.Stage is not ("idle" or "lent" or "failed" or "returned");
+        _lendState.Text = l.Vm is null ? "Choose the VM." :
+            busy ? $"{l.Vm}: {l.Stage}…" :
+            l.Lent ? $"{l.Vm} is running on the card." :
+            $"{l.Vm} is {l.VmState}." + (l.Stage == "returned" ? " The card is back." : "");
+        _lendState.Foreground = l.Error is not null ? Bad : Palette.Text;
+        if (l.Error is not null) _lendState.Text += $" Last attempt failed: {l.Error}";
+        foreach (var p in l.Problems.Where(p => !(l.Lent && p.EndsWith(" is running.", StringComparison.Ordinal)) && !(l.Lent && p == "The card is lent already.")))
+            _lendNotes.Children.Add(Footnote(p, Bad));
+        if (!l.Lent && (l.SystemServices.Count > 0 || l.UserServices.Count > 0))
+            _lendNotes.Children.Add(Footnote("Paused for the handoff and started again afterwards: " +
+                string.Join(", ", l.SystemServices.Concat(l.UserServices)) + "."));
+        _lend.Content = l.Vm is null ? "Lend" : $"Lend to {l.Vm}";
+        _lend.IsEnabled = !busy && !l.Lent && l.Problems.Count == 0;
+        _return.IsEnabled = !busy && l.Lent;
+    }
+
+    private async Task LendAsync()
+    {
+        if (_busy || _lendNow is not { } status) return;
+        _busy = true;
+        Show($"Lending the card to {status.Vm}…", Palette.Footnote);
+        try
+        {
+            await Task.Run(() => _lending.Lend(status));
+            Show($"Lending to {status.Vm}: follow the steps above.", Good);
+        }
+        catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException)
+        {
+            Show($"Not lent: {ex.Message.Replace("openhw-helper: err ", "")}", Bad);
+        }
+        finally
+        {
+            _busy = false;
+            Refresh();
+        }
     }
 
     private string FilterState(CardFilterStatus s)
@@ -170,8 +259,10 @@ public sealed class GpuLendingWindow : Window
                 ((TextBlock)text.Children[0]).Text = "OpenHW's helper (reads the GPU sensors)";
                 text.Children.Add(Footnote("Lets go of the card for the handoff and picks it up again afterwards."));
             }
+            else if (pattern == "" && group.Key == "service:nvidia-persiste")
+                text.Children.Add(Footnote("NVIDIA's persistence daemon: lending turns persistence off for this card, and it lets go."));
             else if (pattern == "")
-                text.Children.Add(Footnote("A system service: it can't be hidden, so it has to let go of the card (or be stopped) for the handoff.", Warn));
+                text.Children.Add(Footnote("A system service: it can't be hidden. Lending pauses it for the handoff and starts it again.", Warn));
             else if (group.All(h => h.Hidden))
                 text.Children.Add(Footnote(pattern == "session.slice"
                     ? "Hidden, but the desktop still has the card open: log out once to free it."

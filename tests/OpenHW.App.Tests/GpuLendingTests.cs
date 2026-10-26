@@ -25,15 +25,26 @@ public sealed class GpuLendingTests
          new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false),
          new(2786, "nvidia-persiste", "/system.slice/nvidia-persistenced.service", null, false)]);
 
-    private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false)
+    private static LendStatus Lend(params string[] problems) => new("Windows-10-LTSC", "shut off", false, "idle", null, 0, problems,
+        ["openfan-helper.service"], ["rtxgpu-openfan.service"]);
+
+    private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false, LendStatus? lend = null, List<(string, string)>? ran = null)
     {
         var sent = new List<string>();
-        var window = new GpuLendingWindow(line =>
+        string Request(string line)
         {
             if (line == "cardfilter") return GpuWire.Encode(Status(enabled));
+            if (line == "lendstatus") return GpuWire.Encode(lend ?? Lend("chrome (15004) has the card open: close it, or hide it and restart it."));
+            if (line == "cardvms") return GpuWire.Encode(new List<LendVm> { new("Windows-10-LTSC", "shut off", true), new("ubuntu-test", "shut off", false) });
             sent.Add(line);
             return "x";
-        }, rtxinvmGuarding: () => true);
+        }
+        var coordinator = new LendCoordinator(Request, (program, args) =>
+        {
+            ran?.Add((program, string.Join(' ', args)));
+            return (0, args.Contains("show") ? "ExecStart={ path=/usr/bin/openfan ; argv[]=/usr/bin/openfan ; ignore_errors=no }\nSlice=rtxgpu.slice\nDescription=RTXinVM app openfan\nFragmentPath=" : "");
+        }, Path.Combine(Directory.CreateTempSubdirectory("openhw-lend-").FullName, "lend-paused.json"));
+        var window = new GpuLendingWindow(Request, rtxinvmGuarding: () => true, lending: coordinator);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return (window, sent);
@@ -55,14 +66,14 @@ public sealed class GpuLendingTests
     {
         var (window, _) = Open();
         var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
-        var card = window.GetVisualDescendants().OfType<ComboBox>().Single();
+        var card = window.GetVisualDescendants().OfType<ComboBox>().First();
         Assert.Equal("NVIDIA RTX PRO 6000 Blackwell Workstation Edition (E1:00.0)", (card.SelectedItem as ComboBoxItem)?.Content);
         Assert.True(card.IsEnabled);
         Assert.Contains(texts, t => t.StartsWith("Off. RTXinVM's guard is protecting this card", StringComparison.Ordinal));
         Assert.Contains("gnome-shell (12040), Xwayland (12725)", texts);             // one row for the whole desktop
         Assert.Contains("Hidden, but the desktop still has the card open: log out once to free it.", texts);
         Assert.Contains("nvidia-persiste (outside the desktop session)", texts);
-        Assert.Contains("A system service: it can't be hidden, so it has to let go of the card (or be stopped) for the handoff.", texts);
+        Assert.Contains("NVIDIA's persistence daemon: lending turns persistence off for this card, and it lets go.", texts);
         Assert.Contains("Login screen", texts);
         Assert.Contains("app-*openhw*.scope", texts);
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending.png"));
@@ -95,7 +106,7 @@ public sealed class GpuLendingTests
     public void TheCardCanOnlyChangeWhileTheFilterIsOff()
     {
         var (window, _) = Open(enabled: true);
-        Assert.False(window.GetVisualDescendants().OfType<ComboBox>().Single().IsEnabled);
+        Assert.False(window.GetVisualDescendants().OfType<ComboBox>().First().IsEnabled);
         Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => (t.Text ?? "").StartsWith("On: hidden programs are refused", StringComparison.Ordinal));
     }
 
@@ -118,5 +129,32 @@ public sealed class GpuLendingTests
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending-live.png"));
+    }
+
+    [AvaloniaFact]
+    public void LendIsGreyedWhileSomethingStandsInTheWay()
+    {
+        var (window, _) = Open();
+        var lend = Button(window, "Lend to Windows-10-LTSC");
+        Assert.False(lend.IsEnabled);
+        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("chrome (15004) has the card open: close it, or hide it and restart it.", texts);
+        Assert.Contains("Paused for the handoff and started again afterwards: openfan-helper.service, rtxgpu-openfan.service.", texts);
+        var vm = window.GetVisualDescendants().OfType<ComboBox>().Last();
+        Assert.Equal(["None", "Windows-10-LTSC"], vm.Items.OfType<ComboBoxItem>().Select(i => (string)i.Content!)); // only VMs with the card
+    }
+
+    [AvaloniaFact]
+    public void LendingPausesTheUsersServiceThenAsksTheHelper()
+    {
+        var ran = new List<(string, string)>();
+        var (window, sent) = Open(lend: Lend(), ran: ran);
+        var lend = Button(window, "Lend to Windows-10-LTSC");
+        Assert.True(lend.IsEnabled);
+        Click(lend);
+        Thread.Sleep(300); Dispatcher.UIThread.RunJobs();
+        Assert.Contains(("systemctl", "--user stop rtxgpu-openfan.service"), ran);
+        Assert.Equal("lend", sent.Last());
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending-lend.png"));
     }
 }

@@ -19,6 +19,8 @@ public sealed class CardFilterSettings
 {
     /// <summary>PCI address of the card to keep away from listed programs ("0000:e1:00.0"), or null for none.</summary>
     public string? Card { get; set; }
+    /// <summary>The libvirt VM (system connection) the card is lent to; it must have the card assigned as a hostdev.</summary>
+    public string? Vm { get; set; }
     public bool Enabled { get; set; }
     public List<CardFilterEntry> Entries { get; set; } = [];
 
@@ -143,10 +145,13 @@ public sealed class CardFilter : IDisposable
     private Thread? _watcher;
     private volatile bool _stopping;
     private readonly int? _gdmUid;
+    private readonly string _cgroupMount;
 
     public CardFilter(string settingsPath = "/etc/openhw/card-filter.json", string runtimePath = "/run/openhw/card-filter-now.json",
-        string pinDir = "/sys/fs/bpf/openhw", string attachRoot = "/sys/fs/cgroup/user.slice", string procRoot = "/proc", string sysRoot = "/sys")
+        string pinDir = "/sys/fs/bpf/openhw", string attachRoot = "/sys/fs/cgroup/user.slice", string procRoot = "/proc", string sysRoot = "/sys",
+        string cgroupMount = "/sys/fs/cgroup")
     {
+        _cgroupMount = cgroupMount;
         (_settingsPath, _runtimePath, _pinDir, _attachRoot, _procRoot, _sysRoot) = (settingsPath, runtimePath, pinDir, attachRoot, procRoot, sysRoot);
         _gdmUid = GdmUid();
         _settings = Load<CardFilterSettings>(_settingsPath) ?? new CardFilterSettings();
@@ -233,6 +238,26 @@ public sealed class CardFilter : IDisposable
             Save();
             if (on) Engage(); else Disengage();
         }
+    }
+
+    public (string? Card, string? Vm) Target { get { lock (_gate) return (_settings.Card, _settings.Vm); } }
+
+    public void SelectVm(string? vm)
+    {
+        lock (_gate)
+        {
+            _settings.Vm = vm;
+            Save();
+        }
+    }
+
+    /// <summary>The card's device files, read from this filter's /proc and /sys.</summary>
+    public IReadOnlyList<CardNode> NodesOf(string card) => CardDevices.Nodes(card, _procRoot, _sysRoot);
+
+    /// <summary>Every process with one of these device files open (the card's, and its audio function's).</summary>
+    public IReadOnlyList<CardHolder> HoldersOf(IReadOnlyList<CardNode> nodes)
+    {
+        lock (_gate) return Holders(nodes);
     }
 
     // ── kernel side ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -419,7 +444,7 @@ public sealed class CardFilter : IDisposable
                 if (!Directory.EnumerateFileSystemEntries(Path.Combine(proc, "fd"))
                         .Any(fd => new FileInfo(fd).LinkTarget is { } target && paths.Contains(target))) continue;
                 var cgroup = File.ReadLines(Path.Combine(proc, "cgroup")).FirstOrDefault(l => l.StartsWith("0::", StringComparison.Ordinal))?[3..] ?? "";
-                var underRoot = "/" + Path.GetRelativePath("/sys/fs/cgroup", _attachRoot);
+                var underRoot = "/" + Path.GetRelativePath(_cgroupMount, _attachRoot);
                 var relative = cgroup.StartsWith(underRoot + "/", StringComparison.Ordinal) ? cgroup[(underRoot.Length + 1)..] : null;
                 var program = SysFs.ReadText(Path.Combine(proc, "comm"));
                 holders.Add(new CardHolder(pid, program, cgroup, relative is null ? null : CardPatterns.Suggest(relative, _gdmUid),

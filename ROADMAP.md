@@ -27,7 +27,7 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
    **Hide from boot** (applied by the helper before the login screen). GNOME desktop: Hide from boot ticked by
    default; unticked → GNOME sees the card from the next boot (and the VM can't start until a logout frees it).
    Unhide is immediate for programs started afterwards. Shows "still holding the card — restart it" where needed.
-4. [ ] **Lend to Windows / Return** (owner's rule: the VM does not start while anything still has the card open; the
+4. [x] **Lend to Windows / Return** (0.15.0; `CardLending` in the helper, `LendCoordinator` in the app) (owner's rule: the VM does not start while anything still has the card open; the
    page names what). Optional: pause OpenFan if it's installed (independence rule: optional, no dependency). The
    libvirt hook keeps doing the handoff; return refreshes the helper's GPU list.
 5. [ ] **Retire RTXinVM**: `rtxinvm uninstall` restores OpenHW's own autostart/menu entries.

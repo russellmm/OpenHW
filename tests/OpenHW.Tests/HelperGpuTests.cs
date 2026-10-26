@@ -25,7 +25,8 @@ public sealed class HelperGpuTests
             readings["nvml:gpu0:temp:core"] = 41.5;
             readings["nvml:gpu0:metric:power"] = double.NaN; // must survive the JSON trip
         }
-        public void Dispose() { }
+        public bool Disposed;
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class NoSmart : INvmeSmartReader
@@ -38,7 +39,7 @@ public sealed class HelperGpuTests
     public void TheHelperServesRowsAndReadingsThatTheAppEngineUnpacks()
     {
         var fake = new FakeEngine();
-        var session = new HelperSession(new NoSmart(), gpus: new SharedGpuEngine(fake));
+        var session = new HelperSession(new NoSmart(), gpus: new SharedGpuEngine(() => fake));
         string Ask(string line)
         {
             var reply = session.HandleLine(line);
@@ -63,7 +64,7 @@ public sealed class HelperGpuTests
     public void TheHelperSharesOneNvmlScanBetweenClients()
     {
         var fake = new FakeEngine();
-        var shared = new SharedGpuEngine(fake);
+        var shared = new SharedGpuEngine(() => fake);
         shared.Read(); // discovers first: NVML handles come from discovery
         shared.Discover();
         shared.Read();
@@ -75,7 +76,7 @@ public sealed class HelperGpuTests
     public void WhileTheHelperIsAwayTheRowsStayWithoutReadings()
     {
         var up = true;
-        var session = new HelperSession(new NoSmart(), gpus: new SharedGpuEngine(new FakeEngine()));
+        var session = new HelperSession(new NoSmart(), gpus: new SharedGpuEngine(() => new FakeEngine()));
         var engine = new HelperGpuEngine(line => up ? session.HandleLine(line)[3..] : throw new IOException("helper restarting"));
         Assert.Single(engine.Discover());
         up = false;
@@ -92,5 +93,20 @@ public sealed class HelperGpuTests
         var reader = new HelperGpuPowerLimits(line => line == "gpulimits" ? GpuWire.Encode(limits) : throw new IOException());
         Assert.Equal(limits, reader.Read());
         Assert.Empty(new HelperGpuPowerLimits(_ => throw new IOException("no helper")).Read());
+    }
+
+    [Fact]
+    public void SuspendClosesNvmlAndAnswersNothingUntilResumed()
+    {
+        var engines = new List<FakeEngine>();
+        var shared = new SharedGpuEngine(() => { var e = new FakeEngine(); engines.Add(e); return e; });
+        Assert.Single(shared.Discover());
+        shared.Suspend();
+        Assert.True(engines[0].Disposed);
+        Assert.Empty(shared.Discover());   // a client asking mid-handoff must not reopen the card
+        Assert.Empty(shared.Read());
+        shared.Resume();
+        Assert.Single(shared.Discover());
+        Assert.Equal(2, engines.Count);    // a fresh NVML session: it sees the cards as they are now
     }
 }

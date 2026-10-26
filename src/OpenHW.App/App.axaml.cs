@@ -21,6 +21,10 @@ public sealed class App : Application
     private CpuFrequencyWindow? _cpuFrequency;
     private PowerLimitsWindow? _powerLimits;
     private GpuLendingWindow? _gpuLending;
+    // Lending the card: the user's own services are paused by this app; it finishes the job when the card comes back,
+    // whether or not the GPU Lending window is open (it checks only while a lend is recorded).
+    private readonly LendCoordinator _lend = new();
+    private readonly DispatcherTimer _lendFollow = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly HelperGpuPowerLimits _gpuPower = new(); // read by the helper: the app never opens a card
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
@@ -75,6 +79,17 @@ public sealed class App : Application
                 _hub.Dispose();
                 CloseAvaloniaDBus();
             };
+
+            _lendFollow.Tick += (_, _) =>
+            {
+                if (_lend.Current is null) return;
+                _ = Task.Run(() =>
+                {
+                    try { if (GpuWire.Decode<LendStatus>(HelperClient.Request("lendstatus", receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes)) is { } s) _lend.Follow(s); }
+                    catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException) { }
+                });
+            };
+            _lendFollow.Start();
 
             _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
             SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
@@ -566,7 +581,7 @@ public sealed class App : Application
 
     private void ShowGpuLending()
     {
-        _gpuLending ??= new GpuLendingWindow();
+        _gpuLending ??= new GpuLendingWindow(lending: _lend);
         _gpuLending.Show();
         _gpuLending.Activate();
     }

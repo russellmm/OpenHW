@@ -31,11 +31,32 @@ public sealed class GpuPowerLimits : IGpuPowerLimitReader, IDisposable
     private readonly object _gate = new();
     private bool _initialised;
 
+    private bool _suspended;
+
+    /// <summary>
+    /// Lending a card to a VM: NVML is shut down (its handles to every card closed) and stays down — reads return
+    /// nothing — until <see cref="Resume"/>, so no request can grab the card while it's being handed over.
+    /// </summary>
+    public void Suspend()
+    {
+        lock (_gate)
+        {
+            _suspended = true;
+            if (_initialised) NvmlNative.nvmlShutdown();
+            _initialised = false;
+        }
+    }
+
+    public void Resume()
+    {
+        lock (_gate) _suspended = false; // NVML opens again on the next read
+    }
+
     public IReadOnlyList<GpuPowerLimit> Read()
     {
         lock (_gate)
         {
-            if (!Init()) return [];
+            if (_suspended || !Init()) return [];
             var gpus = new List<GpuPowerLimit>();
             if (NvmlNative.nvmlDeviceGetCount_v2(out var count) != NvmlNative.Success) return gpus;
             for (uint i = 0; i < count; i++)

@@ -77,7 +77,10 @@ public sealed class AppSettings
         ? config
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
 
-    private static string FilePath => Path.Combine(ConfigHome, "openhw", "settings.json");
+    /// <summary>~/.config/openhw: settings and OpenHW's other per-user files.</summary>
+    public static string ConfigDir => Path.Combine(ConfigHome, "openhw");
+
+    private static string FilePath => Path.Combine(ConfigDir, "settings.json");
 
     /// <summary>Freedesktop autostart entry; GNOME starts it at login.</summary>
     public static string AutostartPath => Path.Combine(ConfigHome, "autostart", "openhw.desktop");

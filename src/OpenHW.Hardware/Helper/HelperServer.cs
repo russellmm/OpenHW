@@ -31,11 +31,13 @@ public static class HelperSocket
 /// The card filter (<see cref="CardFilter"/>): <c>cardfilter</c> (status, holders), <c>cardfilter on|off</c>,
 /// <c>cardselect &lt;pci|none&gt;</c>, <c>cardhide|cardshow &lt;pattern&gt; &lt;now|boot|both&gt; [name]</c>,
 /// <c>cardforget &lt;pattern&gt;</c> — patterns are cgroup unit names with * wildcards, PCI addresses must be listed cards.
+/// Lending (<see cref="CardLending"/>): <c>lendstatus</c>, <c>cardvms</c>, <c>cardvm &lt;name|none&gt;</c> (a VM with the card
+/// assigned), <c>lend</c> and <c>vmreturn</c> (both start in the background; follow them with <c>lendstatus</c>).
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null)
 {
-    public const string Version = "9";
+    public const string Version = "10";
 
     public string HandleLine(string line)
     {
@@ -140,6 +142,24 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "gpulimits" when parts.Length == 1:
                 return gpuPower is null ? "err GPU power limits unavailable" : "ok " + GpuWire.Encode(gpuPower.Read());
 
+            case "lendstatus" or "cardvms" or "cardvm" or "lend" or "vmreturn":
+                if (lending is null) return "err lending unavailable";
+                try
+                {
+                    return (parts[0], parts.Length) switch
+                    {
+                        ("lendstatus", 1) => "ok " + GpuWire.Encode(lending.Status()),
+                        ("cardvms", 1) => "ok " + GpuWire.Encode(lending.Vms()),
+                        ("cardvm", 2) when parts[1] == "none" || CardLending.VmName().IsMatch(parts[1]) =>
+                            Done(() => lending.SelectVm(parts[1] == "none" ? null : parts[1]), parts[1]),
+                        ("lend", 1) => Done(lending.Lend, "lending"),
+                        ("vmreturn", 1) => Done(lending.Return, "returning"),
+                        _ => "err unknown command",
+                    };
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+
             case "cardfilter" or "cardselect" or "cardhide" or "cardshow" or "cardforget":
                 if (card is null) return "err card filter unavailable";
                 try { return CardCommand(card, parts, line); }
@@ -155,6 +175,12 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             default:
                 return "err unknown command";
         }
+    }
+
+    private static string Done(Action action, string reply)
+    {
+        action();
+        return "ok " + reply;
     }
 
     private static string CardCommand(CardFilter card, string[] parts, string line)
@@ -219,7 +245,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -270,7 +296,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending);
         try
         {
             using (client)

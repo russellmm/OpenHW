@@ -3,6 +3,23 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.15.0 — 2026-10-25
+
+**Lend the card to a VM (GPU lending, step 4)**
+- Power → GPU Lending… now has a **Lend** section: choose the VM (only libvirt VMs with the card assigned are
+  offered), see what stands in the way, then **Lend to <VM>** and later **Return**.
+- Lend refuses while anything would stop the handoff — the VM not off, a monitor plugged into the card (or a
+  framebuffer from one at boot), a leftover handoff record, or an app holding the card (close it, or hide it and
+  restart it) — and names it. What can be paused is paused for you and started again afterwards: the desktop user's
+  services holding the card (by OpenHW's window; transient `systemd-run` units are recreated with the same command
+  and slice) and system services (by openhw-helper, which also lets go of its own NVML handles and turns
+  persistence off so nvidia-persistenced lets go). Then it puts back the card's power limit and persistence for the
+  libvirt hook to record and starts the VM; any failure puts everything back.
+- Return asks the VM for a normal shutdown (guest agent, else ACPI; never forced). However the VM is shut down, the
+  helper notices the card is back, reopens NVML and restarts what it paused; OpenHW restarts the user's services
+  so they list the card again (even with the GPU Lending window closed).
+- Helper protocol 10: `lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`.
+
 ## 0.14.1 — 2026-10-25
 
 - Fixed: the GPU Lending page still couldn't see the desktop user's programs holding the card — listing another
