@@ -23,12 +23,14 @@ public static class HelperSocket
 /// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value),
 /// and the boot-time limits: <c>cpupptboot &lt;mW|none&gt;</c> (hsmp-control's config, 100–300 W as it accepts) and
 /// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
-/// Root-only reads: <c>nvmesmart</c>, and <c>rapl</c> (the RAPL package and core energy counters).
+/// Root-only reads: <c>nvmesmart</c>, <c>rapl</c> (the RAPL package and core energy counters), <c>ddr5</c> (each DIMM's
+/// thermal sensors and PMIC; the PMIC's ADC select R30 is the one register set, and restored) and <c>vr</c> (this
+/// board's known PMBus VR, reads only). Neither takes arguments: buses and addresses come from sysfs and fixed tables.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null)
 {
-    public const string Version = "6";
+    public const string Version = "7";
 
     public string HandleLine(string line)
     {
@@ -111,6 +113,19 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 var counters = rapl.Read();
                 return counters.Count == 0 ? "err no RAPL counters" : "ok " + RaplReader.Format(counters);
 
+            case "ddr5" when parts.Length == 1:
+                if (ddr5 is null) return "err DDR5 sideband unavailable";
+                try
+                {
+                    var dimms = ddr5.Read();
+                    return dimms.Count == 0 ? "err no DDR5 SPD hubs" : "ok " + Ddr5Reader.Format(dimms);
+                }
+                catch (IOException ex) { return "err " + ex.Message; }
+
+            case "vr" when parts.Length == 1:
+                if (vr?.Read() is not { } sample) return "err no known board VR";
+                return "ok " + BoardVrReader.Format(sample);
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -155,7 +170,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -206,7 +221,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr);
         try
         {
             using (client)

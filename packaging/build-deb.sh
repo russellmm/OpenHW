@@ -19,7 +19,7 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo"
 
 # The app shows the git revision; a package built from uncommitted edits would say "-dirty" forever.
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then # untracked files leave describe clean
     echo "Commit first: the working tree has uncommitted changes." >&2
     exit 1
 fi

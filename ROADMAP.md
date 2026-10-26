@@ -49,17 +49,21 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
     (`/sys/devices/platform/AMDI0097:00/`): `fclk_input`, `mclk_input`, `cclk_freq_limit_input`, `clk_fmax`/`clk_fmin`,
     `c0_residency_input`, `ddr_max_bw`/`ddr_utilised_bw_input`, `prochot_status`, `pwr_current_active_freq_limit`
     and its `_source` — **done** (`HsmpEngine`, CPU Enhanced group). The full table (`metrics_bin`) is root-only.
-  - SVI3 rail telemetry (VDDCR_VDD / VDDCR_SOC voltage, current, power, TDC/EDC, VRM temperatures): research
-    `ryzen_smu` (out-of-tree module, PM table) support for Threadripper 9000 before committing to it.
+  - SVI3 rail telemetry (VDDCR_VDD / VDDCR_SOC voltage, current, power, TDC/EDC, VRM temperatures): **deferred**
+    (owner, 2026-10-25). Checked: `metrics_bin` answers "Operation not supported" here — the kernel only decodes
+    the HSMP metric table for protocol 6 (MI300); this CPU is protocol 7. The SMU PM table needs the out-of-tree
+    `ryzen_smu` module; research its Threadripper 9000 support before committing to it.
   - Per-core and L3 temperatures, IOD hotspot/average, per-core power, L3 clocks.
-- [ ] **VR controllers**: Infineon XDPE19283B (VR loop temperatures, VIN, VOUT, IOUT, POUT) over PMBus — Linux has
-      PMBus drivers for the XDPE family; devices must be instantiated on the right I²C bus (root, via the helper
-      or a one-time udev/modprobe setup). Read-only.
-- [ ] **DDR5 PMIC rails** per DIMM (VDD/VDDQ/VPP, 1.8V/1.0V VOUT, VIN, total power, PMIC alarms) and the TS0/TS1
-      sensors HWiNFO shows; Linux's `spd5118` driver exposes the hub temperature only. Research a safe read-only
-      path (SMBus reads of the PMIC are root-only and must never write).
+- [x] **VR controllers**: Infineon XDPE19283B (loop temperatures, VIN, VOUT, IIN, IOUT, PIN, POUT, efficiency) over
+      PMBus through the helper's `vr`, PMBus reads only (0.10.0). No kernel driver covers the 19283B; its place
+      (PIIX4 port 0, 0x20) is in `BoardVrs`, confirmed by IC_DEVICE_ID on every read.
+- [x] **DDR5 PMIC rails** per DIMM (VDD/VDDQ/VPP, 1.8V/1.0V VOUT, VIN, total power, PMIC alarms) and the TS0/TS1
+      sensors, through the helper's `ddr5` (0.10.0). Reads, plus the PMIC's ADC select (R30) — owner-approved, the
+      one register HWiNFO also sets — only on a PMIC whose vendor id matches the SPD's, restored after each sweep.
 - [ ] **ASUS EC VRM data**: VRM Vcore0/1 VOUT, IOUT, POUT (HWiNFO shows them); Linux's `asus_ec_sensors` exposes
-      only temperatures and fans on this board — needs the EC register map for this model.
+      only temperatures and fans on this board — needs the EC register map for this model, and a way to call the
+      board's ACPI BREC method for registers the driver doesn't list (acpi_call DKMS or a driver patch). Deferred
+      (owner, 2026-10-25).
 - [x] **GPU extras** where NVML has them: 1 s average power, PCIe error counters (0.5.0). Hotspot / memory-junction
       temperatures aren't in NVML's public interface (memory temperature reports "not supported" on these cards).
 

@@ -31,7 +31,8 @@ public static partial class SensorPresentation
     {
         HardwareKind.TemperatureLimit => false,
         // GPU performance limiters and HSMP frequency-limit sources/PROCHOT; hwmon alarm bits are noise
-        HardwareKind.Status => item.Backend == "nvml" || item.Id.StartsWith("hsmp:", StringComparison.Ordinal),
+        HardwareKind.Status => item.Backend == "nvml" || item.Id.StartsWith("hsmp:", StringComparison.Ordinal) ||
+                               item.Id.StartsWith("ddr5:", StringComparison.Ordinal), // DIMM PMIC alarms
         HardwareKind.Control => item.Backend == "nvml", // GPU fan % is a reading on NVIDIA; hwmon PWM is a setting
         _ => true,
     };
@@ -57,7 +58,9 @@ public static partial class SensorPresentation
             {
                 var (order, title) = GroupTitle(g.Key, g.First(), machine, gpuOrder);
                 // openhw rows keep their own (HWiNFO) order; hardware rows sort by kind, then naturally by name.
-                var rows = g.First().Backend == "openhw"
+                // A DIMM's group is its hwmon hub temperature, then the sideband rows in HWiNFO's order.
+                var rows = g.Key.StartsWith("dimm:", StringComparison.Ordinal) ? g.OrderBy(i => i.Backend == "openhw" ? 1 : 0).Select(View)
+                    : g.First().Backend == "openhw"
                     ? g.Select(View)
                     : g.OrderBy(i => Array.IndexOf(KindOrder, i.Kind)).ThenBy(i => SortKey(i), StringComparer.OrdinalIgnoreCase).Select(View);
                 var arranged = SensorCustomizations.Arrange(rows.ToList(), r => r.Id, custom.RowOrder.GetValueOrDefault(g.Key));
@@ -72,6 +75,10 @@ public static partial class SensorPresentation
 
     private static string Chip(HardwareItem item) => item.Id.Split(':').ElementAtOrDefault(1) ?? "";
 
+    // "hwmon:spd5118:device-…:temp:1" → "device-…" (set by DramSensorIdentity; plain hwmon numbering has none).
+    private static string? HubIdentity(HardwareItem item) =>
+        item.Id.Split(':').ElementAtOrDefault(2) is { } part && part.StartsWith("device-", StringComparison.Ordinal) ? part : null;
+
     private static string GroupKey(HardwareItem item, MachineInfo machine)
     {
         switch (item.Backend)
@@ -84,6 +91,8 @@ public static partial class SensorPresentation
         return Chip(item) switch
         {
             "k10temp" or "amd_hsmp_hwmon" => "cpu-enhanced",
+            // A hub with a stable identity heads its DIMM's own group, beside that DIMM's PMIC and thermal sensors.
+            "spd5118" when HubIdentity(item) is { } hub => DimmEngine.GroupKey(hub),
             "spd5118" or "jc42" => "dimms",
             var chip when IsNetwork(chip) => NetworkEngine.GroupKey(chip), // hwmon PHY temps join the rates
             // A drive's hwmon temperature joins its SMART/activity rows under one "Drive:" heading.
@@ -101,6 +110,9 @@ public static partial class SensorPresentation
         if (key == SystemEngine.CStateGroup) return (2, $"CPU [#0]: {machine.CpuModel}: C-State Residency");
         if (key == "cpu-enhanced") return (2, $"CPU [#0]: {machine.CpuModel}: Enhanced");
         if (key == "dimms") return (3, "DDR5 DIMMs: SPD5118 Hubs");
+        if (key.StartsWith("dimm:", StringComparison.Ordinal)) return (3, DimmEngine.Title(key));
+        if (key.StartsWith("board-vr:", StringComparison.Ordinal))
+            return (6, $"{vendor} {machine.BoardName} ({BoardVrs.For(machine.BoardVendor, machine.BoardName)?.Chip ?? sample.Source})");
         if (key == "edac") return (4, "Memory Controller: EDAC");
         if (key.StartsWith("gpu:", StringComparison.Ordinal))
         {
@@ -117,7 +129,7 @@ public static partial class SensorPresentation
         var chip = Chip(sample);
         if (chip.StartsWith("nct", StringComparison.OrdinalIgnoreCase) || chip.StartsWith("it8", StringComparison.OrdinalIgnoreCase))
             return (5, $"{vendor} {machine.BoardName} ({BoardProfiles.Known.FirstOrDefault(p => p.Matches(machine.BoardVendor, machine.BoardName, chip))?.ChipName ?? SuperIoName(chip)})");
-        if (chip == "asusec") return (6, $"ASUS EC: {vendor}");
+        if (chip == "asusec") return (7, $"ASUS EC: {vendor}");
         return (300, sample.Group);
     }
 
@@ -159,6 +171,7 @@ public static partial class SensorPresentation
             var ccd = CcdName().Match(name);
             if (ccd.Success) return $"CCD{ccd.Groups[1].Value} (Tdie)";
         }
+        if (chip == "spd5118" && HubIdentity(item) is not null) return "SPD Hub Temperature"; // its DIMM's group names the DIMM
         if (chip is "spd5118" or "jc42") return "SPD Hub Temperature (" + name.Replace("DRAM · ", "") + ")";
         if (chip == "nvme" && name.StartsWith("Drive temperature", StringComparison.Ordinal)) return "Drive Temperature";
         return name;

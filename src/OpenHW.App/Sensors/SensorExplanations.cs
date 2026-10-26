@@ -120,6 +120,32 @@ public static partial class SensorExplanations
         // ── Memory ─────────────────────────────────────────────────────────────────────────────────────────────
         R(@"SPD Hub Temperature.*", "Temperature of a DDR5 DIMM, from the SPD hub chip on the module. DDR5 starts slowing " +
             "refresh above ~85 °C; under ~60 °C is comfortable."),
+        R(@"TS0 Temperature|TS1 Temperature", "Temperature at one end of the DIMM, from one of its two thermal sensors " +
+            "(the SPD hub sits in the middle). DDR5 starts slowing refresh above ~85 °C; under ~60 °C is comfortable."),
+        R(@"VDD \(SWA\) Voltage", "The DRAM chips' core supply (VDD), made on the DIMM by its PMIC from VIN. Set by the " +
+            "memory profile (EXPO/XMP), e.g. 1.35 V; JEDEC default is 1.1 V."),
+        R(@"VDDQ \(SWB\) Voltage", "The DRAM chips' I/O supply (VDDQ), made on the DIMM by its PMIC. Normally equal to VDD."),
+        R(@"VPP \(SWC\) Voltage", "The DRAM wordline pump supply (VPP), made on the DIMM by its PMIC; about 1.8 V."),
+        R(@"1\.8V VOUT Voltage|1\.0V VOUT Voltage", "Small supplies the DIMM's PMIC makes for the module's own chips (SPD " +
+            "hub, thermal sensors, register clock driver)."),
+        R(@"VIN Voltage", "The supply the board feeds the DIMM's PMIC (12 V on registered DIMMs, 5 V on desktop DIMMs).",
+            HardwareKind.Voltage),
+        R(@"Total Power", "Power the DIMM's PMIC delivers on its three main rails (VDD, VDDQ, VPP) together — the " +
+            "module's power, in 0.125 W steps."),
+        R(@"SW[ABC] Power|SW[ABC] Current", "Output of one of the DIMM PMIC's switching regulators (SWA = VDD, SWB = VDDQ, " +
+            "SWC = VPP), in 0.125 W or 0.125 A steps."),
+        R(@"PMIC High Temperature", "Yes when the DIMM's PMIC is hotter than its warning threshold. Should always be No."),
+        R(@"PMIC Over Voltage", "Yes when the DIMM's PMIC sees too high an input or output voltage. Should always be No."),
+        R(@"PMIC Under Voltage", "Yes when one of the DIMM PMIC's outputs dropped below its lockout level. Should always be No."),
+        // ── Board voltage regulators ───────────────────────────────────────────────────────────────────────────
+        R(@"VR Loop1|VR Loop2", "Temperature of the voltage regulator's power stages for each of its two control loops."),
+        R(@"VR VOUT", "The regulator's output voltage. On the TRX50-SAGE this is the memory controller's VDD_11_S3 / " +
+            "VDDIO_Mem rail, which follows the memory profile (1.35 V here)."),
+        R(@"VR VIN", "The regulator's input: the board's 12 V supply."),
+        R(@"Current \(IOUT\)|Current \(IIN\)", "Current out of (IOUT) and into (IIN) the voltage regulator."),
+        R(@"Power \(POUT\)|Power \(Input\)", "Power the voltage regulator delivers (POUT) and draws from 12 V (Input)."),
+        R(@"VRM Efficiency", "Output ÷ input power of the regulator. The two meters are coarse, so at light load this " +
+            "reads high (capped at 100 %)."),
         R(@"(Rank \d+ )?Corrected Errors", "Memory errors ECC detected and fixed. A few over months is normal; a rising " +
             "count points to a failing DIMM or unstable memory settings."),
         R(@"(Rank \d+ )?Uncorrected Errors", "Memory errors ECC could not fix — data was lost. Should be 0; any count " +

@@ -114,6 +114,8 @@ units on the tiles** and **Hover** turn the tiles' units and the hover details o
 | `HwmonEngine` | /sys/class/hwmon via libsensors (sysfs fallback): Super I/O, k10temp, HSMP power, SPD5118, NVMe and NIC temps |
 | `HsmpEngine` | AMD HSMP platform device (no root): FCLK, MCLK, core clock limit, active frequency limit and its source, C0 residency, DRAM bandwidth, PROCHOT |
 | `RaplEngine` | RAPL package and core energy → power, through openhw-helper (`rapl`; the counters are root-only) |
+| `DimmEngine` | Per DDR5 DIMM: TS0/TS1, PMIC rails (VDD, VDDQ, VPP, 1.8 V, 1.0 V, VIN), power, alarms — helper `ddr5` (SMBus) |
+| `BoardVrEngine` | A known board's PMBus VR (TRX50-SAGE: Infineon XDPE19283B, memory controller rail) — helper `vr` (SMBus) |
 | `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters |
 | `NvmeEngine` | NVMe SMART health and live activity |
 | `EdacEngine` | Memory-controller corrected/uncorrected error counts |
@@ -131,6 +133,14 @@ NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (bel
 rows stay empty and everything else keeps working. RAPL package and core energy also come through the helper;
 effective clocks come from the kernel's APERF/MPERF average (no root). Not read: per-core power (MSRs, would need
 CAP_SYS_RAWIO in the helper).
+
+**DIMMs and the board VR** are on the SMBus (`/dev/i2c-N`, root-only), so they come through the helper too. Each
+DIMM is its own group, as in HWiNFO: the hub temperature (spd5118, no root), then TS0/TS1 and the PMIC. The helper
+only uses buses where the kernel's spd5118 driver has bound a hub, and DDR5's fixed offsets from it (PMIC 0x48+n,
+TS0 0x10+n, TS1 0x30+n). The PMIC's rail voltages need its ADC channel selected (register R30); that is the one
+register OpenHW writes, only on a PMIC whose vendor id matches what the module's SPD declares, and it is put back
+after each sweep. The board VR is read with PMBus reads only, after its IC_DEVICE_ID matches the board profile; its
+PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only scripts that found these devices.
 
 ## Menu and shortcuts
 
@@ -279,5 +289,5 @@ Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Cur
 highlight, expand/collapse all, reset) with HWiNFO's sensor menu (graphs, rename, hide, monitoring, logging, alerts,
 layout and value customization), up to 8 tray icons, CSV logging, alerts with desktop notifications, power-mode
 switching that keeps boost working, all-core and per-core CPU frequency caps, CPU and GPU power limits, and the
-root helper for NVMe SMART, RAPL, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
+root helper for NVMe SMART, RAPL, DIMM and VR sensors, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHW privileged helper (NVMe SMART, CPU frequency caps, GPU and CPU power limits)
+Description=OpenHW privileged helper (NVMe SMART, DIMM and VR sensors, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
 
 [Service]
@@ -33,6 +33,8 @@ DevicePolicy=closed
 DeviceAllow=char-nvme r
 DeviceAllow=char-nvidia rw
 DeviceAllow=char-nvidiactl rw
+# DDR5 DIMM thermal sensors/PMICs and the board's PMBus VR, through /dev/i2c-N (reads, and the PMIC ADC select).
+DeviceAllow=char-i2c rw
 LockPersonality=true
 RestrictRealtime=true
 

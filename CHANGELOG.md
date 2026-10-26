@@ -3,6 +3,21 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.10.0 — 2026-10-25
+
+**DIMM and VR sensors** (helper protocol 7 — install the .deb)
+- Each DDR5 DIMM is now its own group, as in HWiNFO ("DDR5 DIMM [#0]: Kingston KF556R28-32 (AMDI0010:01 / 0x50)"):
+  SPD hub temperature, TS0 and TS1 temperatures, the PMIC's VDD (SWA), VDDQ (SWB) and VPP (SWC) rails, 1.8 V and
+  1.0 V LDOs, VIN, total power (or per-rail current/power, as the PMIC is set), and its high-temperature,
+  over-voltage and under-voltage alarms.
+- The board's memory-controller regulator, **Infineon XDPE19283B** (TRX50-SAGE): loop temperatures, VOUT, VIN, IOUT,
+  IIN, output and input power, efficiency.
+- Both are read by openhw-helper over the SMBus (new `ddr5` and `vr` commands; the unit may now open `/dev/i2c-*`).
+  Reads only, except the DIMM PMIC's ADC select register, which is restored after each reading and only touched on
+  a PMIC matching the module's SPD. `openhw-helper --once <command>` prints one reply, for checking with sudo.
+- Not done: SVI3 telemetry (needs the SMU PM table; the kernel's HSMP metric table doesn't cover this CPU) and the
+  ASUS EC's VRM voltage/current (needs the EC register map) — see ROADMAP.
+
 ## 0.9.0 — 2026-10-25
 
 **Window scale**
