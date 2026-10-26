@@ -36,7 +36,8 @@ public sealed class CardFilterSettings
 /// <summary>Pure rules: list patterns, verdicts, and the entry to suggest for a process.</summary>
 public static partial class CardPatterns
 {
-    [GeneratedRegex(@"^[A-Za-z0-9@._:\-*]{1,128}\.(scope|service|slice)$", RegexOptions.CultureInvariant)]
+    // Backslash: systemd escapes some characters in unit names ("weather-widget" → "weather\x2dwidget").
+    [GeneratedRegex(@"^[A-Za-z0-9@._:\-*\\]{1,128}\.(scope|service|slice)$", RegexOptions.CultureInvariant)]
     private static partial Regex Valid();
 
     /// <summary>A cgroup unit name, possibly with * wildcards: what a client may send.</summary>

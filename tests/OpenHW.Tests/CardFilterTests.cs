@@ -49,6 +49,9 @@ public sealed class CardFilterTests : IDisposable
         Assert.False(CardPatterns.IsValid("*.scope"));              // would hide every app at once
         Assert.False(CardPatterns.IsValid("../etc/passwd.slice"));
         Assert.False(CardPatterns.IsValid("app 1.scope"));
+        Assert.True(CardPatterns.IsValid(@"app-gnome-weather\x2dwidget-*.scope"));  // systemd's escape for "-"
+        Assert.True(CardPatterns.Matches(@"app-gnome-weather\x2dwidget-*.scope", @"app-gnome-weather\x2dwidget-13422.scope"));
+        Assert.Equal(@"app-gnome-weather\x2dwidget-*.scope", CardPatterns.Suggest(@"user-1000.slice/user@1000.service/app.slice/app-gnome-weather\x2dwidget-13422.scope", 975));
         Assert.True(CardPatterns.Matches("app-*openhw*.scope", "app-gnome-openhw-12244.scope"));
         Assert.True(CardPatterns.Matches("app-*openhw*.scope", "app-openhw-1792988066.scope"));
         Assert.False(CardPatterns.Matches("app-*openhw*.scope", "app-gnome-openfan-1.scope"));
