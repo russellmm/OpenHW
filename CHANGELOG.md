@@ -12,6 +12,9 @@ once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
   the answer covers all of them. Ticking either scope is enough to lend; lending closes them all and opens the app
   once, with its own command (before, the second scope blocked the lend, or would have "reopened" Chrome's crash
   handler). Overlapping checks can no longer ask twice.
+- **GPU lending replaces RTXinVM** (step 5 done): verified on the owner's machine after a reboot — the desktop never
+  opens the lent card, a terminal sees all three GPUs, and a full Lend → Return closed and reopened the ticked apps
+  and put back the card's power limit.
 
 ## 0.16.2 — 2026-10-26
 
