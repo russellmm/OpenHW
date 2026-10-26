@@ -243,6 +243,29 @@ way is offered as **Remove Unexpected CPU Cap** in the Power menu and **Capped a
 only when clicked. Code:
 `src/OpenHW.App/Power/`, `src/OpenHW.Hardware/CpuFrequency/`.
 
+## GPU lending
+
+**Power → GPU Lending…** lends one NVIDIA card to a libvirt VM (e.g. a Windows VM with the card passed through)
+without logging out, and gets it back — the job RTXinVM did before, folded into OpenHW (2026-10-26).
+
+- **Card filter.** One card is kept away from the programs on a list, so nothing that can't let go of it (the GNOME
+  desktop, the login screen, OpenHW's own window, which all draw with the GPU) ever opens it. Everything else — any
+  terminal, vLLM, Unsloth Studio, llama.cpp, nvidia-smi — sees both cards whenever the VM isn't using one. It's a
+  small eBPF cgroup device filter in openhw-helper: a program the helper hasn't classified yet is refused, and every
+  app not on the list is classified "allowed" within about 60 ms of starting, so hiding is airtight. Each list entry
+  is **Hide now** (until reboot) and/or **Hide from boot** (the helper starts before the login screen and puts the
+  filter in force first). Hiding stops a program opening the card; one that already has it keeps it until restarted.
+- **Using the card now** lists every process holding the card, with the list entry that would cover it.
+- **Lend to <VM> / Return.** Lend refuses while anything stands in the way (VM not off, a monitor plugged into the
+  card, an app holding it…) and says what. System services and your own services holding the card are paused and
+  started again; apps ticked **Close and reopen when lending** (e.g. OpenFan's window) are closed gracefully and
+  reopened after the handoff and after the return; the helper releases its own GPU handles and turns persistence
+  off so nvidia-persistenced lets go. The libvirt hook does the hardware handoff (VFIO, saving and restoring the
+  card's power limit and persistence). Return asks the VM for a normal shutdown — never forced — and however the VM
+  is shut down, OpenHW notices the card is back and brings everything back.
+- Leave the card's monitor unplugged until the VM is running, and unplug it before shutting the VM down: Linux
+  makes a framebuffer on a card with a monitor at boot, and the handoff then refuses.
+
 ## Root helper
 
 `openhw-helper` (`src/OpenHW.Helper`) is a small daemon for what Linux reserves for root. It listens on
@@ -254,13 +277,15 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, the read-only
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
-`ddr5`, `vr`, `rapl`, the card filter (`cardfilter`, `cardselect`, `cardhide`, `cardshow`, `cardforget` — see
-ROADMAP "GPU lending to a VM"; off unless turned on), and the boot
+`ddr5`, `vr`, `rapl`, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
-at most once per 10 s, and runs under a hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`; read-only
-filesystem except `/sys/devices/system/cpu`, `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control` and
-the nvidia-power-limit drop-in directory; no network; devices
-limited to NVMe (read) and the NVIDIA control/card nodes NVML needs). Re-run the install below after updating OpenHW when the helper changes.
+at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
+`CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
+`/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
+`/etc/openhw` and `/sys/fs/bpf` (the card filter); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
+`/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs and `/dev/i2c-*`).
+It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
 lingering is enabled for your account — `ls /var/lib/systemd/linger` — since the user manager keeps its boot-time
