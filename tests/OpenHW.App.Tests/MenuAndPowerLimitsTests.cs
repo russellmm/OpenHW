@@ -44,4 +44,25 @@ public sealed class MenuAndPowerLimitsTests
         Assert.Equal(["_File", "_View", "_Power", "_Help"], menu.Items.OfType<MenuItem>().Select(m => (string)m.Header!));
         Assert.Contains(window.KeyBindings, k => k.Gesture.ToString() == "Ctrl+L");
     }
+
+    [AvaloniaFact]
+    public void FooterIsHwinfosBarWithASettingsGear()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-footer-").FullName);
+        using var hub = new SensorHub();
+        hub.Sample();
+        var settings = false;
+        var power = new PowerModeController(new CpuFrequencyLimits());
+        var window = new MainWindow(hub, power, new WindowCommands(() => { }, () => { }, () => settings = true, () => { })) { Width = 1000, Height = 600 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var footer = window.GetVisualDescendants().OfType<Grid>().First(g => g.Height == 58);
+        var buttons = footer.GetVisualDescendants().OfType<Button>().ToList();
+        Assert.Equal(["Expand all", "Collapse all", "Reset Min/Max/Average", "Settings", "Close (OpenHW keeps running in the tray)"],
+            buttons.Select(b => ToolTip.GetTip(b) as string));
+        Assert.Empty(footer.GetVisualDescendants().OfType<ComboBox>()); // power mode moved to the Power menu only
+        buttons[3].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.True(settings);
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-footer.png"));
+    }
 }

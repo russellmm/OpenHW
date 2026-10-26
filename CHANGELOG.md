@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.11.0 — 2026-10-25
+
+**Footer like HWiNFO's**
+- The bottom bar now matches HWiNFO's: expand all / collapse all on the left; the elapsed time, reset (clock),
+  **settings (gear, new)** and close on the right. The icons are redrawn after HWiNFO's — light-blue outward arrows,
+  steel-blue inward arrows, a white clock face, a silver gear, a glossy blue X — on larger buttons.
+- The gear opens File → Settings for now; it will lead to a HWiNFO-style settings menu next.
+- Removed from the footer: the power-mode list, CPU frequency and power limit buttons and the "Capped at …" button.
+  They're all in the Power menu (and the tray menu); a failed power action still shows a short message in the footer.
+
 ## 0.10.1 — 2026-10-25
 
 **Works with RTXinVM's launcher**

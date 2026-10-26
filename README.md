@@ -151,9 +151,9 @@ PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only script
 The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
 Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
 Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
-Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry first; the footer keeps icon shortcuts
-for the common ones (expand/collapse, power mode, CPU frequency, power limits, reset, close), and the tray menu
-mirrors the Power menu.
+Power Limits… Ctrl+L) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
+all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
+close on the right — power controls are in the Power menu and the tray menu only.
 
 Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
 - **Show Graph** — a live window per sensor with its last 30 minutes (OpenHW keeps that history for every sensor it
@@ -223,10 +223,10 @@ the boot service installed, the row says so and stays read-only.
 
 ## Power modes and CPU frequency caps
 
-The window footer and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
+The Power menu and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
 the same setting as GNOME's power menu; no root needed).
 
-**CPU frequency** (footer button, or *CPU Frequency…* in the tray) caps every core at once or each physical core
+**CPU frequency** (Power → CPU Frequency…, or *CPU Frequency…* in the tray) caps every core at once or each physical core
 separately; a core's cap goes to both of its SMT threads' cpufreq policies (`scaling_max_freq`). The window shows each
 core's CCD, live clock and current cap ("(OpenHW)" for caps set here, "(other)" for caps from another tool). Caps
 are written by the helper, checked against each policy's minimum and hardware maximum, read back, and rolled back
@@ -239,7 +239,8 @@ Leaving it normally restores the previous ceiling, but a ceiling stored while bo
 maximum" written in power-saver, which is the base clock then — survives, and Performance silently stays at base
 clock. So whenever a profile change (from OpenHW, GNOME or `powerprofilesctl`) turns boost back on, OpenHW puts
 every core back to its OpenHW cap or, without one, the hardware maximum. A ceiling lower than that found any other
-way is shown as **Capped at …** in the footer and the tray menu, and fixed only when clicked. Code:
+way is offered as **Remove Unexpected CPU Cap** in the Power menu and **Capped at …** in the tray menu, and fixed
+only when clicked. Code:
 `src/OpenHW.App/Power/`, `src/OpenHW.Hardware/CpuFrequency/`.
 
 ## Root helper

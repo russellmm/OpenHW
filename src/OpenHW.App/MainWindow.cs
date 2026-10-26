@@ -74,20 +74,21 @@ public sealed class MainWindow : Window
     private readonly SensorCustomizations _custom = SensorCustomizations.Current;
     private bool _showHidden; // View → Show Hidden Sensors: hidden rows come back, grayed, so they can be unhidden
     private readonly PowerModeController? _power;
-    private ComboBox? _powerMode;
-    private Button? _removeCap;
-    private TextBlock? _powerError;
+    // Power mode, caps and limits live in the Power menu; the footer only reports a failed power action.
+    private readonly TextBlock _powerError = new()
+    {
+        IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
+        VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0),
+    };
     private readonly TextBlock _logging = new()
     {
         IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
         VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
     };
-    private Button? _cpuFrequency;
     private readonly WindowCommands? _commands;
     private MenuItem? _powerMenu;
     private readonly List<MenuItem> _profileItems = [];
     private MenuItem? _fixCapItem;
-    private bool _showingPower; // RefreshPower is setting the selection: not a user choice
 
     public MainWindow(SensorHub hub, PowerModeController? power = null, WindowCommands? commands = null)
     {
@@ -704,6 +705,8 @@ public sealed class MainWindow : Window
         RefreshValues();
     }
 
+    // HWiNFO's bottom bar: expand/collapse all on the left; elapsed time, reset (clock), settings (gear) and close on
+    // the right. Power mode, caps and limits are in the Power menu.
     private Control BuildFooter()
     {
         var expand = FooterButton("Expand all", FooterIcons.Expand, () => SetAllExpanded(true));
@@ -711,99 +714,38 @@ public sealed class MainWindow : Window
         var reset = FooterButton("Reset Min/Max/Average", FooterIcons.Clock, ResetStatistics);
         var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, HideWindow);
 
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _logging, _elapsedText, reset, close } };
-        if (BuildPowerControls() is { } power) right.Children.Insert(0, power);
-        // The version takes whatever width is left and trims, so the power controls never draw over it.
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _powerError, _logging, _elapsedText, reset } };
+        if (_commands is { } commands) right.Children.Add(FooterButton("Settings", FooterIcons.Gear, commands.ShowSettings));
+        right.Children.Add(close);
+        // The version takes whatever width is left and trims, so nothing on the right draws over it.
         var version = new TextBlock
         {
             Text = VersionText(), Foreground = Palette.Footnote, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0),
         };
         ToolTip.SetTip(version, version.Text);
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { expand, collapse } };
-        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 54, Background = Palette.Window, Margin = new Thickness(4, 0) };
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { expand, collapse } };
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 58, Background = Palette.Window, Margin = new Thickness(4, 0) };
         Grid.SetColumn(version, 1);
         Grid.SetColumn(right, 2);
         bar.Children.Add(left);
         bar.Children.Add(version);
         bar.Children.Add(right);
+        RefreshPower();
         return bar;
     }
 
     // ── power mode ───────────────────────────────────────────────────────────────────────────────────────────
 
-    private Control? BuildPowerControls()
-    {
-        if (_power is null) return null;
-        _powerMode = new ComboBox { Width = 130, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
-        ToolTip.SetTip(_powerMode, "Power mode (power-profiles-daemon). If the CPU is still held at base clock after " +
-                                   "leaving Power saver, OpenHW lifts that cap so boost really comes back.");
-        _powerMode.SelectionChanged += (_, _) =>
-        {
-            if (!_showingPower && _powerMode.SelectedItem is ComboBoxItem { Tag: string profile }) _ = _power.SetProfileAsync(profile);
-        };
-        _removeCap = new Button
-        {
-            IsVisible = false, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4),
-            Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1),
-            Foreground = new SolidColorBrush(Color.Parse("#F0B429")),
-        };
-        _removeCap.Click += (_, _) => _ = _power.RestoreCapsAsync();
-        _powerError = new TextBlock
-        {
-            IsVisible = false, Foreground = new SolidColorBrush(Color.Parse("#F07070")), FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextWrapping = TextWrapping.Wrap,
-        };
-        var shortcuts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        if (_commands is { } commands)
-        {
-            _cpuFrequency = FooterButton("CPU frequency caps (Ctrl+F)", FooterIcons.Gauge, commands.ShowCpuFrequency);
-            _cpuFrequency.IsVisible = _power.Cores.Count > 0;
-            shortcuts.Children.Add(_cpuFrequency);
-            shortcuts.Children.Add(FooterButton("Power limits: CPU and GPUs (Ctrl+L)", FooterIcons.Bolt, commands.ShowPowerLimits));
-        }
-        RefreshPower();
-        return new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 8, 0),
-            Children = { _powerError, _removeCap, _powerMode, shortcuts },
-        };
-    }
-
-    /// <summary>Shows the active profile, any CPU frequency cap, and the last error. UI thread.</summary>
+    /// <summary>The Power menu's profile and unexpected-cap items, and the footer's last power error. UI thread.</summary>
     public void RefreshPower()
     {
-        if (_power is null || _powerMode is null || _removeCap is null || _powerError is null) return;
-        _showingPower = true;
-        try
-        {
-            _powerMode.IsVisible = _power.Available;
-            if (_powerMode.Items.Count != _power.Profiles.Count)
-            {
-                _powerMode.Items.Clear();
-                foreach (var profile in _power.Profiles)
-                    _powerMode.Items.Add(new ComboBoxItem { Content = PowerModeController.Label(profile), Tag = profile });
-            }
-            _powerMode.SelectedItem = _powerMode.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == _power.ActiveProfile);
-        }
-        finally
-        {
-            _showingPower = false;
-        }
-
-        var cpu = _power.Cpu;
-        var unexpected = _power.UnexpectedCapKHz;
-        _removeCap.IsVisible = unexpected is not null;
-        _removeCap.Content = $"Capped at {PowerModeController.Ghz(unexpected ?? 0)}";
-        ToolTip.SetTip(_removeCap, $"Something other than OpenHW's caps holds the CPU below {PowerModeController.Ghz(cpu.HardwareMaxKHz)}. " +
-                                   "Click to put every core back to its OpenHW cap or the hardware maximum (needs openhw-helper).");
-        var caps = cpu.Policies.Select(p => _power.CapOf(p.Id)).OfType<long>().ToArray();
-        if (_cpuFrequency is not null)
-            ToolTip.SetTip(_cpuFrequency, "CPU frequency caps (Ctrl+F)" + (caps.Length == 0 ? "" : $": OpenHW caps set, lowest {PowerModeController.Ghz(caps.Min())}"));
-        if (_fixCapItem is not null) _fixCapItem.IsVisible = unexpected is not null;
+        if (_power is null) return;
+        if (_fixCapItem is not null) _fixCapItem.IsVisible = _power.UnexpectedCapKHz is not null;
         RefreshPowerMenu();
         _powerError.Text = _power.LastError ?? "";
         _powerError.IsVisible = _power.LastError is not null;
+        ToolTip.SetTip(_powerError, _power.LastError);
     }
 
     // Radio items for the daemon's profiles, ahead of the separator; rebuilt only when the list changes.
@@ -842,16 +784,15 @@ public sealed class MainWindow : Window
         return parts.Length == 2 ? $"OpenHW {parts[0]} · {parts[1]}" : $"OpenHW {informational}";
     }
 
-    private static Button FooterButton(string tip, (Geometry Data, IBrush? Fill, IBrush? Stroke) icon, Action onClick)
+    private static Button FooterButton(string tip, IImage icon, Action onClick)
     {
         var button = new Button
         {
-            Width = 50, Height = 44, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center,
-            Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
+            Width = 60, Height = 50, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center,
+            Background = FooterIcons.ToolbarFace, BorderBrush = FooterIcons.ToolbarEdge, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
             HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
-            Content = new Path { Data = icon.Data, Fill = icon.Fill, Stroke = icon.Stroke, StrokeThickness = 2.4,
-                                 Width = 30, Height = 30, Stretch = Stretch.Uniform },
+            Content = new Image { Source = icon, Width = 44, Height = 44, Stretch = Stretch.Uniform },
         };
         ToolTip.SetTip(button, tip);
         button.Click += (_, _) => onClick();
