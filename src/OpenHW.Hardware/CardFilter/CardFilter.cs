@@ -252,9 +252,18 @@ public sealed class CardFilter : IDisposable
         lock (_gate)
         {
             if (on && _settings.Card is null) throw new ArgumentException("choose a card first");
+            if (on)
+            {
+                try { Engage(); }
+                catch
+                {
+                    try { Disengage(); } catch (IOException) { } // leave nothing half-attached
+                    throw;                                       // and don't remember "on" for the next boot
+                }
+            }
+            else Disengage();
             _settings.Enabled = on;
             Save();
-            if (on) Engage(); else Disengage();
         }
     }
 

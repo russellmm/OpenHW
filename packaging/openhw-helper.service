@@ -42,7 +42,11 @@ ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true
 RestrictAddressFamilies=AF_UNIX
-ProtectKernelTunables=true
+# Not ProtectKernelTunables: it makes all of /sys read-only, and bpffs (/sys/fs/bpf, where the card filter pins its
+# program) can't be made writable again under it (tools/sandbox-bpffs-test.sh, 2026-10-26: RO with ReadWritePaths or
+# BindPaths, RW only without it). The tunables it protects are made read-only here instead.
+ReadOnlyPaths=/proc/sys /proc/sysrq-trigger /proc/acpi /proc/irq /proc/fs
+ReadOnlyPaths=/sys/kernel /sys/module /sys/power /sys/firmware
 ProtectKernelModules=true
 ProtectControlGroups=true
 DevicePolicy=closed

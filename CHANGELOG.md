@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.16.1 — 2026-10-26
+
+- Fixed: the card filter couldn't be turned on by the installed helper — its sandbox (`ProtectKernelTunables`) left
+  the kernel's BPF filesystem read-only, where the filter keeps its program. The unit now lists the kernel tunables
+  it protects as read-only paths instead (`/proc/sys`, `/sys/kernel`, …). Checked with `tools/sandbox-bpffs-test.sh`.
+- Fixed: a failed "turn the filter on" was still remembered as on (and retried at every boot); it now stays off.
+
 ## 0.16.0 — 2026-10-26
 
 **Ready to replace RTXinVM (GPU lending, step 5 — code)**
