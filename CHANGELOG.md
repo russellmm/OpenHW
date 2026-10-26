@@ -3,6 +3,18 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.14.0 — 2026-10-25
+
+**GPU Lending page (GPU lending, step 3)**
+- Power → **GPU Lending…** (and the tray menu): choose the card to lend, turn the card filter on or off, see what
+  has the card open right now — grouped by the list entry that would cover it, with **Hide now** / **Hide from
+  boot** — and edit the list (Hide now, Hide from boot, Remove). Programs that are hidden but still hold the card
+  are flagged ("restart it", or for the desktop "log out once"); system services that hold it are named; OpenHW's
+  own helper is explained (it lets go of the card for the handoff).
+- While RTXinVM's guard is running, the page says it is protecting the card and the filter should stay off.
+- Fixed: the helper couldn't see which of the desktop user's programs had the card open (reading another user's
+  `/proc/<pid>/fd` needs `CAP_SYS_PTRACE`, which the unit now grants for that), so the list showed only its own use.
+
 ## 0.13.0 — 2026-10-25
 
 **Card filter (GPU lending, step 2) — built and tested, off until the switch-over**

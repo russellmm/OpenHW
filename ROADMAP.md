@@ -22,7 +22,7 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
    Still to do at switch-over: start the helper before the login screen (unit ordering + `Type=notify`). Granularity = how programs are
    launched: an app from the grid/dock (`app-<id>-*.scope`), the GNOME desktop (`org.gnome.Shell@*.service`, which
    includes Xwayland), a terminal window's scope. A program that already has the card keeps it until it exits.
-3. [ ] **Setup page** (from the gear's settings menu / Power menu): the GPU to lend and the VM; **what's using it
+3. [x] **Setup page** (0.14.0: Power → GPU Lending…, also in the tray menu) (from the gear's settings menu / Power menu): the GPU to lend and the VM; **what's using it
    now** (live, every process with its nodes open, from the helper); per entry **Hide now** (until reboot) and
    **Hide from boot** (applied by the helper before the login screen). GNOME desktop: Hide from boot ticked by
    default; unticked → GNOME sees the card from the next boot (and the VM can't start until a logout frees it).

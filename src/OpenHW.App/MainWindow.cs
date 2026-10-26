@@ -28,6 +28,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>File → Tray Icons… and a sensor's "Tray icon settings…".</summary>
     public Action? ShowTrayIcons { get; init; }
 
+    /// <summary>Power → GPU Lending… (the card filter's setup page).</summary>
+    public Action? ShowGpuLending { get; init; }
+
     /// <summary>File → Alerts… and a sensor's "Alert settings…".</summary>
     public Action? ShowAlerts { get; init; }
     public Action<string>? AlertSettings { get; init; }
@@ -681,6 +684,7 @@ public sealed class MainWindow : Window
             _powerMenu.Items.Add(new Separator());
             _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
             _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L"));
+            if (commands.ShowGpuLending is { } lending) _powerMenu.Items.Add(Item("GPU Le_nding…", lending));
             _powerMenu.Items.Add(_fixCapItem);
             menu.Items.Add(_powerMenu);
         }

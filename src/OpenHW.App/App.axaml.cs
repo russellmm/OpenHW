@@ -20,6 +20,7 @@ public sealed class App : Application
     private MainWindow? _window;
     private CpuFrequencyWindow? _cpuFrequency;
     private PowerLimitsWindow? _powerLimits;
+    private GpuLendingWindow? _gpuLending;
     private readonly HelperGpuPowerLimits _gpuPower = new(); // read by the helper: the app never opens a card
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
@@ -54,7 +55,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowGpuLending = ShowGpuLending, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -111,6 +112,7 @@ public sealed class App : Application
             },
             new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)),
             new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
+            new("GPU Lending…", () => Dispatcher.UIThread.Post(ShowGpuLending)),
             TrayMenuItem.Separator,
             new("Tray Icons…", () => Dispatcher.UIThread.Post(ShowTrayIcons)),
             new("Settings…", () => Dispatcher.UIThread.Post(ShowSettings)),
@@ -560,6 +562,13 @@ public sealed class App : Application
     {
         _layoutWindow ??= new LayoutWindow(_hub);
         _layoutWindow.ShowFor(sensorId);
+    }
+
+    private void ShowGpuLending()
+    {
+        _gpuLending ??= new GpuLendingWindow();
+        _gpuLending.Show();
+        _gpuLending.Activate();
     }
 
     private void ShowPowerLimits()
