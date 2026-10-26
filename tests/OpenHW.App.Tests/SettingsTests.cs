@@ -358,3 +358,61 @@ public sealed class GeneralSettingsTests
         Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?.Save(Path.Combine(Path.GetTempPath(), "openhw-general-settings.png"));
     }
 }
+
+public sealed class WindowScaleTests
+{
+    [Fact]
+    public void AFixedScaleOverridesTheDesktopAndAutomaticUndoesOnlyThat()
+    {
+        try
+        {
+            WindowScale.Apply(150);
+            Assert.Equal("1.5", Environment.GetEnvironmentVariable("AVALONIA_GLOBAL_SCALE_FACTOR"));
+            Assert.NotNull(Environment.GetEnvironmentVariable("AVALONIA_SCREEN_SCALE_FACTORS")); // stops Xft.dpi multiplying it
+            Assert.Equal(150, WindowScale.Fixed);
+
+            WindowScale.Apply(0); // a restart back to Automatic inherits the variables above
+            Assert.Null(Environment.GetEnvironmentVariable("AVALONIA_GLOBAL_SCALE_FACTOR"));
+            Assert.Null(Environment.GetEnvironmentVariable("AVALONIA_SCREEN_SCALE_FACTORS"));
+            Assert.Null(WindowScale.Fixed);
+
+            Environment.SetEnvironmentVariable("AVALONIA_GLOBAL_SCALE_FACTOR", "2"); // the user's own
+            WindowScale.Apply(0);
+            Assert.Equal("2", Environment.GetEnvironmentVariable("AVALONIA_GLOBAL_SCALE_FACTOR"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("AVALONIA_GLOBAL_SCALE_FACTOR", null);
+            Environment.SetEnvironmentVariable("AVALONIA_SCREEN_SCALE_FACTORS", null);
+        }
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void PickingAScaleSavesItAndOffersARestart()
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-scale-").FullName);
+        File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")!, "openhw")).FullName, "settings.json"),
+            """{ "WindowScale": 130 }""");
+        var settings = AppSettings.Load();
+        Assert.Equal(0, settings.WindowScale); // not a choice → Automatic
+        var restarted = false;
+        var window = new SettingsWindow(settings, () => { }, () => { }, () => restarted = true);
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var all = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).ToList();
+        var scale = all.OfType<Avalonia.Controls.ComboBox>().Single(c => c.Items.OfType<Avalonia.Controls.ComboBoxItem>().Any(i => i.Tag is int));
+        Assert.StartsWith("Automatic (now 100 %)", (string)((Avalonia.Controls.ComboBoxItem)scale.SelectedItem!).Content!);
+        var restart = all.OfType<Avalonia.Controls.Button>().Single(b => b.Content as string == "Restart OpenHW now");
+        Assert.False(restart.IsVisible);
+
+        scale.SelectedItem = scale.Items.OfType<Avalonia.Controls.ComboBoxItem>().Single(i => i.Tag is 175);
+        Assert.Equal(175, AppSettings.Load().WindowScale);
+        Assert.True(restart.IsVisible);
+        Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?.Save(Path.Combine(Path.GetTempPath(), "openhw-window-scale.png"));
+        restart.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.True(restarted);
+
+        scale.SelectedItem = scale.Items.OfType<Avalonia.Controls.ComboBoxItem>().Single(i => i.Tag is 0);
+        Assert.False(restart.IsVisible); // back to what this run uses
+    }
+}

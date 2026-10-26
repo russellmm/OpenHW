@@ -515,9 +515,17 @@ public sealed class App : Application
 
     private void ShowSettings()
     {
-        _settingsWindow ??= new SettingsWindow(_settings, ApplySettings, ShowTrayIcons);
+        _settingsWindow ??= new SettingsWindow(_settings, ApplySettings, ShowTrayIcons, Restart);
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    // Settings → Restart now (window scale): a normal exit, then Program.Main starts OpenHW again.
+    private void Restart()
+    {
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime lifetime) return;
+        Program.RestartRequested = true;
+        lifetime.Shutdown();
     }
 
     private void ShowTrayIcons()

@@ -19,11 +19,30 @@ internal static class Program
         Instance = Settings.SingleInstance.Claim();
         if (Instance is null) return 0; // the running OpenHW was asked to show its window
         StartInTray = args.Contains("--tray");
+        var settings = Settings.AppSettings.Load();
+        Settings.WindowScale.Apply(settings.WindowScale);
         var builder = BuildAvaloniaApp();
         // Settings → "Draw the window in software": no OpenGL context, so no GPU driver mappings in this process.
-        if (Settings.AppSettings.Load().SoftwareRendering)
+        if (settings.SoftwareRendering)
             builder = builder.With(new X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] });
-        return builder.StartWithClassicDesktopLifetime(args);
+        var exit = builder.StartWithClassicDesktopLifetime(args);
+        if (RestartRequested) Restart(args);
+        return exit;
+    }
+
+    /// <summary>Set before shutting down to start OpenHW again (Settings → Restart now) once this one has let go.</summary>
+    public static bool RestartRequested { get; set; }
+
+    // Runs after the lifetime's Exit handlers, so the single-instance socket is gone and the new process claims it.
+    // The window opens: whoever asked for the restart is looking at OpenHW, even if this run started --tray.
+    private static void Restart(string[] args)
+    {
+        if (Environment.ProcessPath is not { } exe) return;
+        var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        if (Path.GetFileNameWithoutExtension(exe) == "dotnet") start.ArgumentList.Add(Environment.GetCommandLineArgs()[0]);
+        foreach (var arg in args.Where(a => a != "--tray")) start.ArgumentList.Add(arg);
+        try { System.Diagnostics.Process.Start(start)?.Dispose(); }
+        catch (System.ComponentModel.Win32Exception ex) { Console.Error.WriteLine($"openhw: could not restart ({ex.Message})"); }
     }
 
     /// <summary>

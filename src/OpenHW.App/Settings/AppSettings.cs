@@ -65,6 +65,9 @@ public sealed class AppSettings
 
     /// <summary>Draw windows without OpenGL (applies at the next start). Saves the GPU driver's memory, costs some CPU.</summary>
     public bool SoftwareRendering { get; set; }
+
+    /// <summary>Size of every OpenHW window in percent; 0 = Automatic (the desktop's scale). Applies at the next start.</summary>
+    public int WindowScale { get; set; }
     public List<TraySensor> TrayIcons { get; set; } = [new()];
 
     /// <summary>Tray tiles show a short unit after the digits ("32°", "55W", "87%"); off = digits only, as before 0.8.0.</summary>
@@ -92,6 +95,7 @@ public sealed class AppSettings
     private void Normalise()
     {
         if (!PollChoices.Contains(PollSeconds)) PollSeconds = 2;
+        if (!Settings.WindowScale.Choices.Contains(WindowScale)) WindowScale = 0;
         // One icon per sensor: a file from before duplicates were blocked keeps the first of each.
         TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
         foreach (var icon in TrayIcons)

@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.9.0 — 2026-10-25
+
+**Window scale**
+- Fixed: when OpenHW starts at login with only its tray icons, the window opened from the tray ("Show sensors") was
+  drawn at 100 % instead of the desktop's scale. OpenHW starts before GNOME publishes the scale to X11 apps
+  (`Xft.dpi`, about a second later), and Avalonia 11.2 noticed the change but kept its cached screens. Avalonia is
+  now 11.3.22, which re-reads them, so the window follows the scale whenever it arrives (reproduced and checked on a
+  private X server: 1× before, 2× after).
+- File → Settings → **Window scale**: Automatic (the desktop's scale, shown as "now N %") or a fixed 100–400 % for
+  every OpenHW window. Applies at the next start; a **Restart OpenHW now** button next to it does that at once.
+
 ## 0.8.0 — 2026-10-24
 
 **Tray units**

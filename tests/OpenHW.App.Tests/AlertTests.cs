@@ -99,7 +99,7 @@ public sealed class AlertTests
         dialog.Show();
         Dispatcher.UIThread.RunJobs();
         var all = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(dialog).ToList();
-        all.OfType<Avalonia.Controls.TextBox>().First().Text = "90";
+        all.OfType<Avalonia.Controls.TextBox>().First(t => t.TemplatedParent is null).Text = "90"; // not a ComboBox's own (11.3 templates one in)
         all.OfType<Avalonia.Controls.Button>().Single(b => b.Content as string == "Add")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
         var rule = Assert.Single(store.Rules);

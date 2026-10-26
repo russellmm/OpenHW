@@ -83,6 +83,11 @@ second launch (app grid, or the command) shows the running window and exits.
   collapsed. Your expanded/collapsed layout is unchanged; when the window comes back, the other rows are gray for one
   poll and then live again. Their minimum, maximum, average and graph history skip the hidden time (HWiNFO keeps
   everything running, hence off by default). It saves the most when groups are left expanded.
+- **Window scale** (default Automatic): Automatic follows the desktop — on GNOME, the display scale times the text
+  scaling factor (GNOME publishes it to X11 apps as `Xft.dpi`). A fixed 100–400 % sizes every OpenHW window, menu and
+  dialog instead. It applies when OpenHW starts, so a **Restart OpenHW now** button appears next to it after a
+  change. (OpenHW sets Avalonia's `AVALONIA_GLOBAL_SCALE_FACTOR` / `AVALONIA_SCREEN_SCALE_FACTORS` for itself; with
+  Automatic, ones you export yourself still apply.)
 - **Draw windows in software (no OpenGL)** (off by default, applies at the next start): OpenHW doesn't load the GPU
   driver's OpenGL libraries. Measured 2026-10-24 with the window open: 293 → 228 MB resident, about 0.8% more of
   one core while a window is visible (nothing extra while hidden).

@@ -7,7 +7,7 @@ using OpenHW.App.SensorWindow;
 namespace OpenHW.App.Settings;
 
 /// <summary>
-/// File → Settings: OpenHW-wide options — poll interval, start at login, pausing reads while hidden, rendering. Tray icons have their own window
+/// File → Settings: OpenHW-wide options — poll interval, start at login, pausing reads while hidden, window scale, rendering. Tray icons have their own window
 /// (File → Tray Icons…) so this one stays about the app as a whole. Changes are saved and applied at once.
 /// </summary>
 public sealed class SettingsWindow : Window
@@ -15,8 +15,10 @@ public sealed class SettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly Action _applied;
     private readonly TextBlock _status = new() { Foreground = Palette.Footnote, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly ComboBox _scale = new() { Width = 220 };
+    private readonly Button _restart;
 
-    public SettingsWindow(AppSettings settings, Action applied, Action showTrayIcons)
+    public SettingsWindow(AppSettings settings, Action applied, Action showTrayIcons, Action? restart = null)
     {
         _settings = settings;
         _applied = applied;
@@ -55,6 +57,24 @@ public sealed class SettingsWindow : Window
         softwareRendering.IsCheckedChanged += (_, _) =>
             Save(() => _settings.SoftwareRendering = softwareRendering.IsChecked == true, "Saved. Takes effect the next time OpenHW starts.");
 
+        // Window scale: Avalonia sets it once at start, so a change waits for a restart (offered right here).
+        foreach (var percent in WindowScale.Choices) _scale.Items.Add(new ComboBoxItem { Content = WindowScale.Label(percent), Tag = percent });
+        _scale.SelectedItem = _scale.Items.OfType<ComboBoxItem>().First(i => (int)i.Tag! == settings.WindowScale);
+        _restart = new Button
+        {
+            Content = "Restart OpenHW now", Padding = new Thickness(10, 4), Background = FooterIcons.ButtonFace,
+            BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1), Foreground = Palette.Text,
+            IsVisible = false, IsEnabled = restart is not null,
+        };
+        _restart.Click += (_, _) => restart?.Invoke();
+        _scale.SelectionChanged += (_, _) =>
+        {
+            if (_scale.SelectedItem is not ComboBoxItem { Tag: int percent } || percent == _settings.WindowScale) return;
+            Save(() => _settings.WindowScale = percent, "Saved. Takes effect when OpenHW restarts.");
+            _restart.IsVisible = percent != (WindowScale.Fixed ?? 0); // back to what's running: nothing to restart for
+            if (!_restart.IsVisible) _status.Text = "Saved.";
+        };
+
         var trayIcons = new Button
         {
             Content = "Tray Icons…", Padding = new Thickness(10, 4), Background = FooterIcons.ButtonFace,
@@ -78,6 +98,17 @@ public sealed class SettingsWindow : Window
                     Text = "Shorter is more responsive; every poll reads the hardware.", Foreground = Palette.Footnote,
                     TextWrapping = TextWrapping.Wrap, Margin = new Thickness(98, -4, 0, 4),
                 },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 8,
+                    Children = { new TextBlock { Text = "Window scale", VerticalAlignment = VerticalAlignment.Center, Width = 90 }, _scale, _restart },
+                },
+                new TextBlock
+                {
+                    Text = "Automatic follows GNOME's display scale and text size. A fixed size applies to every " +
+                           "OpenHW window and menu after a restart.",
+                    Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(98, -4, 0, 4),
+                },
                 startAtLogin, startInTray,
                 pauseWhenHidden,
                 Note("Only sensors in the tray, with an alert, being logged or with a graph open keep reading, as if " +
@@ -98,6 +129,14 @@ public sealed class SettingsWindow : Window
                 _status,
             },
         };
+    }
+
+    // "Automatic" names the scale it gives right now, read from this window once it is on a screen.
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        if (WindowScale.Fixed is null && _scale.Items[0] is ComboBoxItem automatic)
+            automatic.Content = $"Automatic (now {Math.Round(RenderScaling * 100):0} %)";
     }
 
     private void Save(Action change, string status = "Saved.")
