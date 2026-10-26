@@ -38,6 +38,13 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
     /// <summary>Left click on the icon. Raised on the D-Bus thread.</summary>
     public event Action? Activated;
 
+    /// <summary>
+    /// The tray host (the watcher) came back, e.g. after a screen lock turned GNOME's AppIndicator extension off and
+    /// on: register again with <see cref="RegisterAgainAsync"/>, in panel order. Without a handler the item registers
+    /// itself. Raised on the D-Bus thread.
+    /// </summary>
+    public event Action? WatcherReturned;
+
     private StatusNotifierItem(Connection connection, string id, string title, IReadOnlyList<TrayMenuItem> menu)
     {
         _connection = connection;
@@ -58,6 +65,11 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
         var item = new StatusNotifierItem(connection, id, title, menu);
         connection.AddMethodHandler(item);
         connection.AddMethodHandler(item._menu);
+        // Tmds closes the connection on a failure while handling a call, and with it the icon: say why in the log.
+        _ = connection.DisconnectedAsync().ContinueWith(t =>
+        {
+            if (!item._disposed) Console.Error.WriteLine($"openhw: tray icon '{id}' lost its bus connection: {t.Result}");
+        }, TaskScheduler.Default);
 
         // The watcher lives in gnome-shell (ubuntu-appindicators); re-register whenever it (re)appears, e.g. after
         // a shell restart or the extension being toggled. A missing watcher at startup is not an error.
@@ -76,9 +88,15 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
                 reader.ReadString();
                 return name == WatcherName && reader.ReadString().Length > 0;
             },
-            (Exception? ex, bool watcherAppeared, object? state, object? _) =>
+            // The third argument is the reader state (null); the item is the handler state, the fourth. Reading the third
+            // threw here, which made Tmds close the connection: every lock/unlock of the screen removed all the icons.
+            (Exception? ex, bool watcherAppeared, object? _, object? state) =>
             {
-                if (ex is null && watcherAppeared) _ = ((StatusNotifierItem)state!).RegisterAsync();
+                if (ex is null && watcherAppeared && state is StatusNotifierItem { _disposed: false } self)
+                {
+                    if (self.WatcherReturned is { } returned) returned();
+                    else _ = self.RegisterAsync();
+                }
             },
             ObserverFlags.None,
             readerState: null,
@@ -109,6 +127,8 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
             EmitSignal(_connection, ItemPath, ItemInterface, "NewToolTip");
         }
     }
+
+    public Task RegisterAgainAsync() => _disposed ? Task.CompletedTask : RegisterAsync();
 
     private async Task RegisterAsync()
     {

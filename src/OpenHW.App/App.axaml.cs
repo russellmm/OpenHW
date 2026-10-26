@@ -168,6 +168,7 @@ public sealed class App : Application
                     return;
                 }
                 icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
+                icon.WatcherReturned += () => Dispatcher.UIThread.Post(() => _ = ReregisterTrayAsync());
                 _trayIcons.Insert(0, (config, icon));
                 UpdateTray(); // draw it now, not after the rest
                 await Task.Delay(TrayPlacementPause);
@@ -183,6 +184,29 @@ public sealed class App : Application
     }
 
     private static readonly TimeSpan TrayPlacementPause = TimeSpan.FromMilliseconds(250);
+
+    private static readonly TimeSpan TrayReregisterPause = TimeSpan.FromMilliseconds(150);
+    private int _reregisterGeneration;
+
+    /// <summary>
+    /// The tray host came back (a screen unlock turns GNOME's AppIndicator extension back on): every icon hears it at
+    /// once, so wait for the burst to settle, then register them again last-first with a short pause, which keeps
+    /// their order in the panel. All within ~1.3 s: two seconds after it comes back the extension scans the bus and
+    /// adds items it finds without a service name, which breaks its RegisteredStatusNotifierItems list.
+    /// </summary>
+    private async Task ReregisterTrayAsync()
+    {
+        var generation = ++_reregisterGeneration;
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        if (generation != _reregisterGeneration || _exiting) return;
+        var trayGeneration = _trayGeneration;
+        foreach (var (_, icon) in _trayIcons.AsEnumerable().Reverse().ToList())
+        {
+            await icon.RegisterAgainAsync();
+            await Task.Delay(TrayReregisterPause);
+            if (generation != _reregisterGeneration || trayGeneration != _trayGeneration || _exiting) return;
+        }
+    }
 
     private TrayState TrayStateOf(string sensorId)
     {

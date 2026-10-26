@@ -3,6 +3,14 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.17.1 — 2026-10-26
+
+- Fixed: **all tray icons disappeared after the screen was locked and unlocked** (and whenever GNOME's AppIndicator
+  extension was turned off and on). The code that registers the icons again when the tray comes back read the wrong
+  callback argument and crashed, which closed every icon's bus connection; OpenHW kept running with no icons. The
+  icons now come back, one at a time in their saved order, and a lost tray connection is written to the log.
+  `tools/tray-relock-test/run.sh` checks it in a private headless GNOME Shell.
+
 ## 0.17.0 — 2026-10-26
 
 - GPU Lending: **Install / Uninstall** at the top of Power → GPU Lending…. Uninstall takes lending out of the system:
