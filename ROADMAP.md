@@ -4,6 +4,28 @@ Planned work, roughly in priority order within each section. Writes are validate
 keeping the GUI unprivileged. Behaviour is derived from the hardware's own interfaces (ranges, readback) — not
 copied from openfan-linux, which OpenHW never references.
 
+## GPU lending to a VM (replaces RTXinVM) — agreed with the owner 2026-10-25
+
+Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, every Linux program can use both RTX
+6000s (vLLM, Unsloth Studio, llama.cpp, nvidia-smi…); the card is kept away only from programs the owner lists.
+
+1. [ ] **The window reads all GPUs through openhw-helper** (a system service, never blocked by a device filter).
+   The app then never opens a card, runs as plain `/usr/bin/openhw --tray`, and keeps running through a handoff
+   (the lent card's rows go stale, then return). Saves the app the NVIDIA driver's memory.
+2. [ ] **Card filter in openhw-helper** (RTXinVM's eBPF cgroup device filter): blocks *new* opens of the chosen
+   card's nodes (`/dev/nvidiaN`, `/dev/dri/cardN`, `renderD*`) for listed programs. Granularity = how programs are
+   launched: an app from the grid/dock (`app-<id>-*.scope`), the GNOME desktop (`org.gnome.Shell@*.service`, which
+   includes Xwayland), a terminal window's scope. A program that already has the card keeps it until it exits.
+3. [ ] **Setup page** (from the gear's settings menu / Power menu): the GPU to lend and the VM; **what's using it
+   now** (live, every process with its nodes open, from the helper); per entry **Hide now** (until reboot) and
+   **Hide from boot** (applied by the helper before the login screen). GNOME desktop: Hide from boot ticked by
+   default; unticked → GNOME sees the card from the next boot (and the VM can't start until a logout frees it).
+   Unhide is immediate for programs started afterwards. Shows "still holding the card — restart it" where needed.
+4. [ ] **Lend to Windows / Return** (owner's rule: the VM does not start while anything still has the card open; the
+   page names what). Optional: pause OpenFan if it's installed (independence rule: optional, no dependency). The
+   libvirt hook keeps doing the handoff; return refreshes the helper's GPU list.
+5. [ ] **Retire RTXinVM**: `rtxinvm uninstall` restores OpenHW's own autostart/menu entries.
+
 ## Write capabilities (via openhw-helper)
 
 Each write is a fixed helper command with strict argument validation, a readback check, and a clear error
