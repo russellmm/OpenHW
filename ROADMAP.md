@@ -37,7 +37,8 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
       Chrome and the weather widget, and the hook restored 300 W + persistence.
 6. [x] **Install / Uninstall from the page** (0.17.0, owner's request 2026-10-26): uninstalled, nothing of lending
       is in the kernel or at boot (filter, boot-order drop-in, GNOME udev rule, libvirt hook put away); install puts
-      it all back with the owner's choices. Left: verify on the machine (uninstall → reboot → install → reboot → Lend → Return).
+      it all back with the owner's choices. Verified 2026-10-26: uninstall → reboot (plain boot: no drop-in, rule, hook or
+      filter; GNOME used E1) → install → reboot (helper ordered before gdm, filter attached, desktop off E1) → Lend → Return.
 
 ## Write capabilities (via openhw-helper)
 
