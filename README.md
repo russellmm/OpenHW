@@ -76,7 +76,7 @@ or its output is silently lost and the bus disconnects the app for sending a mal
 **File → Settings** (also in the tray menu), saved in `~/.config/openhw/settings.json` and applied at once: poll
 interval (1–10 s, default 2 s) and start at login (a freedesktop autostart entry, `~/.config/autostart/openhw.desktop`,
 optionally with `--tray` to start with only the tray icons). If another tool has put its own launcher in that
-entry — e.g. RTXinVM's `rtxgpu --app openhw`, which starts OpenHW in the GPU slice that can see its card — OpenHW
+entry — e.g. a wrapper that starts OpenHW in a particular systemd slice — OpenHW
 keeps it: the box only turns the entry on or off (`X-GNOME-Autostart-enabled`/`Hidden`), and Settings names the
 command. **Restart OpenHW now** works under such a launcher too: when OpenHW runs as a systemd user service, a
 small waiter starts the same unit again (same name and slice) once the old one has stopped. OpenHW runs once per
@@ -120,7 +120,7 @@ units on the tiles** and **Hover** turn the tiles' units and the hover details o
 | `RaplEngine` | RAPL package and core energy → power, through openhw-helper (`rapl`; the counters are root-only) |
 | `DimmEngine` | Per DDR5 DIMM: TS0/TS1, PMIC rails (VDD, VDDQ, VPP, 1.8 V, 1.0 V, VIN), power, alarms — helper `ddr5` (SMBus) |
 | `BoardVrEngine` | A known board's PMBus VR (TRX50-SAGE: Infineon XDPE19283B, memory controller rail) — helper `vr` (SMBus) |
-| `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters |
+| `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters — runs in openhw-helper; the window gets it through `HelperGpuEngine` (`gpus`, `gpuread`) |
 | `NvmeEngine` | NVMe SMART health and live activity |
 | `EdacEngine` | Memory-controller corrected/uncorrected error counts |
 | `SystemEngine` | Memory/swap, pressure stall info, load average, per-core clocks and usage, C-state residency |
@@ -251,7 +251,10 @@ only when clicked. Code:
 `cpufreqmax <all|id,id,…> <kHz|max>` (every id must be an existing cpufreq policy and every value lie within that
 policy's minimum and hardware maximum; `max` is each policy's `cpuinfo_max_freq`) and `cpufreqrestore` (every capped
 policy to its hardware maximum) — see [Power modes and CPU frequency caps](#power-modes-and-cpu-frequency-caps) —
-`gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, and the boot
+`gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, the read-only
+`gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
+so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
+`ddr5`, `vr`, `rapl`, and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (only `CAP_SYS_ADMIN` + `CAP_CHOWN`; read-only
 filesystem except `/sys/devices/system/cpu`, `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control` and

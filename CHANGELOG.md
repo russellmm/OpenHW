@@ -3,6 +3,18 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.12.0 — 2026-10-25
+
+**The window no longer opens any GPU** (helper protocol 8 — install the .deb)
+- Every NVIDIA reading (the GPU groups, and the Power Limits window's list) now comes from openhw-helper, which runs
+  NVML as a system service; the window asks it over the socket (`gpus`, `gpuread`, `gpulimits`). The window doesn't
+  load NVML at all.
+- Why: a system service is never hidden from a card by a device filter on the desktop session, so OpenHW sees every
+  GPU however it's started — RTXinVM no longer needs to launch it through `rtxgpu`, and the window can't hold a card
+  that's about to be lent to a VM. While the helper restarts (e.g. around a GPU handoff) the GPU rows stay and go
+  gray instead of disappearing.
+- First step of folding RTXinVM's GPU lending into OpenHW (ROADMAP "GPU lending to a VM").
+
 ## 0.11.1 — 2026-10-25
 
 - Fixed: hovering a footer button dropped its frame and flattened it (Avalonia's default). It now keeps the frame

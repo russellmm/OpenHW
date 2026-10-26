@@ -20,7 +20,7 @@ public sealed class PowerLimitsWindow : Window
     private static readonly IBrush Good = new SolidColorBrush(Color.Parse("#7BC97B"));
     private static readonly string[] BootUnits = ["nvidia-power-limit.service", "hsmp-control-apply.service"];
 
-    private readonly GpuPowerLimits _gpus;
+    private readonly IGpuPowerLimitReader _gpus;
     private readonly CpuPowerLimits _cpu;
     private readonly BootPowerLimits _boot;
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(12, 8) };
@@ -30,7 +30,7 @@ public sealed class PowerLimitsWindow : Window
     private IReadOnlyList<GpuPowerLimit> _gpusNow = [];
     private bool _busy;
 
-    public PowerLimitsWindow(GpuPowerLimits gpus, CpuPowerLimits cpu, BootPowerLimits? boot = null)
+    public PowerLimitsWindow(IGpuPowerLimitReader gpus, CpuPowerLimits cpu, BootPowerLimits? boot = null)
     {
         _gpus = gpus;
         _cpu = cpu;

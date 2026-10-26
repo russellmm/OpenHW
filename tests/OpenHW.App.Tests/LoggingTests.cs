@@ -57,16 +57,17 @@ public sealed class LogColumnTests
         var custom = SensorCustomizations.Current;
         var cpu = hub.CpuTemperatureId()!;
         var fclk = hub.Inventory.First(i => i.Id == "hsmp:fclk").Id;
-        var gpuPower = hub.Inventory.First(i => i.Id.EndsWith(":metric:power", StringComparison.Ordinal)).Id;
-        foreach (var id in new[] { gpuPower, fclk, cpu }) custom.SetLogged(id, true);
+        // A drive row: its group comes after the CPU's (GPU rows need a protocol-8 helper, so they aren't used here).
+        var drive = hub.Inventory.First(i => i.Backend == "nvme-activity").Id;
+        foreach (var id in new[] { drive, fclk, cpu }) custom.SetLogged(id, true);
         var columns = SensorLogger.ColumnsFor(hub);
-        Assert.Equal([cpu, fclk, gpuPower], columns.Select(c => c.Id)); // window order: CPU group before the GPUs
+        Assert.Equal([cpu, fclk, drive], columns.Select(c => c.Id)); // window order: CPU group before the drives
         Assert.Equal("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced: CPU (Tctl/Tdie) [°C]", columns[0].Header);
 
         custom.SetDisabled(fclk, true);          // monitoring off: left out even though chosen
         custom.Rename(cpu, "Threadripper");
         var after = SensorLogger.ColumnsFor(hub);
-        Assert.Equal([cpu, gpuPower], after.Select(c => c.Id));
+        Assert.Equal([cpu, drive], after.Select(c => c.Id));
         Assert.EndsWith(": Threadripper [°C]", after[0].Header);
     }
 }

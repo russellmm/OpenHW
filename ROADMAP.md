@@ -9,7 +9,7 @@ copied from openfan-linux, which OpenHW never references.
 Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, every Linux program can use both RTX
 6000s (vLLM, Unsloth Studio, llama.cpp, nvidia-smi…); the card is kept away only from programs the owner lists.
 
-1. [ ] **The window reads all GPUs through openhw-helper** (a system service, never blocked by a device filter).
+1. [x] **The window reads all GPUs through openhw-helper** (0.12.0; RTXinVM no longer launches OpenHW) (a system service, never blocked by a device filter).
    The app then never opens a card, runs as plain `/usr/bin/openhw --tray`, and keeps running through a handoff
    (the lent card's rows go stale, then return). Saves the app the NVIDIA driver's memory.
 2. [ ] **Card filter in openhw-helper** (RTXinVM's eBPF cgroup device filter): blocks *new* opens of the chosen

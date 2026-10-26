@@ -8,14 +8,14 @@ namespace OpenHW.Hardware;
 public static class HelperClient
 {
     /// <summary>Sends <paramref name="line"/> and returns the reply after "ok ".</summary>
-    public static string Request(string line, string? socketPath = null, int receiveTimeoutMs = 2500)
+    public static string Request(string line, string? socketPath = null, int receiveTimeoutMs = 2500, int maxReplyBytes = 1024)
     {
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified) { SendTimeout = 1500, ReceiveTimeout = receiveTimeoutMs };
         socket.Connect(new UnixDomainSocketEndPoint(socketPath ?? HelperSocket.Path));
         using var stream = new NetworkStream(socket, ownsSocket: false);
         stream.Write(Encoding.ASCII.GetBytes(line + "\n"));
         // Bounded ASCII response: never consume an unbounded line from a broken/mismatched helper.
-        var bytes = new byte[1024]; var count = 0; var end = -1;
+        var bytes = new byte[maxReplyBytes]; var count = 0; var end = -1;
         while (count < bytes.Length && end < 0)
         {
             var read = stream.Read(bytes, count, bytes.Length - count);

@@ -20,7 +20,7 @@ public sealed class App : Application
     private MainWindow? _window;
     private CpuFrequencyWindow? _cpuFrequency;
     private PowerLimitsWindow? _powerLimits;
-    private readonly GpuPowerLimits _gpuPower = new();
+    private readonly HelperGpuPowerLimits _gpuPower = new(); // read by the helper: the app never opens a card
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
     private List<TrayMenuItem> _trayMenu = [];
@@ -69,7 +69,6 @@ public sealed class App : Application
                 _notifier.Dispose();
                 Program.Instance?.Dispose();
                 _power.Dispose();
-                _gpuPower.Dispose();
                 _hub.Dispose();
             };
 

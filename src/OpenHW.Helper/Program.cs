@@ -5,7 +5,8 @@ using OpenHW.Hardware;
 
 // openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, cpufreq ceilings,
 // GPU power limits (NVML), the CPU socket power limit (HSMP), and those limits' boot-time values in the owner's
-// boot services' config; RAPL energy, and the DDR5 DIMM and board VR sensors on the SMBus. It serves fixed,
+// boot services' config; RAPL energy, the DDR5 DIMM and board VR sensors on the SMBus, and every NVIDIA GPU
+// reading for the window (so the desktop app never opens a card). It serves fixed,
 // validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path.
 // `openhw-helper --once <command>` answers one command on stdout and exits (for checking a build with sudo).
 
@@ -20,15 +21,17 @@ var socketPath = HelperSocket.Path;
 var smbus = new LinuxSmbusProvider();
 var ddr5 = new Ddr5Reader(smbus);
 var vr = new BoardVrReader(smbus, BoardVrs.ForThisBoard());
+using var gpus = new SharedGpuEngine();
 
 if (args is ["--once", .. var command] && command.Length > 0)
 {
-    Console.WriteLine(new HelperSession(smart, rapl: new RaplReader(), ddr5: ddr5, vr: vr).HandleLine(string.Join(' ', command)));
+    using var limits = new GpuPowerLimits();
+    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus).HandleLine(string.Join(' ', command)));
     return 0;
 }
 
 using var gpuPower = new GpuPowerLimits();
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr);
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus);
 server.Start();
 var shared = server.RestrictToGroup(HelperSocket.Group);
 var product = typeof(HelperSession).Assembly

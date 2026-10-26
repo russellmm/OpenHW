@@ -9,7 +9,8 @@ namespace OpenHW.App.Sensors;
 public sealed class SensorHub : IDisposable
 {
     private readonly HwmonEngine _hwmon = new();
-    private readonly NvidiaEngine _nvidia = new();
+    // GPUs come from openhw-helper: the app never opens a card (see HelperGpuEngine).
+    private readonly ISensorEngine _nvidia = new HelperGpuEngine();
     private readonly NvmeEngine _nvme = new();
     private readonly SystemEngine _system = new();
     private readonly ISensorEngine[] _engines;

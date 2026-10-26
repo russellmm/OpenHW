@@ -25,12 +25,14 @@ public static class HelperSocket
 /// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
 /// Root-only reads: <c>nvmesmart</c>, <c>rapl</c> (the RAPL package and core energy counters), <c>ddr5</c> (each DIMM's
 /// thermal sensors and PMIC; the PMIC's ADC select R30 is the one register set, and restored) and <c>vr</c> (this
-/// board's known PMBus VR, reads only). Neither takes arguments: buses and addresses come from sysfs and fixed tables.
+/// board's known PMBus VR, reads only) — neither takes arguments: buses and addresses come from sysfs and fixed
+/// tables — and the NVIDIA GPUs for the window, so the app never opens a card: <c>gpus</c> (the rows),
+/// <c>gpuread</c> (their values) and <c>gpulimits</c> (the Power Limits window's list), as <see cref="GpuWire"/>.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null)
 {
-    public const string Version = "7";
+    public const string Version = "8";
 
     public string HandleLine(string line)
     {
@@ -126,6 +128,15 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 if (vr?.Read() is not { } sample) return "err no known board VR";
                 return "ok " + BoardVrReader.Format(sample);
 
+            case "gpus" when parts.Length == 1:
+                return gpus is null ? "err GPUs unavailable" : "ok " + GpuWire.Encode(gpus.Discover());
+
+            case "gpuread" when parts.Length == 1:
+                return gpus is null ? "err GPUs unavailable" : "ok " + GpuWire.Encode(gpus.Read());
+
+            case "gpulimits" when parts.Length == 1:
+                return gpuPower is null ? "err GPU power limits unavailable" : "ok " + GpuWire.Encode(gpuPower.Read());
+
             case "cpufreqrestore" when parts.Length == 1:
                 if (cpufreq is null) return "err cpufreq unavailable";
                 try { return "ok " + cpufreq.RestoreHardwareMaximum(); }
@@ -170,7 +181,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -221,7 +232,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus);
         try
         {
             using (client)

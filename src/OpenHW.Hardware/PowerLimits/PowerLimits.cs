@@ -20,7 +20,13 @@ public sealed record CpuPowerLimit(long LimitMW, long MaxMW, long? DrawMW, long?
 /// GPU power limits through NVML. Reads work for any user; <see cref="Set"/> needs root (openhw-helper). The limit
 /// lasts until the driver reloads or the machine reboots.
 /// </summary>
-public sealed class GpuPowerLimits : IDisposable
+/// <summary>The GPUs' power limits: <see cref="GpuPowerLimits"/> (NVML, in the helper) or <see cref="HelperGpuPowerLimits"/>.</summary>
+public interface IGpuPowerLimitReader
+{
+    IReadOnlyList<GpuPowerLimit> Read();
+}
+
+public sealed class GpuPowerLimits : IGpuPowerLimitReader, IDisposable
 {
     private readonly object _gate = new();
     private bool _initialised;
