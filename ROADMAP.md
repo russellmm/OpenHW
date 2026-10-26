@@ -35,6 +35,9 @@ Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, e
       `rtxinvm uninstall` run). Verified 2026-10-26: after a reboot the desktop never opens the card and a terminal
       lists three GPUs; a full Lend → Return from the page with 0.16.3 (10:17 → 10:20) closed and reopened OpenFan,
       Chrome and the weather widget, and the hook restored 300 W + persistence.
+6. [x] **Install / Uninstall from the page** (0.17.0, owner's request 2026-10-26): uninstalled, nothing of lending
+      is in the kernel or at boot (filter, boot-order drop-in, GNOME udev rule, libvirt hook put away); install puts
+      it all back with the owner's choices. Left: verify on the machine (uninstall → reboot → install → reboot → Lend → Return).
 
 ## Write capabilities (via openhw-helper)
 

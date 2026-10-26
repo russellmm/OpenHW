@@ -3,6 +3,18 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.17.0 — 2026-10-26
+
+- GPU Lending: **Install / Uninstall** at the top of Power → GPU Lending…. Uninstall takes lending out of the system:
+  the card filter leaves the kernel, openhw-helper no longer starts before the login screen, GNOME is no longer kept
+  off the card, and libvirt's handoff hook is put away (in `/etc/openhw/lending-off/`). The page then shows only
+  Install, and no new-app notifications come. Your card, VM, list and filter setting are kept: Install puts
+  everything back as it was. Reboot once after either to finish. Uninstall waits until the card is returned.
+- The helper's start before the login screen moved out of the packaged unit into a drop-in that Install writes
+  (`/etc/systemd/system/openhw-helper.service.d/lending.conf`); an upgrade with lending set up writes it at once.
+  OpenHW's own udev rule (`61-openhw-lending.rules`) replaces RTXinVM's `61-windows-gpu.rules` (kept in
+  `/etc/openhw/lending-off/`). Helper protocol 11 (`lendinstall`, `lenduninstall`).
+
 ## 0.16.3 — 2026-10-26
 
 - Fixed: **an app running in two scopes got two notifications, and lending treated it as two apps.** Chrome (and

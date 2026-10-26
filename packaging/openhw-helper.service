@@ -1,10 +1,10 @@
 [Unit]
 Description=OpenHW privileged helper (NVMe SMART, DIMM and VR sensors, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
-# The card filter (GPU Lending) must be in force before the login screen and the desktop can open the lent card.
-# With the filter off the helper is ready at once; with it on, it waits (≤60 s) for the card's device nodes.
+# With GPU Lending installed, the card filter must be in force before the login screen and the desktop can open the
+# lent card: the helper writes a drop-in (openhw-helper.service.d/lending.conf) that orders it before them, and
+# removes it on uninstall. With the filter off it's ready at once; with it on, it waits (≤60 s) for the card's nodes.
 After=systemd-modules-load.service nvidia-persistenced.service
-Before=display-manager.service systemd-user-sessions.service
 
 [Service]
 Type=notify
@@ -38,6 +38,12 @@ ReadWritePaths=-/etc/systemd/system/nvidia-power-limit.service.d
 # cgroup directory, which ProtectControlGroups' read-only mount allows.
 ReadWritePaths=-/etc/openhw
 ReadWritePaths=/sys/fs/bpf
+# GPU Lending's install/uninstall (page → Install / Uninstall): only fixed file names in these folders — its boot-order
+# drop-in for this unit, its udev rule (61-openhw-lending.rules, replacing RTXinVM's 61-windows-gpu.rules) and the
+# libvirt handoff hook (qemu.d/50-windows-gpu, moved to /etc/openhw/lending-off/ and back).
+ReadWritePaths=-/etc/systemd/system/openhw-helper.service.d
+ReadWritePaths=-/etc/udev/rules.d
+ReadWritePaths=-/etc/libvirt/hooks/qemu.d
 ProtectHome=true
 PrivateTmp=true
 PrivateNetwork=true

@@ -26,7 +26,7 @@ var smbus = new LinuxSmbusProvider();
 var ddr5 = new Ddr5Reader(smbus);
 var vr = new BoardVrReader(smbus, BoardVrs.ForThisBoard());
 using var gpus = new SharedGpuEngine();
-using var card = new CardFilter();
+using var card = new CardFilter(setup: new LendingSetup());
 
 if (args is ["--once", .. var command] && command.Length > 0)
 {

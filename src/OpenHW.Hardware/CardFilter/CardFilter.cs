@@ -22,6 +22,8 @@ public sealed class CardFilterSettings
     /// <summary>The libvirt VM (system connection) the card is lent to; it must have the card assigned as a hostdev.</summary>
     public string? Vm { get; set; }
     public bool Enabled { get; set; }
+    /// <summary>GPU Lending taken out (page → Uninstall): no filter, no boot ordering, rule or hook; the rest is kept.</summary>
+    public bool Uninstalled { get; set; }
     public List<CardFilterEntry> Entries { get; set; } = [];
 
     /// <summary>The starting list for a newly chosen card: the desktop, the login screen and OpenHW's own window.</summary>
@@ -137,7 +139,8 @@ public sealed record CardHolder(int Pid, string Program, string Cgroup, string? 
 /// <summary>Root side of the card filter: the eBPF program (<see cref="Bpf"/>), the list, and the classifier loop.</summary>
 public sealed class CardFilter : IDisposable
 {
-    private readonly string _settingsPath, _runtimePath, _pinDir, _attachRoot, _procRoot, _sysRoot;
+    private readonly string _settingsPath, _runtimePath, _bootPath, _pinDir, _attachRoot, _procRoot, _sysRoot;
+    private readonly LendingSetup? _setup;
     private readonly object _gate = new();
     private CardFilterSettings _settings;
     private HashSet<string> _hiddenNow;
@@ -150,9 +153,11 @@ public sealed class CardFilter : IDisposable
 
     public CardFilter(string settingsPath = "/etc/openhw/card-filter.json", string runtimePath = "/run/openhw/card-filter-now.json",
         string pinDir = "/sys/fs/bpf/openhw", string attachRoot = "/sys/fs/cgroup/user.slice", string procRoot = "/proc", string sysRoot = "/sys",
-        string cgroupMount = "/sys/fs/cgroup")
+        string cgroupMount = "/sys/fs/cgroup", LendingSetup? setup = null)
     {
-        _cgroupMount = cgroupMount;
+        (_cgroupMount, _setup) = (cgroupMount, setup);
+        // Whether lending was installed when this boot started (the first helper start of the boot writes it).
+        _bootPath = Path.Combine(Path.GetDirectoryName(runtimePath)!, "lending-boot");
         (_settingsPath, _runtimePath, _pinDir, _attachRoot, _procRoot, _sysRoot) = (settingsPath, runtimePath, pinDir, attachRoot, procRoot, sysRoot);
         _gdmUid = GdmUid();
         _settings = Load<CardFilterSettings>(_settingsPath) ?? new CardFilterSettings();
@@ -166,7 +171,14 @@ public sealed class CardFilter : IDisposable
     {
         lock (_gate)
         {
-            if (!_settings.Enabled || _settings.Card is not { } card) return;
+            if (!File.Exists(_bootPath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_bootPath)!);
+                File.WriteAllText(_bootPath, _settings.Uninstalled ? "uninstalled" : "installed");
+            }
+            try { ApplyFiles(reload: false); } // e.g. after an upgrade from a version without the drop-in
+            catch (IOException) { } // logged; never keeps the filter from starting
+            if (_settings.Uninstalled || !_settings.Enabled || _settings.Card is not { } card) return;
             // At boot the helper runs before the login screen: let the card's nodes appear first (nvidia_drm creates
             // card/renderD a moment after the driver binds), so the filter knows what to refuse before GNOME starts.
             var deadline = DateTime.UtcNow + (waitForCard ?? TimeSpan.Zero);
@@ -192,10 +204,12 @@ public sealed class CardFilter : IDisposable
         lock (_gate)
         {
             var nodes = _settings.Card is { } card ? CardDevices.Nodes(card, _procRoot, _sysRoot) : [];
+            var booted = File.Exists(_bootPath) ? File.ReadAllText(_bootPath).Trim() : null;
             return new CardFilterStatus(_settings.Enabled, _prog >= 0 && IsAttached(), _settings.Card, CardDevices.List(_procRoot),
                 nodes.Count > 0 ? nodes : _nodes,
                 _settings.Entries.Select(e => new CardFilterEntryStatus(e.Pattern, e.Name, e.HideAtBoot, _hiddenNow.Contains(e.Pattern))).ToList(),
-                Holders(nodes.Count > 0 ? nodes : _nodes));
+                Holders(nodes.Count > 0 ? nodes : _nodes), !_settings.Uninstalled, _setup?.Check(_settings.Card),
+                booted is not null && booted != (_settings.Uninstalled ? "uninstalled" : "installed"));
         }
     }
 
@@ -212,6 +226,7 @@ public sealed class CardFilter : IDisposable
                 _hiddenNow = _settings.Entries.Where(e => e.HideAtBoot).Select(e => e.Pattern).ToHashSet(StringComparer.Ordinal);
             }
             Save();
+            ApplyFiles(); // the udev rule names the card
             return pci ?? "none";
         }
     }
@@ -252,6 +267,7 @@ public sealed class CardFilter : IDisposable
     {
         lock (_gate)
         {
+            if (on && _settings.Uninstalled) throw new ArgumentException("GPU Lending is uninstalled: install it first");
             if (on && _settings.Card is null) throw new ArgumentException("choose a card first");
             if (on)
             {
@@ -265,6 +281,52 @@ public sealed class CardFilter : IDisposable
             else Disengage();
             _settings.Enabled = on;
             Save();
+        }
+    }
+
+    /// <summary>
+    /// Page → Install / Uninstall. Uninstall takes the filter out of the kernel and the boot files out of /etc, but
+    /// keeps every choice (card, VM, list, and whether the filter was on); Install puts the files back and the filter
+    /// back in force if it was on. The caller refuses an uninstall while the card is lent.
+    /// </summary>
+    public IReadOnlyList<string> SetInstalled(bool installed)
+    {
+        lock (_gate)
+        {
+            if (!installed) Disengage();
+            _settings.Uninstalled = !installed;
+            Save();
+            var changes = ApplyFiles();
+            if (installed && _settings.Enabled && _settings.Card is not null)
+            {
+                try { Engage(); }
+                catch
+                {
+                    try { Disengage(); } catch (IOException) { } // installed, but the filter stays off until turned on again
+                    _settings.Enabled = false;
+                    Save();
+                    throw;
+                }
+            }
+            return changes;
+        }
+    }
+
+    public bool Installed { get { lock (_gate) return !_settings.Uninstalled; } }
+
+    private IReadOnlyList<string> ApplyFiles(bool reload = true)
+    {
+        if (_setup is null) return [];
+        try
+        {
+            var changes = _setup.Apply(!_settings.Uninstalled, _settings.Card, reload);
+            foreach (var c in changes) Console.WriteLine("openhw-helper: GPU Lending: " + c);
+            return changes;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine("openhw-helper: GPU Lending files: " + ex.Message);
+            throw new IOException("GPU Lending's system files: " + ex.Message, ex);
         }
     }
 
@@ -537,5 +599,10 @@ public sealed class CardFilter : IDisposable
 }
 
 public sealed record CardFilterEntryStatus(string Pattern, string Name, bool HideAtBoot, bool HiddenNow);
+/// <summary>
+/// <see cref="Installed"/>: GPU Lending is installed (page → Install / Uninstall); <see cref="Files"/>: its system files
+/// (null when the helper doesn't manage them); <see cref="RebootNeeded"/>: installed or uninstalled since this boot began.
+/// </summary>
 public sealed record CardFilterStatus(bool Enabled, bool Attached, string? Card, IReadOnlyList<NvidiaCard> Cards,
-    IReadOnlyList<CardNode> Nodes, IReadOnlyList<CardFilterEntryStatus> Entries, IReadOnlyList<CardHolder> Holders);
+    IReadOnlyList<CardNode> Nodes, IReadOnlyList<CardFilterEntryStatus> Entries, IReadOnlyList<CardHolder> Holders,
+    bool Installed = true, LendingFiles? Files = null, bool RebootNeeded = false);

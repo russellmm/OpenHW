@@ -268,6 +268,12 @@ without logging out, and gets it back — the job RTXinVM did before, folded int
   is shut down, OpenHW notices the card is back and brings everything back.
 - Leave the card's monitor unplugged until the VM is running, and unplug it before shutting the VM down: Linux
   makes a framebuffer on a card with a monitor at boot, and the handoff then refuses.
+- **Install / Uninstall** (top of the page) takes GPU Lending out of the system and puts it back. Uninstalled: the
+  card filter is out of the kernel, the helper no longer starts before the login screen (its drop-in
+  `openhw-helper.service.d/lending.conf` is removed), the udev rule that keeps GNOME off the card
+  (`61-openhw-lending.rules`) is removed, and the libvirt handoff hook (`qemu.d/50-windows-gpu`) is moved to
+  `/etc/openhw/lending-off/`; the page shows only Install. Your card, VM, list and filter setting are kept, so Install
+  brings it all back as it was. Either way, reboot once to finish. Uninstall waits until the card is returned.
 
 ## Root helper
 
@@ -281,12 +287,13 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
 `ddr5`, `vr`, `rapl`, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
-and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`) — see [GPU lending](#gpu-lending) — and the boot
+and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
 `CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
-`/etc/openhw` and `/sys/fs/bpf` (the card filter); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
+`/etc/openhw` and `/sys/fs/bpf` (the card filter), and for GPU Lending's install/uninstall its own drop-in folder,
+`/etc/udev/rules.d` and `/etc/libvirt/hooks/qemu.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
 `/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs and `/dev/i2c-*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 

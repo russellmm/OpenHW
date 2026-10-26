@@ -13,7 +13,8 @@ namespace OpenHW.App.Power;
 /// kept away from the programs on a list — so it can be lent to a VM without logging out — while every other Linux
 /// program keeps using it. Shows which programs have the card open now (with the list entry that would cover each),
 /// and the list with "Hide now" (until reboot) and "Hide from boot". Everything goes through openhw-helper's card*
-/// commands; nothing here touches the card itself.
+/// commands; nothing here touches the card itself. Install / Uninstall at the top puts lending's filter and system
+/// files in place or takes them out (helper <c>lendinstall</c> / <c>lenduninstall</c>); uninstalled, only that shows.
 /// </summary>
 public sealed class GpuLendingWindow : Window
 {
@@ -36,6 +37,11 @@ public sealed class GpuLendingWindow : Window
     private readonly StackPanel _holders = new() { Spacing = 4 };
     private readonly StackPanel _entries = new() { Spacing = 4 };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(12, 8) };
+    private readonly TextBlock _setupState = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly StackPanel _setupNotes = new() { Spacing = 2 };
+    private readonly Button _setup;
+    private readonly List<Control> _lendingSections = [];
+    private bool _armed; // Uninstall asks for a second click
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private CardFilterStatus? _now;
     private bool _showing, _busy;
@@ -51,6 +57,7 @@ public sealed class GpuLendingWindow : Window
         _lending = lending ?? new LendCoordinator(_request);
         _lend = TextButton("Lend", () => _ = LendAsync());
         _return = TextButton("Return", () => _ = RunAsync("vmreturn", "Asked the VM to shut down; the card comes back when it's off."));
+        _setup = TextButton("Uninstall", SetupClicked);
         _vm.SelectionChanged += (_, _) =>
         {
             if (_showing || _vm.SelectedItem is not ComboBoxItem { Tag: string name }) return;
@@ -76,17 +83,7 @@ public sealed class GpuLendingWindow : Window
             _ = RunAsync($"cardfilter {(on ? "on" : "off")}", on ? "Filter on: hidden programs can't open the card." : "Filter off: every program can open the card.");
         };
 
-        Content = new ScrollViewer
-        {
-            MaxHeight = 900,
-            Content = new StackPanel
-            {
-                Children =
-                {
-                    Note("Keep one NVIDIA card away from the programs listed below — so it can be lent to a virtual machine " +
-                         "without logging out — while every other program on Linux (terminals, vLLM, llama.cpp, nvidia-smi…) " +
-                         "can still use it. Hiding stops a program from opening the card; one that already has it open keeps " +
-                         "it until it's restarted."),
+        _lendingSections.AddRange([
                     Section("Card", new StackPanel
                     {
                         Spacing = 6,
@@ -108,11 +105,29 @@ public sealed class GpuLendingWindow : Window
                         },
                     }),
                     Section("Using the card now", _holders),
-                    Section("Hidden programs", _entries),
-                    _status,
-                },
+                    Section("Hidden programs", _entries)]);
+        var page = new StackPanel
+        {
+            Children =
+            {
+                Note("Keep one NVIDIA card away from the programs listed below — so it can be lent to a virtual machine " +
+                     "without logging out — while every other program on Linux (terminals, vLLM, llama.cpp, nvidia-smi…) " +
+                     "can still use it. Hiding stops a program from opening the card; one that already has it open keeps " +
+                     "it until it's restarted."),
+                Section("Installation", new StackPanel
+                {
+                    Spacing = 6,
+                    Children =
+                    {
+                        new DockPanel { Children = { Dock(_setup, Avalonia.Controls.Dock.Right), _setupState } },
+                        _setupNotes,
+                    },
+                }),
             },
         };
+        foreach (var section in _lendingSections) page.Children.Add(section);
+        page.Children.Add(_status);
+        Content = new ScrollViewer { MaxHeight = 900, Content = page };
         _timer.Tick += (_, _) => Refresh();
         Opened += (_, _) => { Refresh(); _timer.Start(); };
         Refresh();
@@ -145,6 +160,7 @@ public sealed class GpuLendingWindow : Window
         try
         {
             var s = _now;
+            DrawSetup(s);
             if (_card.Items.Count != (s?.Cards.Count ?? 0) + 1)
             {
                 _card.Items.Clear();
@@ -204,6 +220,61 @@ public sealed class GpuLendingWindow : Window
         _lend.Content = l.Vm is null ? "Lend" : $"Lend to {l.Vm}";
         _lend.IsEnabled = !busy && !l.Lent && l.Problems.Count == 0 && blocking.Count == 0;
         _return.IsEnabled = !busy && l.Lent;
+    }
+
+    private void DrawSetup(CardFilterStatus? s)
+    {
+        _setupNotes.Children.Clear();
+        _setup.IsVisible = s is not null;
+        var installed = s?.Installed != false;
+        foreach (var section in _lendingSections) section.IsVisible = installed;
+        if (s is null) { _setupState.Text = ""; return; }
+        _setup.Content = _armed ? "Click again to uninstall" : installed ? "Uninstall" : "Install";
+        _setup.IsEnabled = !(installed && _lendNow is { } l && (l.Lent || l.Stage is not ("idle" or "lent" or "failed" or "returned")));
+        ToolTip.SetTip(_setup, installed
+            ? (_setup.IsEnabled ? "Take GPU Lending out: no filter, nothing at boot. Your card, VM and lists are kept." : "Return the card first.")
+            : "Put GPU Lending back as it was, with your card, VM and lists.");
+        _setupState.Text = installed
+            ? "Installed."
+            : "Not installed: no card filter, nothing of GPU Lending runs at boot, and GNOME may use the card. Don't start the " +
+              "VM with the card meanwhile: libvirt's handoff hook is put away too. Your card, VM and lists are kept for when you " +
+              "install it again.";
+        if (installed && s.Card is not null && s.Files is { } f)
+        {
+            var missing = new List<string>();
+            if (!f.BootOrder) missing.Add("the helper's start before the login screen");
+            if (!f.GnomeIgnore) missing.Add("the udev rule that keeps GNOME off the card");
+            if (!f.Hook) missing.Add($"the libvirt handoff hook (/etc/libvirt/hooks/qemu.d/{LendingSetup.HookName})");
+            _setupNotes.Children.Add(missing.Count == 0
+                ? Footnote("In place: the helper starts before the login screen, GNOME leaves the card alone, and libvirt's handoff hook is there.")
+                : Footnote("Missing: " + string.Join("; ", missing) + ". Lending needs " + (missing.Count == 1 ? "it" : "them") + ".", Bad));
+        }
+        if (s.RebootNeeded)
+            _setupNotes.Children.Add(Footnote(installed
+                ? "Reboot to finish: the boot order, GNOME's rule and libvirt's hook take effect from the next boot."
+                : "Reboot to finish: this boot still started with GPU Lending (GNOME's rule and the boot order).", Warn));
+    }
+
+    private void SetupClicked()
+    {
+        if (_now is not { } s || _busy) return;
+        if (!s.Installed) { _ = RunAsync("lendinstall", "GPU Lending installed. Reboot to finish."); return; }
+        if (!_armed)
+        {
+            _armed = true; // a second click within 5 s uninstalls
+            DispatcherTimer.RunOnce(() => { _armed = false; Draw(); }, TimeSpan.FromSeconds(5));
+            Draw();
+            return;
+        }
+        _armed = false;
+        _ = RunAsync("lenduninstall", "GPU Lending uninstalled. Reboot to finish.");
+    }
+
+    private static Control Dock(Control control, Dock side)
+    {
+        DockPanel.SetDock(control, side);
+        control.Margin = new Thickness(8, 0, 0, 0);
+        return control;
     }
 
     private async Task LendAsync()

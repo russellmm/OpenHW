@@ -13,7 +13,7 @@ namespace OpenHW.App.Tests;
 public sealed class GpuLendingTests
 {
     // What openhw-helper reports on the owner's machine with the RTX 6000 at E1 chosen and the filter off.
-    private static CardFilterStatus Status(bool enabled = false) => new(
+    private static CardFilterStatus Status(bool enabled = false, bool installed = true, bool rebootNeeded = false) => new(
         enabled, enabled, "0000:e1:00.0",
         [new("0000:01:00.0", "NVIDIA GeForce RTX 5060 Ti"), new("0000:11:00.0", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"),
          new("0000:e1:00.0", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition")],
@@ -23,7 +23,8 @@ public sealed class GpuLendingTests
         [new(12040, "gnome-shell", "/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@ubuntu.service", "session.slice", true),
          new(12725, "Xwayland", "/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@ubuntu.service", "session.slice", true),
          new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false),
-         new(2786, "nvidia-persiste", "/system.slice/nvidia-persistenced.service", null, false)]);
+         new(2786, "nvidia-persiste", "/system.slice/nvidia-persistenced.service", null, false)],
+        installed, installed ? new LendingFiles(true, true, true) : new LendingFiles(false, false, false), rebootNeeded);
 
     private static readonly CardHolder Chrome = new(15004, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope", false);
     private static readonly CardHolder OpenFan = new(4242, "openfan", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-openfan-4200.scope", "app-gnome-openfan-*.scope", false);
@@ -32,12 +33,12 @@ public sealed class GpuLendingTests
         ["openfan-helper.service"], ["rtxgpu-openfan.service"], apps);
 
     private static (GpuLendingWindow Window, List<string> Sent) Open(bool enabled = false, LendStatus? lend = null, List<(string, string)>? ran = null,
-        Settings.AppSettings? settings = null)
+        Settings.AppSettings? settings = null, bool installed = true, bool rebootNeeded = false)
     {
         var sent = new List<string>();
         string Request(string line)
         {
-            if (line == "cardfilter") return GpuWire.Encode(Status(enabled));
+            if (line == "cardfilter") return GpuWire.Encode(Status(enabled, installed, rebootNeeded));
             if (line == "lendstatus") return GpuWire.Encode(lend ?? Lend(Chrome));
             if (line == "cardvms") return GpuWire.Encode(new List<LendVm> { new("Windows-10-LTSC", "shut off", true), new("ubuntu-test", "shut off", false) });
             sent.Add(line);
@@ -105,6 +106,33 @@ public sealed class GpuLendingTests
         filter.IsChecked = true;
         Thread.Sleep(100); Dispatcher.UIThread.RunJobs();
         Assert.Equal("cardfilter on", sent.Last());
+    }
+
+    [AvaloniaFact]
+    public void InstalledShowsWhatIsInPlaceAndUninstallNeedsASecondClick()
+    {
+        var (window, sent) = Open();
+        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("Installed.", texts);
+        Assert.Contains(texts, t => t.StartsWith("In place: the helper starts before the login screen", StringComparison.Ordinal));
+        Click(Button(window, "Uninstall"));
+        Assert.DoesNotContain("lenduninstall", sent);
+        Click(Button(window, "Click again to uninstall"));
+        Assert.Equal("lenduninstall", sent.Last());
+    }
+
+    [AvaloniaFact]
+    public void UninstalledShowsOnlyInstall()
+    {
+        var (window, sent) = Open(installed: false, rebootNeeded: true);
+        var visible = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text ?? "").ToList();
+        Assert.Contains(visible, t => t.StartsWith("Not installed: no card filter", StringComparison.Ordinal));
+        Assert.Contains(visible, t => t.StartsWith("Reboot to finish: this boot still started with GPU Lending", StringComparison.Ordinal));
+        Assert.DoesNotContain("Hidden programs", visible);
+        Assert.DoesNotContain("Using the card now", visible);
+        Click(Button(window, "Install"));
+        Assert.Equal("lendinstall", sent.Last());
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-gpu-lending-uninstalled.png"));
     }
 
     [AvaloniaFact]

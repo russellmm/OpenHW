@@ -40,7 +40,7 @@ public sealed class CardHolderWatch(Func<string, string> request, Settings.AppSe
         CardFilterStatus? status;
         try { status = GpuWire.Decode<CardFilterStatus>(request("cardfilter")); }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException) { return; }
-        if (status is not { Enabled: true, Card: { } card }) return;
+        if (status is not { Installed: true, Enabled: true, Card: { } card }) return;
         var listed = status.Entries.Select(e => e.Pattern).ToHashSet(StringComparer.Ordinal);
         var cardName = status.Cards.FirstOrDefault(c => c.Pci == card)?.Name.Replace("NVIDIA ", "") ?? "the lent card";
         foreach (var app in status.Holders

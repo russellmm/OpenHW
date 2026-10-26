@@ -31,13 +31,15 @@ public static class HelperSocket
 /// The card filter (<see cref="CardFilter"/>): <c>cardfilter</c> (status, holders), <c>cardfilter on|off</c>,
 /// <c>cardselect &lt;pci|none&gt;</c>, <c>cardhide|cardshow &lt;pattern&gt; &lt;now|boot|both&gt; [name]</c>,
 /// <c>cardforget &lt;pattern&gt;</c> — patterns are cgroup unit names with * wildcards, PCI addresses must be listed cards.
+/// <c>lendinstall</c> / <c>lenduninstall</c> put GPU Lending's filter and system files in place or take them out
+/// (<see cref="LendingSetup"/>; refused while the card is lent or a lend/return is under way).
 /// Lending (<see cref="CardLending"/>): <c>lendstatus</c>, <c>cardvms</c>, <c>cardvm &lt;name|none&gt;</c> (a VM with the card
 /// assigned), <c>lend</c> and <c>vmreturn</c> (both start in the background; follow them with <c>lendstatus</c>).
 /// Replies are "ok …" or "err …".
 /// </summary>
 public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null)
 {
-    public const string Version = "10";
+    public const string Version = "11";
 
     public string HandleLine(string line)
     {
@@ -156,6 +158,18 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                         ("vmreturn", 1) => Done(lending.Return, "returning"),
                         _ => "err unknown command",
                     };
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+
+            case "lendinstall" or "lenduninstall" when parts.Length == 1:
+                if (card is null) return "err card filter unavailable";
+                try
+                {
+                    if (parts[0] == "lenduninstall" && lending?.Status() is { } l && (l.Lent || l.Stage is not ("idle" or "lent" or "failed" or "returned")))
+                        return "err return the card first";
+                    var changes = card.SetInstalled(parts[0] == "lendinstall");
+                    return "ok " + (changes.Count == 0 ? "nothing to change" : string.Join("; ", changes));
                 }
                 catch (ArgumentException ex) { return "err " + ex.Message; }
                 catch (IOException ex) { return "err " + ex.Message; }

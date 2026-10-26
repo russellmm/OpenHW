@@ -284,6 +284,7 @@ public sealed partial class CardLending : IDisposable
         var system = new List<string>();
         var user = new List<string>();
         var apps = new List<CardHolder>();
+        if (!_filter.Installed) { problems.Add("GPU Lending is uninstalled."); return (problems, system, user, apps); }
         if (card is null) { problems.Add("Choose the card to lend."); return (problems, system, user, apps); }
         if (vm is null) problems.Add("Choose the VM to lend it to.");
         else if (state == "running") problems.Add($"{vm} is running.");

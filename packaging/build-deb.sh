@@ -105,6 +105,8 @@ fi
 
 # The card filter's list (/etc/openhw/card-filter.json): the sandbox can write there but can't create the directory.
 install -d -m 755 /etc/openhw
+# GPU Lending's boot-order drop-in for the helper (written and removed by the helper; same reason).
+install -d -m 755 /etc/systemd/system/openhw-helper.service.d
 
 # The user who ran sudo (or pkexec, for graphical installers) gets the group that may talk to the helper.
 user="${SUDO_USER:-}"
@@ -136,6 +138,11 @@ PRERM
 install -m 755 /dev/stdin "$root/DEBIAN/postrm" <<'POSTRM'
 #!/bin/sh
 set -e
+# GPU Lending's files that only the helper manages; a stashed libvirt hook stays in /etc/openhw/lending-off/.
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    rm -f /etc/systemd/system/openhw-helper.service.d/lending.conf /etc/udev/rules.d/61-openhw-lending.rules
+    rmdir /etc/systemd/system/openhw-helper.service.d 2>/dev/null || true
+fi
 [ -d /run/systemd/system ] && systemctl daemon-reload || true
 POSTRM
 
