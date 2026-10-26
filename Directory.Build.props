@@ -5,6 +5,6 @@
     Each release gets a CHANGELOG.md entry and a git tag (v0.2.0). The app stamps the git revision after a "+".
   -->
   <PropertyGroup>
-    <Version>0.11.0</Version>
+    <Version>0.11.1</Version>
   </PropertyGroup>
 </Project>

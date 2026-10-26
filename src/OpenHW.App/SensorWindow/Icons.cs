@@ -52,6 +52,8 @@ public static class FooterIcons
     /// <summary>The toolbar buttons' own face: near-black with a faint light top, as HWiNFO's.</summary>
     public static readonly IBrush ToolbarFace = Vertical("#2E3033", "#08090A");
     public static readonly IBrush ToolbarEdge = new SolidColorBrush(Color.Parse("#5E6166"));
+    public static readonly IBrush ToolbarHover = Vertical("#45484D", "#16181A");
+    public static readonly IBrush ToolbarPressed = Vertical("#121314", "#2A2C2F");
 
     public static readonly IImage Expand = Icon(
         Shape("M1,16 L10.5,6 V11.5 H14.2 V20.5 H10.5 V26 Z M31,16 L21.5,6 V11.5 H17.8 V20.5 H21.5 V26 Z",

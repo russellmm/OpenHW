@@ -64,5 +64,15 @@ public sealed class MenuAndPowerLimitsTests
         buttons[3].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.True(settings);
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-footer.png"));
+
+        // Hover keeps the frame (Fluent's default would drop it) and lightens the face.
+        var gear = buttons[3];
+        var centre = Avalonia.VisualExtensions.TranslatePoint(gear, new Avalonia.Point(gear.Bounds.Width / 2, gear.Bounds.Height / 2), window)!.Value;
+        window.MouseMove(centre);
+        Dispatcher.UIThread.RunJobs();
+        var presenter = gear.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+        Assert.Same(OpenHW.App.SensorWindow.FooterIcons.ToolbarEdge, presenter.BorderBrush);
+        Assert.Same(OpenHW.App.SensorWindow.FooterIcons.ToolbarHover, presenter.Background);
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-footer-hover.png"));
     }
 }

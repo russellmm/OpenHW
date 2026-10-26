@@ -726,6 +726,16 @@ public sealed class MainWindow : Window
         ToolTip.SetTip(version, version.Text);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { expand, collapse } };
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 58, Background = Palette.Window, Margin = new Thickness(4, 0) };
+        // Fluent's own hover drops the frame and flattens the face; HWiNFO keeps the frame and lightens the face.
+        foreach (var (state, face) in new[] { (":pointerover", FooterIcons.ToolbarHover), (":pressed", FooterIcons.ToolbarPressed) })
+            bar.Styles.Add(new Style(x => x.OfType<Button>().Class(state).Template().OfType<Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, face),
+                    new Setter(Avalonia.Controls.Presenters.ContentPresenter.BorderBrushProperty, FooterIcons.ToolbarEdge),
+                },
+            });
         Grid.SetColumn(version, 1);
         Grid.SetColumn(right, 2);
         bar.Children.Add(left);

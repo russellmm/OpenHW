@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.11.1 — 2026-10-25
+
+- Fixed: hovering a footer button dropped its frame and flattened it (Avalonia's default). It now keeps the frame
+  and lightens the face, as HWiNFO's do; pressed darkens it.
+
 ## 0.11.0 — 2026-10-25
 
 **Footer like HWiNFO's**
