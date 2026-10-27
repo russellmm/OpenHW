@@ -96,6 +96,20 @@ public sealed class SensorCustomizations
     public void RestoreOriginalOrder() => Change(() => { GroupOrder.Clear(); RowOrder.Clear(); });
     public bool HasCustomOrder => GroupOrder.Count > 0 || RowOrder.Count > 0;
 
+    /// <summary>Moves every choice made for a renumbered hwmon sensor or group onto its current id; saves if any moved.</summary>
+    public void Remap(HwmonRenumbering renumbering)
+    {
+        var changed = HwmonRenumbering.Remap(Names, renumbering.Id);
+        changed |= HwmonRenumbering.Remap(Hidden, renumbering.Id);
+        changed |= HwmonRenumbering.Remap(Disabled, renumbering.Id);
+        changed |= HwmonRenumbering.Remap(Logged, renumbering.Id);
+        changed |= HwmonRenumbering.Remap(Values, renumbering.Id);
+        changed |= HwmonRenumbering.Remap(GroupOrder, renumbering.Group);
+        changed |= HwmonRenumbering.Remap(RowOrder, renumbering.Group);
+        foreach (var rows in RowOrder.Values) changed |= HwmonRenumbering.Remap(rows, renumbering.Id);
+        if (changed) Change(() => { });
+    }
+
     /// <summary>
     /// Puts <paramref name="items"/> in the user's order: the items <paramref name="order"/> names take the
     /// positions those items already hold, in the order given; everything else stays where it was. So a sensor or

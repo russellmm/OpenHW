@@ -157,6 +157,21 @@ public sealed class AppSettings
         StartAtLogin = AutostartEnabled(); // the file is the truth: the user may have removed or disabled it elsewhere
     }
 
+    /// <summary>Points tray icons for a renumbered hwmon sensor at its current id; true (unsaved) if any moved.</summary>
+    public bool Remap(Sensors.HwmonRenumbering renumbering)
+    {
+        var changed = false;
+        foreach (var icon in TrayIcons)
+        {
+            var id = renumbering.Id(icon.SensorId);
+            if (id == icon.SensorId) continue;
+            icon.SensorId = id;
+            changed = true;
+        }
+        if (changed) TrayIcons = TrayIcons.DistinctBy(t => t.SensorId).ToList();
+        return changed;
+    }
+
     /// <summary>
     /// Raised after every <see cref="Save"/> (UI thread), so each window showing a setting — File → Settings, Tray
     /// Icons, the gear's Sensor Settings — redraws when another one changes it.

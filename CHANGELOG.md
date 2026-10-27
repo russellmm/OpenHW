@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.20.1 — 2026-10-27
+
+- Fixed: after a boot where Linux numbered the hwmon chips differently (e.g. `asusec` registering first and taking
+  `hwmon9`), sensors saved under the old number showed as "(not present now)" — a tray icon for
+  `amd_hsmp_hwmon` socket power, an alert, a logged sensor — and renamed, hidden, reordered or collapsed hwmon groups
+  lost their settings. OpenHW now moves every saved choice to the same sensor's new number when the sensor list
+  loads or changes. It only does so when exactly one chip of that name has that channel, so drives
+  (several `nvme` chips) are never guessed at.
+
 ## 0.20.0 — 2026-10-26
 
 - New switches in **Sensor Settings → General**, for things OpenHW always did (all on by default, so nothing changes

@@ -172,6 +172,12 @@ public sealed class MainWindow : Window
         RebuildTree();
     }
 
+    /// <summary>Keeps collapsed groups and expanded rows of hwmon chips whose kernel number changed.</summary>
+    public void Remap(HwmonRenumbering renumbering)
+    {
+        if (_view.Remap(renumbering)) _view.Save();
+    }
+
     /// <summary>Re-reads the inventory into groups and rows, keeping each group's and subgroup's expansion.</summary>
     public void RebuildTree()
     {

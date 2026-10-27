@@ -81,6 +81,13 @@ public sealed class AlertStore
     public void Remove(AlertRule rule) => Change(() => Rules.Remove(rule));
     public void Update(Action edit) => Change(edit);
 
+    /// <summary>Points rules for a renumbered hwmon sensor at its current id; saves if any moved.</summary>
+    public void Remap(HwmonRenumbering renumbering)
+    {
+        if (Snapshot().All(r => renumbering.Id(r.SensorId) == r.SensorId)) return;
+        Change(() => { foreach (var rule in Rules) rule.SensorId = renumbering.Id(rule.SensorId); });
+    }
+
     private void Change(Action change)
     {
         string json;

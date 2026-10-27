@@ -69,6 +69,7 @@ public sealed class App : Application
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
             _window.ApplyDisplay(_settings);
+            RemapRenumbered(); // before the tray icons are built
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
 
@@ -107,7 +108,7 @@ public sealed class App : Application
             _alerts.Store.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // re-pins the watched sensors
             _ = _power.StartAsync();
 
-            _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => _window?.RebuildTree());
+            _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => { RemapRenumbered(); _window?.RebuildTree(); });
             var period = TimeSpan.FromSeconds(_settings.PollSeconds); // 2 s by default, HWiNFO's polling period
             _poll = new Timer(_ => Poll(), null, period, period);
             BuildTrayMenu(lifetime);
@@ -115,6 +116,22 @@ public sealed class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// After a boot that numbered the hwmon chips differently, points every saved choice — tray icons, alerts, names,
+    /// hidden/logged sensors, layout, collapsed groups — at the same sensor's current id.
+    /// </summary>
+    private void RemapRenumbered()
+    {
+        if (_exiting) return;
+        var renumbering = new HwmonRenumbering(_hub.Inventory);
+        SensorCustomizations.Current.Remap(renumbering);
+        _alerts.Store.Remap(renumbering);
+        _window?.Remap(renumbering);
+        if (!_settings.Remap(renumbering)) return;
+        _settings.Save();
+        if (_trayIcons.Count > 0) _ = RebuildTrayAsync();
     }
 
     private void BuildTrayMenu(IClassicDesktopStyleApplicationLifetime lifetime)
