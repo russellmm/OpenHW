@@ -28,6 +28,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>File → Tray Icons… and a sensor's "Tray icon settings…".</summary>
     public Action? ShowTrayIcons { get; init; }
 
+    /// <summary>The footer gear: HWiNFO's Sensor Settings dialog (scaffolding for now); null falls back to ShowSettings.</summary>
+    public Action? ShowSensorSettings { get; init; }
+
     /// <summary>Power → GPU Lending… (the card filter's setup page).</summary>
     public Action? ShowGpuLending { get; init; }
 
@@ -728,7 +731,7 @@ public sealed class MainWindow : Window
         var close = FooterButton("Close (OpenHW keeps running in the tray)", FooterIcons.Close, HideWindow);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _powerError, _logging, _elapsedText, reset } };
-        if (_commands is { } commands) right.Children.Add(FooterButton("Settings", FooterIcons.Gear, commands.ShowSettings));
+        if (_commands is { } commands) right.Children.Add(FooterButton("Settings", FooterIcons.Gear, commands.ShowSensorSettings ?? commands.ShowSettings));
         right.Children.Add(close);
         // The version takes whatever width is left and trims, so nothing on the right draws over it.
         var version = new TextBlock

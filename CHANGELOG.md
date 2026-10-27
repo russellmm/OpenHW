@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.18.0 — 2026-10-26
+
+- The footer's **settings gear** now opens **Sensor Settings**, laid out like HWiNFO's: General, Layout, Customize,
+  Tray Icon and Alerts, with OSD, OSD (RTSS), Logitech LCD and HWiNFO Gadget grayed ("To be implemented"). Its
+  **Main Settings** button opens **Settings**: General / User Interface, Safety, SMBus / I2C and Driver Management,
+  with License Management grayed.
+- **Scaffolding only so far**: the controls work but change nothing yet, and OK and Cancel just close. The sensor
+  lists show your real sensors and whether each one is monitored, logged, in the tray or has an alert. Options will
+  be connected one at a time. File → Settings and the tray's Settings… still open OpenHW's own Settings window.
+
 ## 0.17.2 — 2026-10-26
 
 - Fixed: **OpenHW's windows opened in the top-left corner of the secondary monitor**, and forgot where you had put

@@ -33,6 +33,7 @@ public sealed class App : Application
     private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
+    private SensorSettingsWindow? _sensorSettingsWindow;
     private TrayIconsWindow? _trayIconsWindow;
     private LayoutWindow? _layoutWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
@@ -62,7 +63,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowGpuLending = ShowGpuLending, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -573,6 +574,18 @@ public sealed class App : Application
         if (_settingsWindow is null) WindowPlaces.Track(_settingsWindow = new SettingsWindow(_settings, ApplySettings, ShowTrayIcons, Restart), "settings");
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    // The footer gear. A new dialog each time, so Cancel leaves nothing behind (it saves nothing yet anyway).
+    private void ShowSensorSettings()
+    {
+        if (_sensorSettingsWindow is null)
+        {
+            WindowPlaces.Track(_sensorSettingsWindow = new SensorSettingsWindow(_hub, _settings, _alerts.Store), "sensor-settings");
+            _sensorSettingsWindow.Closed += (_, _) => _sensorSettingsWindow = null;
+        }
+        _sensorSettingsWindow.Show();
+        _sensorSettingsWindow.Activate();
     }
 
     /// <summary>
