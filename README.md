@@ -159,7 +159,10 @@ The **gear** opens **Sensor Settings**, laid out like HWiNFO's (General, Layout,
 OSD (RTSS), Logitech LCD and HWiNFO Gadget grayed "To be implemented"); its **Main Settings** button opens
 **Settings** (General / User Interface, Safety, SMBus / I2C, Driver Management; License Management grayed). What OpenHW
 already had is connected (0.19.0): Polling Period, the Layout, Customize, Tray Icon and Alerts tabs' per-sensor items,
-Auto Start / Minimize Main Window on Startup, and openhw-helper's status under Driver Management. They are the same
+Auto Start / Minimize Main Window on Startup, and openhw-helper's status under Driver Management. 0.20.0 adds
+switches for things OpenHW always did — Row Shading, Highlight changing values, Show ToolTips, Show columns, Change
+Item Color, Validate Window Positions — plus Always On Top, Average last N samples, and Enable NVML / SMBus Support /
+S.M.A.R.T. Support to turn OpenHW's GPU, DIMM/VR and NVMe health readers off. File → Sensor Settings… opens it too. They are the same
 settings as in File → Settings, File → Tray Icons…, View → Layout Settings…, File → Alerts… and the row menu, saved at
 once, and a change in either place shows in the other. The rest of the two dialogs is layout only so far (OK and
 Cancel just close); more gets connected one item at a time, and the older windows stay until it's all there.

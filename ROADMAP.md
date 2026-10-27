@@ -155,6 +155,8 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
       from `reference/settings_menu/`; tabs without a capture grayed. Nothing saved yet.
 - [x] **Connect what OpenHW already has** (0.19.0): Polling Period, Layout, Customize, Tray Icon and Alerts items,
       Auto Start / Minimize on Startup, helper status — two-way with the older windows, which stay for now (owner).
+- [x] **Small additions** (0.20.0): Row Shading, Highlight changing values, Show ToolTips, Show columns, Always On
+      Top, Average last N samples, Change Item Color, Validate Window Positions, Enable NVML / SMBus / S.M.A.R.T.
 - [ ] **Connect the rest of the settings menu** item by item (owner-led): each control to the matching OpenHW option, or grayed
       "To be implemented" where there is none yet; decide which Windows-only items (PresentMon, ADL, Intel ME, CSMI
       SAS, NVAPI, Driver Management) get a Linux meaning, a new name, or are grayed. Then decide what happens to

@@ -82,6 +82,45 @@ public sealed class AppSettings
     /// <summary>Tray tiles show a short unit after the digits ("32°", "55W", "87%"); off = digits only, as before 0.8.0.</summary>
     public bool TrayUnits { get; set; } = true;
 
+    // Sensor Settings → General (HWiNFO's names). Defaults are what OpenHW did before these were switches.
+
+    /// <summary>Row Shading: alternate black/gray sensor rows under each group heading.</summary>
+    public bool RowShading { get; set; } = true;
+
+    /// <summary>Highlight changing values: a Current cell turns blue while it differs from the last sample.</summary>
+    public bool HighlightChanges { get; set; } = true;
+
+    /// <summary>Show ToolTips: a sensor row explains its reading on hover.</summary>
+    public bool ShowToolTips { get; set; } = true;
+
+    /// <summary>Always On Top: the sensor window stays above other windows.</summary>
+    public bool AlwaysOnTop { get; set; }
+
+    /// <summary>Averaging Interval: Average = the last N samples; 0 = the whole run until reset.</summary>
+    public int AverageSamples { get; set; }
+    public const int MaxAverageSamples = 100_000;
+
+    /// <summary>Show columns: Current, Minimum, Maximum, Average (the Sensor column is always shown).</summary>
+    public bool ShowCurrent { get; set; } = true;
+    public bool ShowMinimum { get; set; } = true;
+    public bool ShowMaximum { get; set; } = true;
+    public bool ShowAverage { get; set; } = true;
+
+    /// <summary>Main Settings → Validate Window Positions: a window saved on a monitor that's gone opens on the primary.</summary>
+    public bool ValidateWindowPositions { get; set; } = true;
+
+    // Main Settings → Safety / SMBus: which of OpenHW's readers run (HWiNFO's Enable NVML, SMBus Support,
+    // S.M.A.R.T. Support). Off = those sensors leave the list until turned back on.
+
+    /// <summary>GPUs (NVML, through openhw-helper).</summary>
+    public bool ReadNvidia { get; set; } = true;
+
+    /// <summary>DIMM and board VR sensors on the SMBus (through openhw-helper).</summary>
+    public bool ReadSmbus { get; set; } = true;
+
+    /// <summary>NVMe S.M.A.R.T. health readings (through openhw-helper); drive temperatures from hwmon stay.</summary>
+    public bool ReadSmart { get; set; } = true;
+
     private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
         ? config
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
@@ -108,6 +147,7 @@ public sealed class AppSettings
     {
         if (!PollChoices.Contains(PollSeconds)) PollSeconds = 2;
         if (!Settings.WindowScale.Choices.Contains(WindowScale)) WindowScale = 0;
+        AverageSamples = Math.Clamp(AverageSamples, 0, MaxAverageSamples);
         // One icon per sensor: a file from before duplicates were blocked keeps the first of each.
         TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
         foreach (var icon in TrayIcons)

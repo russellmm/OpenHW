@@ -70,7 +70,10 @@ public sealed class SensorHub : IDisposable
         var requested = Inventory.Select(i => i.Id).Where(id => !frozen.Contains(id)).ToHashSet(StringComparer.Ordinal);
 
         var readings = requested.ToDictionary(id => id, _ => (double?)null, StringComparer.Ordinal);
-        foreach (var engine in _engines) engine.ReadInto(readings, frozen.Count == 0 ? null : requested);
+        // With S.M.A.R.T. off, the NVMe engine gets the requested set, so it skips the health reads (they aren't asked).
+        var only = frozen.Count == 0 && _readSmart ? null : requested;
+        foreach (var engine in _engines.Where(IsOn)) engine.ReadInto(readings, only);
+        if (!_readSmart) foreach (var id in readings.Keys.Where(IsSmart).ToList()) readings.Remove(id);
         var hold = _pauses.EndPoll(readings, frozen);
         lock (_gate) Statistics.Record(readings, hold);
         History.Record(readings.Where(r => r.Value is not null && !hold.Contains(r.Key)).Select(r => (r.Key, r.Value!.Value)));
@@ -87,6 +90,36 @@ public sealed class SensorHub : IDisposable
         lock (_gate) Statistics.Reset();
     }
 
+    /// <summary>Sensor Settings → Averaging Interval: Average over the last N samples, 0 = the whole run.</summary>
+    public void SetAverageSamples(int samples)
+    {
+        lock (_gate) Statistics.AverageSamples = samples;
+    }
+
+    private volatile bool _readNvidia = true, _readSmbus = true, _readSmart = true;
+    private volatile bool _rediscover;
+
+    /// <summary>
+    /// Main Settings' Enable NVML, SMBus Support and S.M.A.R.T. Support: which readers run. A reader that's off isn't
+    /// asked for anything and its sensors leave the inventory at the next poll; on again, they come back.
+    /// </summary>
+    public void SetReaders(bool nvidia, bool smbus, bool smart)
+    {
+        if (nvidia == _readNvidia && smbus == _readSmbus && smart == _readSmart) return;
+        (_readNvidia, _readSmbus, _readSmart) = (nvidia, smbus, smart);
+        _rediscover = true;
+    }
+
+    private bool IsOn(ISensorEngine engine) => engine switch
+    {
+        _ when engine == _nvidia => _readNvidia,
+        DimmEngine or BoardVrEngine => _readSmbus,
+        _ => true,
+    };
+
+    // NVMe S.M.A.R.T. readings (nvme-health:<drive>:smart:<metric>); the drive's other sensors stay.
+    private static bool IsSmart(string id) => id.StartsWith("nvme-health:", StringComparison.Ordinal);
+
     /// <summary>The CPU temperature the tray shows: k10temp Tctl, else any sensor named like a package temperature.</summary>
     public string? CpuTemperatureId()
     {
@@ -97,11 +130,14 @@ public sealed class SensorHub : IDisposable
 
     private bool RefreshInventory()
     {
-        if (!_inventoryCadence.IsDue(_clock.Elapsed)) return false;
+        var force = _rediscover;
+        if (!_inventoryCadence.IsDue(_clock.Elapsed, force)) return false;
+        _rediscover = false;
         // GPUs listed by hwmon (e.g. nouveau) are dropped when NVML reports the same card.
         var merged = InventoryMerger.Merge(
-            _engines.Where(e => e != _nvidia).SelectMany(e => e.Discover()),
-            _nvidia.Discover());
+            _engines.Where(e => e != _nvidia && IsOn(e)).SelectMany(e => e.Discover()),
+            _readNvidia ? _nvidia.Discover() : []);
+        if (!_readSmart) merged = merged.Where(i => !IsSmart(i.Id)).ToList();
         var fingerprint = string.Join('|', merged.Select(i => $"{i.Id}\t{i.Name}\t{i.Group}").OrderBy(x => x, StringComparer.Ordinal));
         if (fingerprint == _fingerprint) return false;
         lock (_gate)

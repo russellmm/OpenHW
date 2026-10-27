@@ -57,6 +57,7 @@ public sealed class App : Application
         {
             // Closing the window keeps the tray icons running, as HWiNFO does; Exit in the tray menu quits.
             lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ApplyReading(); // readers and averaging before the first sample
             _hub.Sample();
             _logger?.Append(DateTime.Now, id => _hub.Get(id).Current);
             CheckAlerts(); // first discovery + sample before the window builds its tree
@@ -67,6 +68,7 @@ public sealed class App : Application
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
+            _window.ApplyDisplay(_settings);
             if (!Program.StartInTray) _window.Show(); // started at login with --tray: icons only until asked
             if (Program.Instance is { } instance) instance.ShowRequested += () => Dispatcher.UIThread.Post(ShowWindow);
 
@@ -240,6 +242,14 @@ public sealed class App : Application
         _trayIconsWindow?.RefreshTrayRows();
     }
 
+    // Sensor Settings: which readers run, how Average is taken, and whether saved window places are checked.
+    private void ApplyReading()
+    {
+        _hub.SetReaders(_settings.ReadNvidia, _settings.ReadSmbus, _settings.ReadSmart);
+        _hub.SetAverageSamples(_settings.AverageSamples);
+        WindowPlaces.Validate = _settings.ValidateWindowPositions;
+    }
+
     // Sensor Settings → Tray Icon → Remove All Items From Tray.
     private void ClearTray()
     {
@@ -261,7 +271,12 @@ public sealed class App : Application
     {
         var period = TimeSpan.FromSeconds(_settings.PollSeconds);
         _poll?.Change(period, period);
-        if (_window is not null) _window.PauseWhenHidden = _settings.PauseWhenHidden;
+        ApplyReading();
+        if (_window is not null)
+        {
+            _window.PauseWhenHidden = _settings.PauseWhenHidden;
+            _window.ApplyDisplay(_settings);
+        }
         _ = RebuildTrayAsync();
     }
 

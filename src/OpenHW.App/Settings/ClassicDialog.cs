@@ -137,12 +137,20 @@ public sealed class ClassicPage : Canvas
         return Grayable(PutBox(box, x1, y1, x2, y2), needsSelection);
     }
 
-    /// <summary>A read-only framed value (Driver Management's "Current Status").</summary>
-    public Border Readout(string text, double x1, double y1, double x2, double y2) => PutBox(new Border
+    /// <summary>
+    /// A read-only framed value (Driver Management's "Current Status"). The capture's width is its minimum: the box
+    /// grows to fit a longer value, or the desktop's wider font, instead of cutting it off.
+    /// </summary>
+    public Border Readout(string text, double x1, double y1, double x2, double y2)
     {
-        BorderBrush = ClassicColors.FieldEdge, BorderThickness = new Thickness(1), Background = ClassicColors.Window,
-        Child = new TextBlock { Text = text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-    }, x1, y1, x2, y2);
+        var box = new Border
+        {
+            BorderBrush = ClassicColors.FieldEdge, BorderThickness = new Thickness(1), Background = ClassicColors.Window,
+            MinWidth = L(x2 - x1), Height = L(y2 - y1), Padding = new Thickness(6, 0),
+            Child = new TextBlock { Text = text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        return Put(box, x1, y1);
+    }
 
     public Button Button(string text, double x1, double y1, double x2, double y2, bool needsSelection = false) =>
         Grayable(PutBox(new Button { Content = text }, x1, y1, x2, y2), needsSelection);
@@ -576,6 +584,34 @@ public abstract class ClassicDialog : Window
             [!ContentPresenter.ForegroundProperty] = button[!TemplatedControl.ForegroundProperty],
         },
     });
+
+    private readonly List<(CheckBox Box, Func<bool> Get)> _bound = [];
+    private bool _showingBound;
+
+    /// <summary>
+    /// Connects a check box to one of OpenHW's settings: ticking saves at once and applies it (as every OpenHW
+    /// settings window does), and <see cref="ShowBound"/> shows the saved value again after any change.
+    /// </summary>
+    protected void Bind(CheckBox box, AppSettings settings, Action applied, Func<bool> get, Action<bool> set, string tip)
+    {
+        _bound.Add((box, get));
+        ToolTip.SetTip(box, tip);
+        box.IsChecked = get();
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if (_showingBound || (box.IsChecked == true) == get()) return;
+            set(box.IsChecked == true);
+            settings.Save();
+            applied();
+        };
+    }
+
+    protected void ShowBound()
+    {
+        _showingBound = true;
+        try { foreach (var (box, get) in _bound) box.IsChecked = get(); }
+        finally { _showingBound = false; }
+    }
 
     /// <summary>Enables or grays the controls HWiNFO grays until a sensor is selected.</summary>
     protected static void EnableSelectionControls(ClassicPage page, bool enabled)

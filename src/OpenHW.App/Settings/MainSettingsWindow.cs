@@ -56,6 +56,7 @@ public sealed class MainSettingsWindow : ClassicDialog
         _startMinimized.IsChecked = _settings.StartInTray;
         // As in File → Settings: only OpenHW's own login entry can start it with just the tray icons.
         _startMinimized.IsEnabled = _settings.StartAtLogin && AppSettings.ForeignAutostart() is null;
+        ShowBound();
         _showing = false;
     }
 
@@ -86,6 +87,8 @@ public sealed class MainSettingsWindow : ClassicDialog
         ToolTip.SetTip(_autoStart, "Start OpenHW when you log in (File → Settings).");
         _autoStart.IsCheckedChanged += (_, _) => Save(() => _settings.StartAtLogin = _autoStart.IsChecked == true);
         _startMinimized.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = _startMinimized.IsChecked == true);
+        Bind(checks[6], _settings, _applied, () => _settings.ValidateWindowPositions, v => _settings.ValidateWindowPositions = v,
+            "A window saved on a monitor that's no longer there opens on the primary monitor instead. Off: exactly where it was.");
         p.Label("[12-HOUR LIMIT]", 52, 460, bold: true);
         p.Label("Language:", 24, 489);
         p.Combo(["English"], 0, 24, 507, 329, 534);
@@ -112,7 +115,7 @@ public sealed class MainSettingsWindow : ClassicDialog
     }
 
     // Main_Settings_Safety.jpg — page frame at (8, 79).
-    private static ClassicPage Safety()
+    private ClassicPage Safety()
     {
         var p = new ClassicPage(8, 79);
         p.Group("IDE/(S)ATA Drive Scan", 25, 107, 335, 326, 35);
@@ -120,7 +123,8 @@ public sealed class MainSettingsWindow : ClassicDialog
         p.Radio("Low-level IO Access", "drive-scan", 40, 170);
         p.Radio("Disable Drive Scan", "drive-scan", 40, 202);
         p.Check("CSMI SAS Support", 40, 242, true);
-        p.Check("S.M.A.R.T. Support", 40, 272, true);
+        Bind(p.Check("S.M.A.R.T. Support", 40, 272, true), _settings, _applied, () => _settings.ReadSmart, v => _settings.ReadSmart = v,
+            "Read the NVMe drives' S.M.A.R.T. health (through openhw-helper). Off: those readings leave the list; drive temperatures stay.");
         p.Check("ATA Statistics Support", 40, 302, true);
 
         p.Group("CPU Clock Measurement", 25, 347, 335, 501, 35);
@@ -143,15 +147,18 @@ public sealed class MainSettingsWindow : ClassicDialog
             ("Enable NVML", 122, true), ("oneAPI Support", 152, true), ("USB Type-C PD Support", 182, true),
             ("Debug Mode", 452, false), ("Debug Write Direct", 482, true),
         ];
-        foreach (var (text, y, on) in right) p.Check(text, 675, y, on);
+        var rightChecks = right.Select(c => p.Check(c.Text, 675, c.Y, c.On)).ToList();
+        Bind(rightChecks[0], _settings, _applied, () => _settings.ReadNvidia, v => _settings.ReadNvidia = v,
+            "Read the NVIDIA GPUs (NVML, through openhw-helper). Off: the GPU sensors leave the list. GPU Lending works either way.");
         return p;
     }
 
     // Main_Settings_SMBus_I2C.jpg — page frame at (12, 85).
-    private static ClassicPage SmbusI2c()
+    private ClassicPage SmbusI2c()
     {
         var p = new ClassicPage(12, 85);
-        p.Check("SMBus Support", 44, 113, true);
+        Bind(p.Check("SMBus Support", 44, 113, true), _settings, _applied, () => _settings.ReadSmbus, v => _settings.ReadSmbus = v,
+            "Read the DIMM and board VR sensors on the SMBus (through openhw-helper). Off: those sensors leave the list.");
         p.Group("SMBus Device Exclusion", 30, 158, 449, 390, 40);
         // 8 rows (0x–7x) × 16 columns (x0–xF) of 7-bit addresses; HWiNFO excludes 0x00–0x0F by default.
         for (var column = 0; column < 16; column++)

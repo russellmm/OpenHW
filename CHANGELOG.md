@@ -3,6 +3,22 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.20.0 — 2026-10-26
+
+- New switches in **Sensor Settings → General**, for things OpenHW always did (all on by default, so nothing changes
+  until you turn one off): **Row Shading**, **Highlight changing values**, **Show ToolTips**, and **Show columns**
+  Current / Minimum / Maximum / Average. Also **Always On Top** (off by default) for the sensor window.
+- **Averaging Interval → Average last N samples**: the Average column can cover just the last N samples; 0 (the
+  default) is still every sample since the last reset. Minimum and Maximum still cover the whole run.
+- **Alerts → Change Item Color**: whether a firing alert turns the sensor's Current value red (on by default, as before).
+- **Main Settings → Validate Window Positions** (on by default): a window saved on a monitor that's gone opens on
+  the primary monitor; off, windows go exactly where they were saved.
+- **Main Settings → Enable NVML, SMBus Support, S.M.A.R.T. Support**: turn off OpenHW's GPU, DIMM / board VR or
+  NVMe S.M.A.R.T. readers. Their sensors leave the list until turned back on; drive temperatures stay, and GPU
+  Lending works either way.
+- **File → Sensor Settings…** opens the same dialog as the footer gear.
+- Fixed: Driver Management's **Current Status** box cut off "Running (protocol 11)"; it now grows to fit.
+
 ## 0.19.0 — 2026-10-26
 
 - **Sensor Settings and Settings now change real options**, the ones OpenHW already had. Each is the same setting

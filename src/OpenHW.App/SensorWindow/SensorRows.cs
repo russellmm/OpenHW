@@ -111,7 +111,7 @@ public sealed class SensorRow : Row
     /// <summary>A Current cell with a firing alert is drawn red (File → Alerts…).</summary>
     public static readonly IBrush AlertBackground = new SolidColorBrush(Color.Parse("#6B1E1E"));
 
-    public void Update(SensorStatistics.Snapshot snapshot, bool paused, bool alerting = false)
+    public void Update(SensorStatistics.Snapshot snapshot, bool paused, bool alerting = false, bool highlight = true)
     {
         if (Disabled)
         {
@@ -127,7 +127,7 @@ public sealed class SensorRow : Row
         Minimum = SensorPresentation.Format(Item, Scaled(snapshot.Minimum));
         Maximum = SensorPresentation.Format(Item, Scaled(snapshot.Maximum));
         Average = SensorPresentation.FormatAverage(Item, Scaled(snapshot.Average));
-        CurrentBackground = alerting ? AlertBackground : _changed && !paused ? Palette.Changed : Brushes.Transparent;
+        CurrentBackground = alerting ? AlertBackground : _changed && !paused && highlight ? Palette.Changed : Brushes.Transparent;
         TextBrush = paused ? Palette.Frozen : Palette.Text;
     }
 }

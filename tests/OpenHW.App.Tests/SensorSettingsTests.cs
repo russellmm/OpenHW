@@ -276,12 +276,125 @@ public sealed class SensorSettingsTests
     }
 
     [AvaloniaFact]
+    public void DisplaySwitchesChangeTheSensorWindow()
+    {
+        Isolate();
+        using var s = Open();
+        var main = new MainWindow(s.Hub, null, new WindowCommands(() => { }, () => { }, () => { }, () => { })) { Width = 1000, Height = 600 };
+        main.Show();
+        Dispatcher.UIThread.RunJobs();
+        var dialog = s.Window;
+
+        dialog.GeneralCheck("Row Shading").IsChecked = false;
+        dialog.GeneralCheck("Highlight changing values").IsChecked = false;
+        dialog.GeneralCheck("Show ToolTips").IsChecked = false;
+        dialog.GeneralCheck("Always On Top").IsChecked = true;
+        dialog.GeneralCheck("Minimum").IsChecked = false;
+        Assert.Equal((false, false, false, true, false),
+            (s.Settings.RowShading, s.Settings.HighlightChanges, s.Settings.ShowToolTips, s.Settings.AlwaysOnTop, s.Settings.ShowMinimum));
+        main.ApplyDisplay(s.Settings); // what App.ApplySettings does after every save
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(main.RowShading);
+        Assert.False(main.HighlightChanges);
+        Assert.True(main.Topmost);
+        Assert.Equal(0, main.ColumnLayout.C2.Value);
+        Assert.False(ToolTip.GetServiceEnabled(main.GetVisualDescendants().OfType<ListBox>().First()));
+        main.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? System.IO.Path.GetTempPath(), "openhw-display-switches.png"));
+
+        s.Settings.RowShading = true; // as File → Settings would, through Save
+        s.Settings.ShowMinimum = true;
+        s.Settings.Save();
+        Assert.True(dialog.GeneralCheck("Row Shading").IsChecked);
+        Assert.True(dialog.GeneralCheck("Minimum").IsChecked);
+        main.ApplyDisplay(s.Settings);
+        Assert.True(main.RowShading);
+        Assert.Equal(main.ColumnLayout.Widths[2], main.ColumnLayout.C2.Value);
+        main.Close();
+    }
+
+    [AvaloniaFact]
+    public void AverageLastSamplesIsSavedAndUsed()
+    {
+        Isolate();
+        using var s = Open();
+        s.Window.AverageField.Text = "30";
+        s.Window.SetAverageNow();
+        Assert.Equal(30, s.Settings.AverageSamples);
+        Assert.Equal(30, AppSettings.Load().AverageSamples);
+        s.Hub.SetAverageSamples(s.Settings.AverageSamples);
+        Assert.Equal(30, s.Hub.Statistics.AverageSamples);
+        s.Window.AverageField.Text = "-4"; // not a count: back to the saved value
+        s.Window.SetAverageNow();
+        Assert.Equal("30", s.Window.AverageField.Text);
+    }
+
+    [AvaloniaFact]
+    public void ChangeItemColorDecidesWhetherAFiringAlertTurnsTheCellRed()
+    {
+        Isolate();
+        using var s = Open();
+        var window = s.Window;
+        window.SelectTab("Alerts");
+        var sensor = FirstSensor(window.AlertList);
+        window.AlertList.Selected = sensor;
+        window.AboveField.Text = "-1000";
+        window.AboveBox.IsChecked = true;
+        var rule = Assert.Single(s.Alerts.For(sensor.Key));
+        Assert.True(rule.ChangeColor);
+        Assert.True(window.ChangeColorBox.IsChecked);
+
+        var monitor = new AlertMonitor(s.Alerts);
+        monitor.Evaluate(0, _ => 1, _ => ("x", ""));
+        Assert.Contains(sensor.Key, monitor.AlertingSensors);
+        window.ChangeColorBox.IsChecked = false;
+        Assert.False(rule.ChangeColor);
+        Assert.DoesNotContain(sensor.Key, monitor.AlertingSensors); // still firing, but no red cell
+    }
+
+    [AvaloniaFact]
+    public void ReaderSwitchesTakeTheirSensorsOutAndBack()
+    {
+        Isolate();
+        using var s = Open();
+        var main = new MainSettingsWindow(s.Settings, () => s.Hub.SetReaders(s.Settings.ReadNvidia, s.Settings.ReadSmbus, s.Settings.ReadSmart), () => "11");
+        main.Show();
+        Dispatcher.UIThread.RunJobs();
+        CheckBox Box(string tab, string text)
+        {
+            main.SelectTab(tab);
+            Dispatcher.UIThread.RunJobs();
+            return main.SelectedPage!.GetVisualDescendants().OfType<CheckBox>().First(c => c.Content as string == text);
+        }
+        static bool Smart(string id) => id.StartsWith("nvme-health:", StringComparison.Ordinal);
+        var hadSmart = s.Hub.Inventory.Any(i => Smart(i.Id));
+
+        Box("Safety", "S.M.A.R.T. Support").IsChecked = false;
+        Box("Safety", "Enable NVML").IsChecked = false;
+        Box("SMBus / I2C", "SMBus Support").IsChecked = false;
+        Assert.Equal((false, false, false), (s.Settings.ReadSmart, s.Settings.ReadNvidia, s.Settings.ReadSmbus));
+        s.Hub.Sample();
+        Assert.DoesNotContain(s.Hub.Inventory, i => Smart(i.Id) || i.Id.StartsWith("nvml:", StringComparison.Ordinal)
+                                                   || i.Id.StartsWith("ddr5:", StringComparison.Ordinal) || i.Id.StartsWith("vr:", StringComparison.Ordinal));
+
+        Box("Safety", "S.M.A.R.T. Support").IsChecked = true;
+        s.Hub.Sample();
+        Assert.Equal(hadSmart, s.Hub.Inventory.Any(i => Smart(i.Id))); // back (on a machine whose helper reads SMART)
+
+        Box("General / User Interface", "Validate Window Positions").IsChecked = false;
+        Assert.False(s.Settings.ValidateWindowPositions);
+        main.Close();
+    }
+
+    [AvaloniaFact]
     public void ScaffoldingControlsSaveNothing()
     {
         var dir = Isolate();
         using var s = Open();
-        // General's check boxes and radios aren't connected yet.
-        foreach (var check in s.Window.SelectedPage!.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>())
+        // General's other check boxes and radios aren't connected yet.
+        string[] connected = ["Row Shading", "Highlight changing values", "Show ToolTips", "Always On Top", "Current", "Minimum", "Maximum", "Average"];
+        foreach (var check in s.Window.SelectedPage!.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>()
+                     .Where(c => !connected.Contains(c.Content as string)))
             check.IsChecked = !check.IsChecked;
         s.Window.Ok.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();

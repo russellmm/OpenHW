@@ -22,6 +22,9 @@ public sealed class AlertRule
     public int ForSeconds { get; set; }
     public bool Enabled { get; set; } = true;
 
+    /// <summary>HWiNFO's "Change Item Color": the sensor's Current cell turns red while this rule fires.</summary>
+    public bool ChangeColor { get; set; } = true;
+
     public static readonly int[] DurationChoices = [0, 5, 10, 30, 60, 300];
 
     public bool IsMet(double value) => Condition == AlertCondition.Above ? value > Threshold : value < Threshold;
@@ -115,12 +118,12 @@ public sealed class AlertMonitor(AlertStore store)
 
     public AlertStore Store => store;
 
-    /// <summary>Sensors with a rule currently firing (their Current cell turns red).</summary>
+    /// <summary>Sensors with a rule currently firing that changes the item's color (their Current cell turns red).</summary>
     public IReadOnlySet<string> AlertingSensors
     {
         get
         {
-            lock (_gate) return store.Snapshot().Where(r => _firing.Contains(r.Id)).Select(r => r.SensorId).ToHashSet(StringComparer.Ordinal);
+            lock (_gate) return store.Snapshot().Where(r => r.ChangeColor && _firing.Contains(r.Id)).Select(r => r.SensorId).ToHashSet(StringComparer.Ordinal);
         }
     }
 

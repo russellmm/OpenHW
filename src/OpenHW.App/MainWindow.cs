@@ -245,8 +245,8 @@ public sealed class MainWindow : Window
         foreach (var group in _groups)
             foreach (var sensor in group.Sensors)
             {
-                sensor.Update(_hub.Get(sensor.Id), _hub.IsPaused(sensor.Id), alerting.Contains(sensor.Id));
-                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id), _hub.IsPaused(child.Id), alerting.Contains(child.Id));
+                sensor.Update(_hub.Get(sensor.Id), _hub.IsPaused(sensor.Id), alerting.Contains(sensor.Id), _highlightChanges);
+                foreach (var child in sensor.Children) child.Update(_hub.Get(child.Id), _hub.IsPaused(child.Id), alerting.Contains(child.Id), _highlightChanges);
             }
         _elapsedText.Text = _elapsed.Elapsed.ToString(@"h\:mm\:ss");
     }
@@ -306,17 +306,42 @@ public sealed class MainWindow : Window
         _view.Save();
     }
 
-    // HWiNFO restarts the black/grey alternation under every group heading.
+    // HWiNFO restarts the black/grey alternation under every group heading (Row Shading; off = all black).
     private void Reshade()
     {
         var odd = false;
         foreach (var row in _rows)
         {
             if (row is GroupRow) { row.Background = Palette.GroupHeader; odd = false; continue; }
-            row.Background = odd ? Palette.RowB : Palette.RowA;
+            row.Background = odd && _rowShading ? Palette.RowB : Palette.RowA;
             odd = !odd;
         }
     }
+
+    private bool _rowShading = true, _highlightChanges = true;
+    private readonly List<Control> _columnHandles = [];
+
+    /// <summary>
+    /// The display options of Sensor Settings → General: Row Shading, Highlight changing values, Show ToolTips,
+    /// Show columns and Always On Top. Applied at once whenever settings are saved.
+    /// </summary>
+    public void ApplyDisplay(Settings.AppSettings settings)
+    {
+        if (_rowShading != settings.RowShading)
+        {
+            _rowShading = settings.RowShading;
+            Reshade();
+        }
+        _highlightChanges = settings.HighlightChanges;
+        ToolTip.SetServiceEnabled(_list, settings.ShowToolTips);
+        bool[] shown = [true, settings.ShowCurrent, settings.ShowMinimum, settings.ShowMaximum, settings.ShowAverage];
+        for (var i = 1; i < shown.Length; i++) _columns.SetShown(i, shown[i]);
+        for (var i = 0; i < _columnHandles.Count; i++) _columnHandles[i].IsVisible = _columns.IsShown(i);
+        Topmost = settings.AlwaysOnTop;
+    }
+
+    internal bool RowShading => _rowShading;
+    internal bool HighlightChanges => _highlightChanges;
 
     // ── templates ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -470,7 +495,7 @@ public sealed class MainWindow : Window
         string[] columns = [nameof(SensorRow.Current), nameof(SensorRow.Minimum), nameof(SensorRow.Maximum), nameof(SensorRow.Average)];
         for (var i = 0; i < columns.Length; i++)
         {
-            var cell = new Border { BorderBrush = Palette.Separator, BorderThickness = new Thickness(1, 0, i == 3 ? 1 : 0, 0) };
+            var cell = new Border { BorderBrush = Palette.Separator, BorderThickness = new Thickness(1, 0, i == 3 ? 1 : 0, 0), ClipToBounds = true };
             if (withValues)
             {
                 cell.Child = Text(columns[i]);
@@ -513,7 +538,7 @@ public sealed class MainWindow : Window
         {
             var cell = new Border
             {
-                BorderBrush = Palette.GroupHeader, BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 1),
+                BorderBrush = Palette.GroupHeader, BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 1), ClipToBounds = true,
                 Child = new TextBlock
                 {
                     Text = titles[i], VerticalAlignment = VerticalAlignment.Center,
@@ -565,6 +590,8 @@ public sealed class MainWindow : Window
                 SaveColumns();
             };
             ToolTip.SetTip(handle, "Drag to resize; double-click for the default width");
+            handle.IsVisible = _columns.IsShown(i); // a hidden column has nothing to resize
+            _columnHandles.Add(handle);
             Grid.SetColumn(handle, i);
             grid.Children.Add(handle);
         }
@@ -606,7 +633,8 @@ public sealed class MainWindow : Window
             if (!firstOpen) return; // reopened from the tray: it stays where it was hidden
             firstOpen = false;
             var saved = _view.WindowX is not null && _view.WindowY is not null;
-            if ((!saved ||Screens.ScreenFromPoint(Position) is null) && WindowState == WindowState.Normal && Screens.Primary is { } screen)
+            var lost = Settings.WindowPlaces.Validate && Screens.ScreenFromPoint(Position) is null; // Validate Window Positions
+            if ((!saved || lost) && WindowState == WindowState.Normal && Screens.Primary is { } screen)
                 Position = new PixelPoint(screen.WorkingArea.X + (int)Math.Max(0, (screen.WorkingArea.Width - Width * screen.Scaling) / 2),
                                           screen.WorkingArea.Y + (int)Math.Max(0, (screen.WorkingArea.Height - Height * screen.Scaling) / 2));
         };
@@ -665,6 +693,7 @@ public sealed class MainWindow : Window
         {
             if (c.ShowAlerts is { } alerts) file.Items.Add(Item("_Alerts…", alerts));
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
+            if (c.ShowSensorSettings is { } sensorSettings) file.Items.Add(Item("Sensor Setti_ngs…", sensorSettings)); // the footer gear
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());
             file.Items.Add(Item("E_xit OpenHW", c.Exit, "Ctrl+Q"));

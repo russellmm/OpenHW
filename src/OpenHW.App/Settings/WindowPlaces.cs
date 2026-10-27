@@ -24,6 +24,12 @@ public static class WindowPlaces
 
     private static Dictionary<string, WindowPlace> Places => _places ??= Load(FilePath);
 
+    /// <summary>
+    /// Main Settings → Validate Window Positions (on by default): a saved place on no current monitor is replaced by
+    /// the primary monitor's centre. Off: windows go exactly where they were saved.
+    /// </summary>
+    public static bool Validate { get; set; } = true;
+
     /// <summary>Call once, before the window is first shown.</summary>
     public static void Track(Window window, string key)
     {
@@ -49,7 +55,7 @@ public static class WindowPlaces
             if (placed) return; // only the first time: after that it reopens where it was hidden
             placed = true;
             var screens = window.Screens.All.Select(s => s.WorkingArea).ToList();
-            if (window.Screens.Primary is { } primary && (saved is null || !IsOnScreen(new PixelPoint(saved.X, saved.Y), screens)))
+            if (window.Screens.Primary is { } primary && (saved is null || Validate && !IsOnScreen(new PixelPoint(saved.X, saved.Y), screens)))
                 window.Position = Centered(primary.WorkingArea, Frame(window, primary.Scaling));
         };
         window.PositionChanged += (_, _) => Remember(window, key, sizes);

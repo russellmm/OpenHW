@@ -14,6 +14,7 @@ public sealed class ColumnLayout : INotifyPropertyChanged
     public static readonly double[] Minimums = [140, 48, 48, 48, 48];
 
     private readonly double[] _widths;
+    private readonly bool[] _shown = [true, true, true, true, true];
 
     public ColumnLayout(IReadOnlyList<double>? saved)
     {
@@ -27,11 +28,23 @@ public sealed class ColumnLayout : INotifyPropertyChanged
     public IReadOnlyList<double> Widths => _widths;
 
     // Bindable per column: a Grid's ColumnDefinition.Width binds to these.
-    public GridLength C0 => new(_widths[0]);
-    public GridLength C1 => new(_widths[1]);
-    public GridLength C2 => new(_widths[2]);
-    public GridLength C3 => new(_widths[3]);
-    public GridLength C4 => new(_widths[4]);
+    public GridLength C0 => Width(0);
+    public GridLength C1 => Width(1);
+    public GridLength C2 => Width(2);
+    public GridLength C3 => Width(3);
+    public GridLength C4 => Width(4);
+
+    private GridLength Width(int column) => new(_shown[column] ? _widths[column] : 0);
+
+    /// <summary>Sensor Settings → Show columns: a hidden column takes no width (its saved width is kept).</summary>
+    public bool IsShown(int column) => _shown[column];
+
+    public void SetShown(int column, bool shown)
+    {
+        if (column == 0 || _shown[column] == shown) return; // the Sensor column always shows
+        _shown[column] = shown;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("C" + column));
+    }
 
     public void Set(int column, double width)
     {

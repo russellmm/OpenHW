@@ -93,6 +93,10 @@ public sealed class SensorSettingsWindow : ClassicDialog
     internal CheckBox AboveBox => _above;
     internal TextBox AboveField => _aboveValue;
     internal CheckBox EnableAlertingBox => _enable;
+    internal TextBox AverageField => _average;
+    internal void SetAverageNow() => SetAverage();
+    internal CheckBox ChangeColorBox => _changeColor;
+    internal CheckBox GeneralCheck(string text) => (CheckBox)_generalPage.Children.First(c => c is CheckBox { Content: string t } && t == text);
 
     private HardwareItem? Item(string? id) => id is null ? null : _hub.Inventory.FirstOrDefault(i => i.Id == id);
     private static string? SensorKey(ClassicEntryList list) => list.Selected is { IsGroup: false } e ? e.Key : null;
@@ -158,11 +162,12 @@ public sealed class SensorSettingsWindow : ClassicDialog
     // ── General ───────────────────────────────────────────────────────────────────────────────────────────────
 
     private TextBox _poll = null!;
+    private ClassicPage _generalPage = null!;
 
     // General_Settings.jpg — page frame at (13, 84).
     private ClassicPage General()
     {
-        var p = new ClassicPage(13, 84);
+        var p = _generalPage = new ClassicPage(13, 84);
         p.Group("Polling Period", 31, 101, 583, 233, 41);
         p.Label("Global:", 43, 134);
         _poll = p.Field("", 277, 120, 357, 148);
@@ -180,9 +185,11 @@ public sealed class SensorSettingsWindow : ClassicDialog
 
         p.Group("Averaging Interval", 31, 248, 583, 373, 41);
         p.Label("Average last", 43, 278);
-        p.Field("0", 291, 264, 357, 292);
+        _average = p.Field("0", 291, 264, 357, 292);
+        ToolTip.SetTip(_average, "The Average column covers the last N samples; 0 = every sample since the last reset.");
         p.Label("samples", 368, 278);
-        p.Button("Set", 463, 254, 568, 306);
+        p.Button("Set", 463, 254, 568, 306).Click += (_, _) => SetAverage();
+        OnCommit(_average, SetAverage);
         p.Label("0 = Whole runtime until user reset (default)", 47, 327);
 
         p.Group("Temperature units", 31, 406, 272, 485, 41);
@@ -201,7 +208,16 @@ public sealed class SensorSettingsWindow : ClassicDialog
             ("Accept negative temperatures (for sub-zero cooling)", false), ("Show all fans (including stopped or not present)", false),
         ];
         double[] rows = [529, 558, 586, 615, 643, 672, 700, 729, 757, 786, 814];
-        for (var i = 0; i < options.Length; i++) p.Check(options[i].Text, 34, rows[i], options[i].On);
+        var checks = options.Select((o, i) => p.Check(o.Text, 34, rows[i], o.On)).ToList();
+        CheckBox Option(string text) => checks[Array.FindIndex(options, o => o.Text == text)];
+        Bind(Option("Row Shading"), _settings, _actions.Applied, () => _settings.RowShading, v => _settings.RowShading = v,
+            "Alternate black and gray rows under each group heading.");
+        Bind(Option("Highlight changing values"), _settings, _actions.Applied, () => _settings.HighlightChanges, v => _settings.HighlightChanges = v,
+            "A Current value turns blue while it differs from the last sample.");
+        Bind(Option("Always On Top"), _settings, _actions.Applied, () => _settings.AlwaysOnTop, v => _settings.AlwaysOnTop = v,
+            "Keep the sensor window above other windows.");
+        Bind(Option("Show ToolTips"), _settings, _actions.Applied, () => _settings.ShowToolTips, v => _settings.ShowToolTips = v,
+            "Explain a sensor's reading when the pointer rests on its row.");
         p.Link("Check online for HWiNFO Addons and Extensions", 32, 853);
 
         p.Group("Show values", 597, 101, 866, 373, 608);
@@ -211,7 +227,14 @@ public sealed class SensorSettingsWindow : ClassicDialog
 
         p.Group("Show columns", 871, 101, 1142, 264, 882);
         string[] columns = ["Current", "Minimum", "Maximum", "Average", "Profiling Time"];
-        for (var i = 0; i < columns.Length; i++) p.Check(columns[i], 900, valueRows[i], i < 4);
+        var columnChecks = columns.Select((c, i) => p.Check(c, 900, valueRows[i], i < 4)).ToList();
+        (Func<bool> Get, Action<bool> Set)[] shown =
+        [
+            (() => _settings.ShowCurrent, v => _settings.ShowCurrent = v), (() => _settings.ShowMinimum, v => _settings.ShowMinimum = v),
+            (() => _settings.ShowMaximum, v => _settings.ShowMaximum = v), (() => _settings.ShowAverage, v => _settings.ShowAverage = v),
+        ];
+        for (var i = 0; i < shown.Length; i++)
+            Bind(columnChecks[i], _settings, _actions.Applied, shown[i].Get, shown[i].Set, $"Show the {columns[i]} column in the sensor window.");
 
         p.Check("Enable Hot Key to Reset Values", 638, 392);
         p.Label("Hot Key", 637, 422);
@@ -246,7 +269,28 @@ public sealed class SensorSettingsWindow : ClassicDialog
         return p;
     }
 
-    private void ShowGeneral() => _poll.Text = $"{_settings.PollSeconds * 1000:0}";
+    private TextBox _average = null!;
+
+    private void ShowGeneral()
+    {
+        _poll.Text = $"{_settings.PollSeconds * 1000:0}";
+        _average.Text = $"{_settings.AverageSamples}";
+        ShowBound();
+    }
+
+    private void SetAverage()
+    {
+        if (!UserChange) return;
+        if (!int.TryParse(_average.Text?.Trim(), out var samples) || samples < 0) { Showing(ShowGeneral); return; }
+        samples = Math.Min(samples, AppSettings.MaxAverageSamples);
+        if (samples != _settings.AverageSamples)
+        {
+            _settings.AverageSamples = samples;
+            _settings.Save();
+            _actions.Applied();
+        }
+        Showing(ShowGeneral);
+    }
 
     // HWiNFO takes any number of ms; OpenHW offers a few intervals (File → Settings), so this picks the nearest.
     private void SetPoll()
@@ -542,7 +586,7 @@ public sealed class SensorSettingsWindow : ClassicDialog
     // ── Alerts ────────────────────────────────────────────────────────────────────────────────────────────────
 
     private ClassicPage _alertPage = null!;
-    private CheckBox _enable = null!, _below = null!, _above = null!, _warning = null!;
+    private CheckBox _enable = null!, _below = null!, _above = null!, _warning = null!, _changeColor = null!;
     private TextBox _belowValue = null!, _aboveValue = null!, _samples = null!;
 
     // General_Settings_Alerts.jpg — page frame at (9, 78).
@@ -571,7 +615,16 @@ public sealed class SensorSettingsWindow : ClassicDialog
         p.Label("Note:", 566, 661);
         p.Label("%v program argument = actual sensor value", 566, 680);
         p.Label("%s program argument = actual sensor name", 566, 699);
-        p.Check("Change Item Color", 40, 690, needsSelection: true);
+        _changeColor = p.Check("Change Item Color", 40, 690, needsSelection: true);
+        ToolTip.SetTip(_changeColor, "The sensor's Current value turns red while its alert fires.");
+        _changeColor.IsCheckedChanged += (_, _) =>
+        {
+            if (!UserChange || SensorKey(AlertList) is not { } id) return;
+            var on = _changeColor.IsChecked == true;
+            var rules = _alerts.For(id).ToList();
+            if (rules.Any(r => r.ChangeColor != on)) _alerts.Update(() => rules.ForEach(r => r.ChangeColor = on));
+            else Showing(ShowAlert);
+        };
         p.Check("Log alerts into:", 40, 718, needsSelection: true);
         p.Label("\"HWiNFO_AlertLog.txt\"", 341, 718);
 
@@ -623,6 +676,7 @@ public sealed class SensorSettingsWindow : ClassicDialog
                 var others = _alerts.For(id).FirstOrDefault();
                 _alerts.Add(new AlertRule
                 {
+                    ChangeColor = _changeColor.IsChecked == true,
                     SensorId = id, Condition = condition, Threshold = CustomizeDialog.ParseNumber(value.Text) ?? 0,
                     ForSeconds = others?.ForSeconds ?? ForSeconds(int.TryParse(_samples.Text, out var n) && n > 0 ? n : 1),
                 });
@@ -650,5 +704,6 @@ public sealed class SensorSettingsWindow : ClassicDialog
         _belowValue.Text = below is null ? "0" : AlertMonitor.ThresholdText(below.Threshold);
         _aboveValue.Text = above is null ? "0" : AlertMonitor.ThresholdText(above.Threshold);
         _samples.Text = $"{(rules.Count > 0 ? Samples(rules[0].ForSeconds) : 1)}";
+        _changeColor.IsChecked = rules.Count > 0 ? rules.Any(r => r.ChangeColor) : true; // new rules change it
     }
 }
