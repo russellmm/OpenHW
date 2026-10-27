@@ -117,6 +117,12 @@ public sealed class AppSettings
         StartAtLogin = AutostartEnabled(); // the file is the truth: the user may have removed or disabled it elsewhere
     }
 
+    /// <summary>
+    /// Raised after every <see cref="Save"/> (UI thread), so each window showing a setting — File → Settings, Tray
+    /// Icons, the gear's Sensor Settings — redraws when another one changes it.
+    /// </summary>
+    public event Action? Saved;
+
     public void Save()
     {
         try
@@ -129,6 +135,7 @@ public sealed class AppSettings
         {
             Console.Error.WriteLine($"openhw: could not save settings ({ex.Message})");
         }
+        Saved?.Invoke();
     }
 
     /// <summary>

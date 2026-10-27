@@ -157,10 +157,12 @@ close on the right — power controls are in the Power menu and the tray menu on
 
 The **gear** opens **Sensor Settings**, laid out like HWiNFO's (General, Layout, Customize, Tray Icon, Alerts; OSD,
 OSD (RTSS), Logitech LCD and HWiNFO Gadget grayed "To be implemented"); its **Main Settings** button opens
-**Settings** (General / User Interface, Safety, SMBus / I2C, Driver Management; License Management grayed). Since 0.18.0
-these two dialogs are **scaffolding**: the controls work but nothing is saved yet (OK and Cancel just close), and the
-sensor lists show your real sensors and their state, read-only. Options get connected one at a time. OpenHW's own
-settings are still in File → Settings, File → Tray Icons… and View → Layout Settings….
+**Settings** (General / User Interface, Safety, SMBus / I2C, Driver Management; License Management grayed). What OpenHW
+already had is connected (0.19.0): Polling Period, the Layout, Customize, Tray Icon and Alerts tabs' per-sensor items,
+Auto Start / Minimize Main Window on Startup, and openhw-helper's status under Driver Management. They are the same
+settings as in File → Settings, File → Tray Icons…, View → Layout Settings…, File → Alerts… and the row menu, saved at
+once, and a change in either place shows in the other. The rest of the two dialogs is layout only so far (OK and
+Cancel just close); more gets connected one item at a time, and the older windows stay until it's all there.
 
 Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
 - **Show Graph** — a live window per sensor with its last 30 minutes (OpenHW keeps that history for every sensor it

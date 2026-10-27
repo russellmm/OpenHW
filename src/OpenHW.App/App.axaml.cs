@@ -240,6 +240,22 @@ public sealed class App : Application
         _trayIconsWindow?.RefreshTrayRows();
     }
 
+    // Sensor Settings → Tray Icon → Remove All Items From Tray.
+    private void ClearTray()
+    {
+        if (_settings.TrayIcons.Count == 0) return;
+        _settings.TrayIcons.Clear();
+        _settings.Save();
+        ApplySettings();
+        _trayIconsWindow?.RefreshTrayRows();
+    }
+
+    // Sensor Settings → Tray Icon → Background: the same as the icon's Color menu.
+    private void SetTrayColourOf(string sensorId, string hex)
+    {
+        if (_settings.TrayIcons.FirstOrDefault(t => ResolveTrayId(t) == sensorId) is { } config) SetTrayColour(config, hex);
+    }
+
     /// <summary>Settings changed: poll interval and tray icons take effect now.</summary>
     private void ApplySettings()
     {
@@ -581,7 +597,8 @@ public sealed class App : Application
     {
         if (_sensorSettingsWindow is null)
         {
-            WindowPlaces.Track(_sensorSettingsWindow = new SensorSettingsWindow(_hub, _settings, _alerts.Store), "sensor-settings");
+            var actions = new SensorSettingsActions(ApplySettings, TrayStateOf, AddToTray, RemoveFromTray, ClearTray, SetTrayColourOf);
+            WindowPlaces.Track(_sensorSettingsWindow = new SensorSettingsWindow(_hub, _settings, _alerts.Store, actions), "sensor-settings");
             _sensorSettingsWindow.Closed += (_, _) => _sensorSettingsWindow = null;
         }
         _sensorSettingsWindow.Show();

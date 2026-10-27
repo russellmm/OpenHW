@@ -217,7 +217,7 @@ public sealed class ClassicPage : Canvas
 public sealed class ClassicEntryList : Border
 {
     /// <summary>A line of the list: a group heading, a sensor, or the blank line between groups.</summary>
-    public sealed record Entry(string Key, bool IsGroup, string Label, string Value)
+    public sealed record Entry(string Key, bool IsGroup, string Label, string Value, string GroupKey = "")
     {
         public bool IsSpacer => Key.Length == 0;
     }
@@ -279,7 +279,18 @@ public sealed class ClassicEntryList : Border
 
     public IReadOnlyList<Entry> Entries => _list.Items.OfType<Entry>().ToList();
     public Entry? Selected { get => _list.SelectedItem as Entry; set => _list.SelectedItem = value; }
-    public void Fill(IReadOnlyList<Entry> entries) => _list.ItemsSource = entries;
+    /// <summary>Replaces the rows, keeping the selected one selected (by key) when it is still there.</summary>
+    public void Fill(IReadOnlyList<Entry> entries)
+    {
+        var selected = Selected;
+        _list.ItemsSource = entries;
+        if (selected is not null)
+            _list.SelectedItem = entries.FirstOrDefault(e => !e.IsSpacer && e.Key == selected.Key && e.IsGroup == selected.IsGroup);
+    }
+
+    /// <summary>The rows as (key, group?, group key), for <see cref="SensorWindow.LayoutWindow.MoveShown"/>.</summary>
+    public IReadOnlyList<(string Key, bool IsGroup, string GroupKey)> Shown =>
+        Entries.Where(e => !e.IsSpacer).Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList();
 
     /// <summary>OpenHW's real groups and sensors as HWiNFO lists them; <paramref name="value"/> gives each sensor's column.</summary>
     public static IReadOnlyList<Entry> FromHub(Sensors.SensorHub hub, Func<string, string> value, string groupValue = "-",
@@ -289,8 +300,8 @@ public sealed class ClassicEntryList : Border
         foreach (var group in Sensors.SensorPresentation.Build(hub.Inventory, hub.Children, hub.Machine))
         {
             if (entries.Count > 0) entries.Add(new Entry("", false, "", ""));
-            entries.Add(new Entry(group.Key, true, $"[{group.Title}]", groupValueOf?.Invoke(group) ?? groupValue));
-            entries.AddRange(group.Sensors.Select(s => new Entry(s.Id, false, s.Name, value(s.Id))));
+            entries.Add(new Entry(group.Key, true, $"[{group.Title}]", groupValueOf?.Invoke(group) ?? groupValue, group.Key));
+            entries.AddRange(group.Sensors.Select(s => new Entry(s.Id, false, s.Name, value(s.Id), group.Key)));
         }
         return entries;
     }
@@ -566,10 +577,9 @@ public abstract class ClassicDialog : Window
         },
     });
 
-    /// <summary>Wires a page's list to the controls HWiNFO grays until something is selected.</summary>
-    protected static void EnableOnSelection(ClassicPage page, ClassicEntryList list) =>
-        list.SelectionChanged += entry =>
-        {
-            foreach (var control in page.NeedSelection) control.IsEnabled = entry is { IsGroup: false };
-        };
+    /// <summary>Enables or grays the controls HWiNFO grays until a sensor is selected.</summary>
+    protected static void EnableSelectionControls(ClassicPage page, bool enabled)
+    {
+        foreach (var control in page.NeedSelection) control.IsEnabled = enabled;
+    }
 }

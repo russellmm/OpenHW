@@ -1,30 +1,74 @@
 using Avalonia;
 using Avalonia.Controls;
+using OpenHW.Hardware;
 
 namespace OpenHW.App.Settings;
 
 /// <summary>
 /// Sensor Settings → Main Settings: HWiNFO's "Settings" dialog (reference/settings_menu/Main_Settings_*.jpg).
-/// <b>Scaffolding</b> like <see cref="SensorSettingsWindow"/>: the controls work, nothing is saved, OK and Cancel
-/// close. License Management is grayed (OpenHW has no license to manage).
+/// Like <see cref="SensorSettingsWindow"/>, what OpenHW already has is connected and saved at once — Auto Start and
+/// Minimize Main Window on Startup are File → Settings' start-at-login options, Driver Management shows
+/// openhw-helper (OpenHW's root helper, its "driver") — and the rest is scaffolding. OK and Cancel close.
+/// License Management is grayed (OpenHW has no license to manage).
 /// </summary>
 public sealed class MainSettingsWindow : ClassicDialog
 {
     public static readonly string[] Tabs = ["General / User Interface", "Safety", "SMBus / I2C", "Driver Management", "License Management"];
 
-    public MainSettingsWindow()
+    private readonly AppSettings _settings;
+    private readonly Action _applied;
+    private CheckBox _autoStart = null!, _startMinimized = null!;
+    private TextBlock _driverStatus = null!;
+    private bool _showing; // showing saved values: not a user change
+
+    public MainSettingsWindow(AppSettings settings, Action applied, Func<string>? ping = null)
         : base("OpenHW - Settings", new Size(813, 453), new Rect(4, 29.6, 800.8, 383.2), new Point(522.4, 423.2))
     {
+        (_settings, _applied) = (settings, applied);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AddTab("General / User Interface", General());
         AddTab("Safety", Safety());
         AddTab("SMBus / I2C", SmbusI2c());
         AddTab("Driver Management", DriverManagement());
         AddTab("License Management", null);
+        ShowSaved();
+        settings.Saved += ShowSaved;
+        Closed += (_, _) => settings.Saved -= ShowSaved;
+        ping ??= () => HelperClient.Request("ping");
+        Opened += async (_, _) => _driverStatus.Text = await Task.Run(() => HelperStatus(ping));
+    }
+
+    internal CheckBox AutoStartBox => _autoStart;
+    internal CheckBox StartMinimizedBox => _startMinimized;
+    internal string DriverStatus => _driverStatus.Text ?? "";
+
+    /// <summary>openhw-helper's state, as HWiNFO shows its driver's: "Running (protocol N)" (its ping reply) or "Not running".</summary>
+    internal static string HelperStatus(Func<string> ping)
+    {
+        try { return $"Running (protocol {ping().Trim()})"; }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException) { return "Not running"; }
+    }
+
+    private void ShowSaved()
+    {
+        _showing = true;
+        _autoStart.IsChecked = _settings.StartAtLogin;
+        _startMinimized.IsChecked = _settings.StartInTray;
+        // As in File → Settings: only OpenHW's own login entry can start it with just the tray icons.
+        _startMinimized.IsEnabled = _settings.StartAtLogin && AppSettings.ForeignAutostart() is null;
+        _showing = false;
+    }
+
+    private void Save(Action change)
+    {
+        if (_showing) return;
+        change();
+        _settings.Save();
+        _applied();
     }
 
     // Main_Settings_General.jpg — page frame at (7, 81).
-    private static ClassicPage General()
+    private ClassicPage General()
     {
         var p = new ClassicPage(7, 81);
         (string Text, bool On)[] left =
@@ -34,7 +78,14 @@ public sealed class MainSettingsWindow : ClassicDialog
             ("Validate Window Positions", true), ("Auto Start", true), ("Automatic Update", true), ("Flush Buffers on Start", true),
             ("Snapshot CPU Polling", false), ("Shared Memory Support", true),
         ];
-        for (var i = 0; i < left.Length; i++) p.Check(left[i].Text, 26, 109 + 30 * i, left[i].On);
+        var checks = left.Select((c, i) => p.Check(c.Text, 26, 109 + 30 * i, c.On)).ToList();
+        _startMinimized = checks[2];
+        _autoStart = checks[7];
+        ToolTip.SetTip(_startMinimized, "At login, start with only the tray icons (File → Settings).");
+        ToolTip.SetShowOnDisabled(_startMinimized, true);
+        ToolTip.SetTip(_autoStart, "Start OpenHW when you log in (File → Settings).");
+        _autoStart.IsCheckedChanged += (_, _) => Save(() => _settings.StartAtLogin = _autoStart.IsChecked == true);
+        _startMinimized.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = _startMinimized.IsChecked == true);
         p.Label("[12-HOUR LIMIT]", 52, 460, bold: true);
         p.Label("Language:", 24, 489);
         p.Combo(["English"], 0, 24, 507, 329, 534);
@@ -129,11 +180,13 @@ public sealed class MainSettingsWindow : ClassicDialog
     }
 
     // Main_Settings_Driver_Management.jpg — page frame at (9, 86).
-    private static ClassicPage DriverManagement()
+    private ClassicPage DriverManagement()
     {
         var p = new ClassicPage(9, 86);
         p.Label("Current Status:", 39, 127);
-        p.Readout("Installed", 215, 112, 349, 141);
+        var status = p.Readout("…", 215, 112, 349, 141);
+        _driverStatus = (TextBlock)status.Child!;
+        ToolTip.SetTip(status, "openhw-helper, OpenHW's root helper (HWiNFO's driver): installed with the .deb, run by systemd.");
         p.Button("Install", 40, 181, 172, 222);
         p.Button("Remove", 216, 181, 348, 222);
         p.Check("Persistent Driver", 40, 279);

@@ -3,6 +3,25 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.19.0 — 2026-10-26
+
+- **Sensor Settings and Settings now change real options**, the ones OpenHW already had. Each is the same setting
+  as in OpenHW's other windows, saved the moment you change it, and a change made in either place shows in the
+  other right away (OK and Cancel just close):
+  - General → **Polling Period → Global** = File → Settings → Poll every (any ms; OpenHW uses the nearest of 1, 2, 3,
+    5 or 10 s).
+  - **Layout** = View → Layout Settings…: Monitoring, Show / Hidden items, the order arrows, Restore Original Order.
+  - **Customize** = the row's Rename… and Customize values… and Enable Logging: Label, Unit, Multiply / Add (+),
+    Decimal Digits, Logged.
+  - **Tray Icon** = File → Tray Icons… and the row's Add to tray: Show in Tray, the Background color, Add All Items
+    To Tray (up to 8 icons), Remove All Items From Tray.
+  - **Alerts** = File → Alerts…: Enable Alerting, If value < / If value >= with their thresholds (OpenHW's "below" and
+    "above"; above means more than), Number of samples to trigger alarm (× the poll interval). Display Warning Window
+    is always on: OpenHW always shows a desktop notification.
+  - Main Settings → **Auto Start** and **Minimize Main Window on Startup** = File → Settings → start at login and
+    "with only the tray icons". **Driver Management → Current Status** shows whether openhw-helper is running.
+- Everything else in the two dialogs is still layout only and changes nothing.
+
 ## 0.18.0 — 2026-10-26
 
 - The footer's **settings gear** now opens **Sensor Settings**, laid out like HWiNFO's: General, Layout, Customize,

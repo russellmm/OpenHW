@@ -19,6 +19,9 @@ public sealed class SettingsWindow : Window
     private readonly CheckBox _startInTray;
     private readonly TextBlock _loginNote;
     private readonly Button _restart;
+    private readonly ComboBox _poll;
+    private readonly CheckBox _startAtLogin;
+    private bool _refreshing; // showing a change made elsewhere: not a user change
 
     public SettingsWindow(AppSettings settings, Action applied, Action showTrayIcons, Action? restart = null)
     {
@@ -32,15 +35,15 @@ public sealed class SettingsWindow : Window
         Foreground = Palette.Text;
         FontSize = 12.5;
 
-        var poll = new ComboBox { Width = 100 };
+        var poll = _poll = new ComboBox { Width = 100 };
         foreach (var seconds in AppSettings.PollChoices) poll.Items.Add(new ComboBoxItem { Content = $"{seconds:0} s", Tag = seconds });
         poll.SelectedItem = poll.Items.OfType<ComboBoxItem>().First(i => (double)i.Tag! == settings.PollSeconds);
         poll.SelectionChanged += (_, _) =>
         {
-            if (poll.SelectedItem is ComboBoxItem { Tag: double s } && s != _settings.PollSeconds) Save(() => _settings.PollSeconds = s);
+            if (!_refreshing && poll.SelectedItem is ComboBoxItem { Tag: double s } && s != _settings.PollSeconds) Save(() => _settings.PollSeconds = s);
         };
 
-        var startAtLogin = new CheckBox { Content = "Start OpenHW when I log in", IsChecked = settings.StartAtLogin };
+        var startAtLogin = _startAtLogin = new CheckBox { Content = "Start OpenHW when I log in", IsChecked = settings.StartAtLogin };
         var startInTray = _startInTray = new CheckBox
         {
             Content = "…with only the tray icons (window hidden)", IsChecked = settings.StartInTray,
@@ -49,11 +52,13 @@ public sealed class SettingsWindow : Window
         _loginNote = Note("");
         startAtLogin.IsCheckedChanged += (_, _) =>
         {
+            if (_refreshing) return;
             Save(() => _settings.StartAtLogin = startAtLogin.IsChecked == true);
             ShowLoginEntry();
         };
         ShowLoginEntry();
-        startInTray.IsCheckedChanged += (_, _) => Save(() => _settings.StartInTray = startInTray.IsChecked == true);
+        settings.Saved += ShowSaved;
+        startInTray.IsCheckedChanged += (_, _) => { if (!_refreshing) Save(() => _settings.StartInTray = startInTray.IsChecked == true); };
 
         var pauseWhenHidden = new CheckBox { Content = "Pause sensors while the window is hidden", IsChecked = settings.PauseWhenHidden };
         pauseWhenHidden.IsCheckedChanged += (_, _) => Save(() => _settings.PauseWhenHidden = pauseWhenHidden.IsChecked == true);
@@ -133,6 +138,17 @@ public sealed class SettingsWindow : Window
                 _status,
             },
         };
+    }
+
+    // Poll interval and start-at-login can also be changed from the gear's Sensor Settings / Settings.
+    private void ShowSaved()
+    {
+        _refreshing = true;
+        _poll.SelectedItem = _poll.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (double)i.Tag! == _settings.PollSeconds);
+        _startAtLogin.IsChecked = _settings.StartAtLogin;
+        _startInTray.IsChecked = _settings.StartInTray;
+        ShowLoginEntry();
+        _refreshing = false;
     }
 
     // "Automatic" names the scale it gives right now, read from this window once it is on a screen.

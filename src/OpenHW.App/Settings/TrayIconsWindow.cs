@@ -100,6 +100,7 @@ public sealed class TrayIconsWindow : Window
         };
         FillPicker();
         RebuildTrayRows();
+        _settings.Saved += () => { if (!_saving) RefreshTrayRows(); };
 
         Content = new ScrollViewer
         {
@@ -328,7 +329,9 @@ public sealed class TrayIconsWindow : Window
     private void Save(Action change, bool rebuild = false)
     {
         change();
-        _settings.Save();
+        _saving = true;
+        try { _settings.Save(); }
+        finally { _saving = false; }
         _applied();
         if (rebuild)
         {
@@ -338,7 +341,9 @@ public sealed class TrayIconsWindow : Window
         _status.Text = "Saved.";
     }
 
-    /// <summary>The tray list changed elsewhere (a sensor row's "Add to tray"): redraw it if the window is up.</summary>
+    private bool _saving; // this window's own save: it redraws itself
+
+    /// <summary>The tray list changed elsewhere (a sensor row's "Add to tray", the gear's Tray Icon tab): redraw it if the window is up.</summary>
     public void RefreshTrayRows()
     {
         if (!IsVisible) return;

@@ -184,24 +184,34 @@ public sealed class LayoutWindow : Window
         _status.Text = entry is null ? "Select a group or sensor." : entry.IsGroup ? "Moves the whole group." : "";
     }
 
-    // Moves the selection among what the main list shows: a group among groups, a sensor within its group. Hidden
-    // rows keep their places (Arrange fills only the positions of the rows it names).
+    // Moves the selection among what the main list shows: a group among groups, a sensor within its group.
     private void Move(int by)
     {
         if (_list.SelectedItem is not Entry entry) return;
-        if (entry.IsGroup)
+        MoveShown(_custom, _groups, Entries(_list).Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList(), entry.Key, entry.IsGroup, entry.GroupKey, by);
+    }
+
+    /// <summary>
+    /// Moves a group among the shown groups, or a sensor within its group, and saves the new order (also the gear's
+    /// Sensor Settings → Layout). Hidden rows keep their places (Arrange fills only the positions of the rows it names).
+    /// by: -1/+1 one step, int.MinValue/MaxValue to the ends.
+    /// </summary>
+    internal static void MoveShown(SensorCustomizations custom, IReadOnlyList<SensorGroupView> groups,
+        IReadOnlyList<(string Key, bool IsGroup, string GroupKey)> shown, string key, bool isGroup, string groupKey, int by)
+    {
+        if (isGroup)
         {
-            var keys = Entries(_list).Where(e => e.IsGroup).Select(e => e.Key).ToList();
-            if (Shift(keys, entry.Key, by)) _custom.SetGroupOrder(SensorCustomizations.Arrange(_groups.Select(g => g.Key).ToList(), k => k, keys));
+            var keys = shown.Where(e => e.IsGroup).Select(e => e.Key).ToList();
+            if (Shift(keys, key, by)) custom.SetGroupOrder(SensorCustomizations.Arrange(groups.Select(g => g.Key).ToList(), k => k, keys));
         }
-        else if (_groups.FirstOrDefault(g => g.Key == entry.GroupKey) is { } group)
+        else if (groups.FirstOrDefault(g => g.Key == groupKey) is { } group)
         {
-            var ids = Entries(_list).Where(e => !e.IsGroup && e.GroupKey == group.Key).Select(e => e.Key).ToList();
-            if (Shift(ids, entry.Key, by)) _custom.SetRowOrder(group.Key, SensorCustomizations.Arrange(group.Sensors.Select(s => s.Id).ToList(), k => k, ids));
+            var ids = shown.Where(e => !e.IsGroup && e.GroupKey == group.Key).Select(e => e.Key).ToList();
+            if (Shift(ids, key, by)) custom.SetRowOrder(group.Key, SensorCustomizations.Arrange(group.Sensors.Select(s => s.Id).ToList(), k => k, ids));
         }
     }
 
-    // by: -1/+1 one step, int.MinValue/MaxValue to the ends. False when nothing moves.
+    // False when nothing moves.
     private static bool Shift(List<string> keys, string key, int by)
     {
         var from = keys.IndexOf(key);

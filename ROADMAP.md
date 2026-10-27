@@ -153,7 +153,9 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
 - [x] **HWiNFO settings menu, scaffolding** (0.18.0): footer gear → Sensor Settings (General, Layout, Customize,
       Tray Icon, Alerts) → Main Settings (General / User Interface, Safety, SMBus / I2C, Driver Management), laid out
       from `reference/settings_menu/`; tabs without a capture grayed. Nothing saved yet.
-- [ ] **Connect the settings menu** item by item (owner-led): each control to the matching OpenHW option, or grayed
+- [x] **Connect what OpenHW already has** (0.19.0): Polling Period, Layout, Customize, Tray Icon and Alerts items,
+      Auto Start / Minimize on Startup, helper status — two-way with the older windows, which stay for now (owner).
+- [ ] **Connect the rest of the settings menu** item by item (owner-led): each control to the matching OpenHW option, or grayed
       "To be implemented" where there is none yet; decide which Windows-only items (PresentMon, ADL, Intel ME, CSMI
       SAS, NVAPI, Driver Management) get a Linux meaning, a new name, or are grayed. Then decide what happens to
       File → Settings, Tray Icons… and Layout Settings… (they overlap with these tabs).

@@ -6,11 +6,16 @@ using Avalonia.VisualTree;
 using OpenHW.App.Alerts;
 using OpenHW.App.Sensors;
 using OpenHW.App.Settings;
+using OpenHW.App.SensorWindow;
 using Xunit;
 
 namespace OpenHW.App.Tests;
 
-/// <summary>The footer gear's HWiNFO-style Sensor Settings and Main Settings dialogs (scaffolding: nothing saved).</summary>
+/// <summary>
+/// The footer gear's HWiNFO-style Sensor Settings and Main Settings dialogs: their tabs, the items connected to
+/// OpenHW's settings — each change showing both here and in the older window that sets the same thing — and the
+/// scaffolding that still saves nothing.
+/// </summary>
 public sealed class SensorSettingsTests
 {
     private static string Isolate()
@@ -25,24 +30,54 @@ public sealed class SensorSettingsTests
         window.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(
             Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? System.IO.Path.GetTempPath(), $"openhw-{name}.png"));
 
-    private static (SensorHub Hub, SensorSettingsWindow Window) Open()
+    /// <summary>The app's tray calls, done on the settings directly (App saves and re-registers the icons).</summary>
+    private static SensorSettingsActions Actions(AppSettings s, SensorHub hub)
+    {
+        string? Resolve(TraySensor t) => t.SensorId == AppSettings.CpuTemperature ? hub.CpuTemperatureId() : t.SensorId;
+        return new SensorSettingsActions(
+            () => { },
+            id =>
+            {
+                var inTray = s.TrayIcons.Any(t => Resolve(t) == id);
+                return new TrayState(inTray, !inTray && s.TrayIcons.Count < AppSettings.MaxTrayIcons, null);
+            },
+            id => { s.TrayIcons.Add(new TraySensor { SensorId = id }); s.Save(); },
+            id => { s.TrayIcons.RemoveAll(t => Resolve(t) == id); s.Save(); },
+            () => { s.TrayIcons.Clear(); s.Save(); },
+            (id, hex) => { foreach (var t in s.TrayIcons.Where(t => Resolve(t) == id)) t.Colour = hex; s.Save(); });
+    }
+
+    private sealed record Setup(SensorHub Hub, AppSettings Settings, AlertStore Alerts, SensorSettingsWindow Window) : IDisposable
+    {
+        public void Dispose()
+        {
+            Window.Close();
+            Hub.Dispose();
+        }
+    }
+
+    private static Setup Open()
     {
         var hub = new SensorHub();
         hub.Sample();
-        var window = new SensorSettingsWindow(hub, AppSettings.Load(), AlertStore.Load());
+        var settings = AppSettings.Load();
+        var alerts = AlertStore.Load();
+        var window = new SensorSettingsWindow(hub, settings, alerts, Actions(settings, hub));
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        return (hub, window);
+        return new Setup(hub, settings, alerts, window);
     }
+
+    private static ClassicEntryList.Entry FirstSensor(ClassicEntryList list, Func<ClassicEntryList.Entry, bool>? where = null) =>
+        list.Entries.First(e => !e.IsGroup && !e.IsSpacer && (where?.Invoke(e) ?? true));
 
     [AvaloniaFact]
     public void HasHwinfosTabsWithTheMissingOnesGrayed()
     {
         Isolate();
-        var (hub, window) = Open();
-        using var _ = hub;
+        using var s = Open();
+        var window = s.Window;
         Assert.Equal(SensorSettingsWindow.Tabs, window.TabTitles);
-        Assert.Equal("General", window.TabTitles[0]);
         foreach (var missing in new[] { "OSD", "OSD (RTSS)", "Logitech LCD", "HWiNFO Gadget" }) Assert.False(window.SelectTab(missing));
         foreach (var tab in new[] { "General", "Layout", "Customize", "Tray Icon", "Alerts" })
         {
@@ -50,18 +85,15 @@ public sealed class SensorSettingsTests
             Dispatcher.UIThread.RunJobs();
             Capture(window, $"sensor-settings-{tab.Replace(' ', '-').ToLowerInvariant()}");
         }
-        window.Close();
     }
 
     [AvaloniaFact]
     public void EntryListsShowTheRealSensorsAndSelectionEnablesTheControls()
     {
         Isolate();
-        var (hub, window) = Open();
-        using var _ = hub;
-        var entries = window.LayoutList.Entries;
-        Assert.NotEmpty(entries);
-        Assert.StartsWith("[", entries[0].Label);
+        using var s = Open();
+        var window = s.Window;
+        Assert.StartsWith("[", window.LayoutList.Entries[0].Label);
         Assert.All(window.CustomizeList.Entries.Where(e => e.IsGroup), e => Assert.Equal("-", e.Value));
         Assert.Contains(window.TrayList.Entries, e => e.Value == "Yes"); // the default CPU temperature tile
 
@@ -69,23 +101,191 @@ public sealed class SensorSettingsTests
         Dispatcher.UIThread.RunJobs();
         var page = window.SelectedPage!;
         Assert.All(page.NeedSelection, c => Assert.False(c.IsEnabled));
-        window.AlertList.Selected = window.AlertList.Entries.First(e => !e.IsGroup && !e.IsSpacer);
+        window.AlertList.Selected = FirstSensor(window.AlertList);
         Assert.All(page.NeedSelection, c => Assert.True(c.IsEnabled));
         window.AlertList.Selected = window.AlertList.Entries.First(e => e.IsGroup);
         Assert.All(page.NeedSelection, c => Assert.False(c.IsEnabled));
-        window.Close();
     }
 
     [AvaloniaFact]
-    public void TogglingAndOkSaveNothing()
+    public void PollingPeriodIsFileSettingsPollInterval()
+    {
+        Isolate();
+        using var s = Open();
+        var settingsWindow = new SettingsWindow(s.Settings, () => { }, () => { });
+        settingsWindow.Show();
+        Dispatcher.UIThread.RunJobs();
+        var poll = settingsWindow.GetVisualDescendants().OfType<ComboBox>().First();
+        Assert.Equal("2000", s.Window.PollField.Text);
+
+        s.Window.PollField.Text = "4400"; // OpenHW's nearest interval
+        s.Window.SetPollNow();
+        Assert.Equal(5, s.Settings.PollSeconds);
+        Assert.Equal("5000", s.Window.PollField.Text);
+        Assert.Equal(5.0, (poll.SelectedItem as ComboBoxItem)?.Tag);
+
+        poll.SelectedItem = poll.Items.OfType<ComboBoxItem>().First(i => (double)i.Tag! == 3);
+        Assert.Equal(3, s.Settings.PollSeconds);
+        Assert.Equal("3000", s.Window.PollField.Text);
+        Assert.Equal(3, AppSettings.Load().PollSeconds); // saved
+        settingsWindow.Close();
+    }
+
+    [AvaloniaFact]
+    public void LayoutTabIsViewLayoutSettings()
+    {
+        Isolate();
+        using var s = Open();
+        var custom = SensorCustomizations.Current;
+        var layout = new LayoutWindow(s.Hub);
+        var window = s.Window;
+        window.SelectTab("Layout");
+        var sensor = FirstSensor(window.LayoutList);
+        window.LayoutList.Selected = sensor;
+
+        window.MonitoringBox.IsChecked = false;
+        Assert.True(custom.IsDisabled(sensor.Key));
+        Assert.Equal("No", layout.ListEntries.First(e => e.Key == sensor.Key).Monitoring);
+        custom.SetDisabled(sensor.Key, false); // the row menu / Layout Settings
+        Assert.True(window.MonitoringBox.IsChecked);
+        Assert.Equal("Yes", window.LayoutList.Entries.First(e => e.Key == sensor.Key).Value);
+
+        window.ShowBox.IsChecked = false;
+        Assert.True(custom.IsHidden(sensor.Key));
+        Assert.Contains(layout.HiddenEntries, e => e.Key == sensor.Key);
+        Assert.Equal(sensor.Key, window.HiddenList.Selected?.Key); // follows it into Hidden items
+        window.ShowBox.IsChecked = true;
+        Assert.False(custom.IsHidden(sensor.Key));
+
+        // Moving the group's second sensor up puts it first, in both windows.
+        var group = window.LayoutList.Entries.Where(e => !e.IsGroup && !e.IsSpacer && e.GroupKey == sensor.GroupKey).ToList();
+        window.LayoutList.Selected = group[1];
+        window.MoveSelected(-1);
+        Assert.Equal(group[1].Key, window.LayoutList.Entries.First(e => !e.IsGroup && e.GroupKey == sensor.GroupKey).Key);
+        Assert.Equal(group[1].Key, layout.ListEntries.First(e => !e.IsGroup && e.GroupKey == sensor.GroupKey).Key);
+        custom.RestoreOriginalOrder();
+        Assert.Equal(group[0].Key, window.LayoutList.Entries.First(e => !e.IsGroup && e.GroupKey == sensor.GroupKey).Key);
+        layout.Close();
+    }
+
+    [AvaloniaFact]
+    public void CustomizeTabIsRenameCustomizeValuesAndLogging()
+    {
+        Isolate();
+        using var s = Open();
+        var custom = SensorCustomizations.Current;
+        var window = s.Window;
+        window.SelectTab("Customize");
+        var item = s.Hub.Inventory.First(i => SensorPresentation.CanCustomize(i) && window.CustomizeList.Entries.Any(e => e.Key == i.Id));
+        window.CustomizeList.Selected = window.CustomizeList.Entries.First(e => e.Key == item.Id);
+        Assert.Equal(SensorPresentation.BuiltInName(item), window.CurrentLabel.Text);
+
+        window.CurrentLabel.Text = "Renamed here";
+        window.RenameLabelNow();
+        Assert.Equal("Renamed here", custom.NameOf(item.Id));
+        custom.Rename(item.Id, "Renamed in the row menu");
+        Assert.Equal("Renamed in the row menu", window.CurrentLabel.Text);
+        Assert.Equal("Renamed in the row menu", window.CustomizeList.Entries.First(e => e.Key == item.Id).Label);
+
+        window.MultiplyField.Text = "1,8"; // either decimal separator, as Customize values…
+        window.SetValuesNow();
+        Assert.Equal(1.8, custom.ValuesOf(item.Id)?.Multiply);
+        custom.Customize(item.Id, null);
+        Assert.Equal("1", window.MultiplyField.Text);
+
+        window.LoggedBox.IsChecked = true;
+        Assert.True(custom.IsLogged(item.Id));
+        Assert.Equal("Yes", window.CustomizeList.Entries.First(e => e.Key == item.Id).Value);
+        custom.SetLogged(item.Id, false); // the row menu's Disable Logging
+        Assert.False(window.LoggedBox.IsChecked);
+    }
+
+    [AvaloniaFact]
+    public void TrayIconTabIsAddAndRemoveFromTray()
+    {
+        Isolate();
+        using var s = Open();
+        var window = s.Window;
+        window.SelectTab("Tray Icon");
+        var sensor = FirstSensor(window.TrayList, e => e.Value == "No");
+        window.TrayList.Selected = sensor;
+        Assert.False(window.InTrayBox.IsChecked);
+
+        window.InTrayBox.IsChecked = true;
+        Assert.Contains(s.Settings.TrayIcons, t => t.SensorId == sensor.Key);
+        Assert.Equal("Yes", window.TrayList.Entries.First(e => e.Key == sensor.Key).Value);
+
+        s.Settings.TrayIcons.RemoveAll(t => t.SensorId == sensor.Key); // e.g. the icon's own Remove
+        s.Settings.Save();
+        Assert.False(window.InTrayBox.IsChecked);
+        Assert.Equal("No", window.TrayList.Entries.First(e => e.Key == sensor.Key).Value);
+    }
+
+    [AvaloniaFact]
+    public void AlertsTabIsOpenHwsAlertRules()
+    {
+        Isolate();
+        using var s = Open();
+        var window = s.Window;
+        window.SelectTab("Alerts");
+        var sensor = FirstSensor(window.AlertList);
+        window.AlertList.Selected = sensor;
+
+        window.AboveField.Text = "80";
+        window.AboveBox.IsChecked = true;
+        var rule = Assert.Single(s.Alerts.For(sensor.Key));
+        Assert.Equal((AlertCondition.Above, 80.0, true), (rule.Condition, rule.Threshold, rule.Enabled));
+        Assert.Equal("Yes", window.AlertList.Entries.First(e => e.Key == sensor.Key).Value);
+
+        s.Alerts.Update(() => rule.Threshold = 90); // File → Alerts…
+        Assert.Equal("90", window.AboveField.Text);
+        window.EnableAlertingBox.IsChecked = false;
+        Assert.False(rule.Enabled);
+
+        s.Alerts.Remove(rule);
+        Assert.False(window.AboveBox.IsChecked);
+        Assert.Equal("No", window.AlertList.Entries.First(e => e.Key == sensor.Key).Value);
+    }
+
+    [AvaloniaFact]
+    public void MainSettingsStartupItemsAreFileSettingsStartAtLogin()
+    {
+        Isolate();
+        var settings = AppSettings.Load();
+        var settingsWindow = new SettingsWindow(settings, () => { }, () => { });
+        settingsWindow.Show();
+        var main = new MainSettingsWindow(settings, () => { }, () => "11");
+        main.Show();
+        Dispatcher.UIThread.RunJobs();
+        var startAtLogin = settingsWindow.GetVisualDescendants().OfType<CheckBox>().First(c => c.Content as string == "Start OpenHW when I log in");
+
+        main.AutoStartBox.IsChecked = true;
+        Assert.True(settings.StartAtLogin);
+        Assert.True(File.Exists(AppSettings.AutostartPath));
+        Assert.True(startAtLogin.IsChecked);
+        Assert.True(main.StartMinimizedBox.IsEnabled);
+
+        startAtLogin.IsChecked = false;
+        Assert.False(main.AutoStartBox.IsChecked);
+        Assert.False(main.StartMinimizedBox.IsEnabled); // only meaningful at login, as in File → Settings
+        main.Close();
+        settingsWindow.Close();
+
+        Assert.Equal("Running (protocol 11)", MainSettingsWindow.HelperStatus(() => "11"));
+        Assert.Equal("Not running", MainSettingsWindow.HelperStatus(() => throw new System.Net.Sockets.SocketException()));
+    }
+
+    [AvaloniaFact]
+    public void ScaffoldingControlsSaveNothing()
     {
         var dir = Isolate();
-        var (hub, window) = Open();
-        using var _ = hub;
-        foreach (var check in window.SelectedPage!.GetVisualDescendants().OfType<CheckBox>()) check.IsChecked = !check.IsChecked;
-        window.Ok.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        using var s = Open();
+        // General's check boxes and radios aren't connected yet.
+        foreach (var check in s.Window.SelectedPage!.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>())
+            check.IsChecked = !check.IsChecked;
+        s.Window.Ok.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
-        Assert.False(window.IsVisible);
+        Assert.False(s.Window.IsVisible);
         Assert.False(File.Exists(System.IO.Path.Combine(dir, "openhw", "settings.json")));
     }
 
@@ -93,16 +293,14 @@ public sealed class SensorSettingsTests
     public void MainSettingsButtonOpensTheSettingsDialog()
     {
         Isolate();
-        var (hub, window) = Open();
-        using var _ = hub;
+        using var s = Open();
         var opened = false;
-        window.ShowMainSettings = () => { opened = true; return Task.CompletedTask; };
-        var button = window.SelectedPage!.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Main Settings");
+        s.Window.ShowMainSettings = () => { opened = true; return Task.CompletedTask; };
+        var button = s.Window.SelectedPage!.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Main Settings");
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.True(opened);
-        window.Close();
 
-        var main = new MainSettingsWindow();
+        var main = new MainSettingsWindow(s.Settings, () => { }, () => "11");
         main.Show();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(MainSettingsWindow.Tabs, main.TabTitles);
