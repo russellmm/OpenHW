@@ -155,6 +155,13 @@ Power Limits… Ctrl+L, GPU Lending…) and **Help** (About). New features get a
 all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
 close on the right — power controls are in the Power menu and the tray menu only.
 
+The **gear** opens **Sensor Settings**, laid out like HWiNFO's (General, Layout, Customize, Tray Icon, Alerts; OSD,
+OSD (RTSS), Logitech LCD and HWiNFO Gadget grayed "To be implemented"); its **Main Settings** button opens
+**Settings** (General / User Interface, Safety, SMBus / I2C, Driver Management; License Management grayed). Since 0.18.0
+these two dialogs are **scaffolding**: the controls work but nothing is saved yet (OK and Cancel just close), and the
+sensor lists show your real sensors and their state, read-only. Options get connected one at a time. OpenHW's own
+settings are still in File → Settings, File → Tray Icons… and View → Layout Settings….
+
 Right-clicking a sensor row opens HWiNFO's sensor menu, item for item:
 - **Show Graph** — a live window per sensor with its last 30 minutes (OpenHW keeps that history for every sensor it
   reads; unread stretches are gaps) and Current/Min/Max/Average.
@@ -315,7 +322,9 @@ dotnet test
 
 Headless: the helper protocol, its validation and the client/server socket round trip run without root or a display.
 `tests/OpenHW.App.Tests` renders the real window with Avalonia's headless Skia backend (no display) to check what
-rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors.
+rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
+saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
+HWiNFO captures in `reference/settings_menu/`.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
@@ -331,7 +340,8 @@ fixes only. The version is set once in `Directory.Build.props` (app, helper and 
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
 highlight, expand/collapse all, reset) with HWiNFO's sensor menu (graphs, rename, hide, monitoring, logging, alerts,
-layout and value customization), up to 8 tray icons, CSV logging, alerts with desktop notifications, power-mode
+layout and value customization), HWiNFO's Sensor Settings / Settings dialogs behind the footer gear (layout only so
+far), up to 8 tray icons, CSV logging, alerts with desktop notifications, power-mode
 switching that keeps boost working, all-core and per-core CPU frequency caps, CPU and GPU power limits, and the
 root helper for NVMe SMART, RAPL, DIMM and VR sensors, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).

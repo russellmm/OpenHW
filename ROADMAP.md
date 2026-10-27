@@ -150,7 +150,15 @@ NVIDIA OpenGL driver mappings (Avalonia renders through GL), ~98 MB shared libra
       every reading.
 - [ ] Hover info for tray icons on GNOME (the AppIndicators extension shows no tooltips): a left-click info popup,
       or an OpenHW GNOME Shell extension with real hover tooltips. Deferred by the owner.
-- [ ] More settings modelled on `reference/` (units, shown columns, row shading, highlight).
+- [x] **HWiNFO settings menu, scaffolding** (0.18.0): footer gear → Sensor Settings (General, Layout, Customize,
+      Tray Icon, Alerts) → Main Settings (General / User Interface, Safety, SMBus / I2C, Driver Management), laid out
+      from `reference/settings_menu/`; tabs without a capture grayed. Nothing saved yet.
+- [ ] **Connect the settings menu** item by item (owner-led): each control to the matching OpenHW option, or grayed
+      "To be implemented" where there is none yet; decide which Windows-only items (PresentMon, ADL, Intel ME, CSMI
+      SAS, NVAPI, Driver Management) get a Linux meaning, a new name, or are grayed. Then decide what happens to
+      File → Settings, Tray Icons… and Layout Settings… (they overlap with these tabs).
+- [ ] More settings modelled on `reference/` (units, shown columns, row shading, highlight) — most are on the
+      General tab now, waiting to be connected.
 - [x] Column resizing; remember window size/position, expanded groups and hidden sensors.
 - [x] CSV logging.
 - [x] Single instance (a second launch shows the running window).
