@@ -552,13 +552,11 @@ public sealed class SensorSettingsWindow : ClassicDialog
         p.Label("Show value type:", 42, 785);
         p.Combo(["Current", "Minimum", "Maximum", "Average"], -1, 301, 769, 462, 795);
 
+        // Owner, 2026-10-28: the tray has no icon limit, so this would put every sensor (hundreds) on the panel.
         var addAll = p.Button("Add All Items To Tray", 691, 669, 949, 723);
-        ToolTip.SetTip(addAll, $"Adds sensors in list order until the tray has {AppSettings.MaxTrayIcons} icons, the most OpenHW shows.");
-        addAll.Click += (_, _) =>
-        {
-            foreach (var entry in TrayList.Entries.Where(e => !e.IsGroup && !e.IsSpacer))
-                if (_actions.TrayStateOf(entry.Key).CanAdd) _actions.AddToTray(entry.Key);
-        };
+        addAll.IsEnabled = false;
+        ToolTip.SetShowOnDisabled(addAll, true);
+        ToolTip.SetTip(addAll, "Not offered in OpenHW: it would put every sensor in the tray. Add sensors one at a time with Show In Tray.");
         p.Button("Remove All Items From Tray", 691, 741, 949, 795).Click += (_, _) => _actions.ClearTray();
         TrayList.SelectionChanged += _ => Showing(ShowTray);
         return p;

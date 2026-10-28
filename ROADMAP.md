@@ -50,7 +50,7 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
       (helper `cpuppt`); shows the active frequency limit and its source. Live until reboot.
 - [x] **Keep power limits after reboot** — in the existing boot services' config: hsmp-control's `ppt_mw` (100–300 W)
       and an OpenHW drop-in for `nvidia-power-limit.service` (helper `cpupptboot` / `gpupowerboot`).
-- [x] **Settings window** — poll interval, start at login (`--tray`), tray icons (sensor + colour, up to 8),
+- [x] **Settings window** — poll interval, start at login (`--tray`), tray icons (sensor + colour, no limit since 0.20.2),
       single instance.
 - [x] **Power modes** — switch power-profiles-daemon's profile from the footer and tray, and lift the base-clock
       cap left after power-saver (helper `cpufreqrestore`). See README "Power modes and CPU frequency caps".

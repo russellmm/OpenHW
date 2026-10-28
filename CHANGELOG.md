@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.20.2 — 2026-10-28
+
+- **No limit on tray icons** (was 8): File → Tray Icons… and Sensor Settings → Tray Icon → Show In Tray add as
+  many as you like.
+- Sensor Settings → Tray Icon → **Add All Items To Tray** is grayed out: with no limit it would put every sensor
+  (several hundred) in the top bar.
+
 ## 0.20.1 — 2026-10-27
 
 - Fixed: after a boot where Linux numbered the hwmon chips differently (e.g. `asusec` registering first and taking

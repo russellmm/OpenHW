@@ -17,7 +17,6 @@ public sealed class TraySensor
 public sealed class AppSettings
 {
     public const string CpuTemperature = "auto:cpu-temperature";
-    public const int MaxTrayIcons = 8;
     public static readonly double[] PollChoices = [1, 2, 3, 5, 10];
 
     /// <summary>Tile colours offered for tray icons: distinct on a dark panel, each readable with white or black text.</summary>
@@ -149,7 +148,7 @@ public sealed class AppSettings
         if (!Settings.WindowScale.Choices.Contains(WindowScale)) WindowScale = 0;
         AverageSamples = Math.Clamp(AverageSamples, 0, MaxAverageSamples);
         // One icon per sensor: a file from before duplicates were blocked keeps the first of each.
-        TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).Take(MaxTrayIcons).ToList();
+        TrayIcons = TrayIcons.Where(t => !string.IsNullOrWhiteSpace(t.SensorId)).DistinctBy(t => t.SensorId).ToList();
         foreach (var icon in TrayIcons)
             if (!IsColor(icon.Colour)) icon.Colour = Colours[0].Hex;
         CustomColours = CustomColours.Where(IsColor).Select(h => h.ToUpperInvariant()).Where(h => PresetName(h) is null)

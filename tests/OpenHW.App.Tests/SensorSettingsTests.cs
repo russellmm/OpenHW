@@ -39,7 +39,7 @@ public sealed class SensorSettingsTests
             id =>
             {
                 var inTray = s.TrayIcons.Any(t => Resolve(t) == id);
-                return new TrayState(inTray, !inTray && s.TrayIcons.Count < AppSettings.MaxTrayIcons, null);
+                return new TrayState(inTray, !inTray, null);
             },
             id => { s.TrayIcons.Add(new TraySensor { SensorId = id }); s.Save(); },
             id => { s.TrayIcons.RemoveAll(t => Resolve(t) == id); s.Save(); },
@@ -219,6 +219,11 @@ public sealed class SensorSettingsTests
         s.Settings.Save();
         Assert.False(window.InTrayBox.IsChecked);
         Assert.Equal("No", window.TrayList.Entries.First(e => e.Key == sensor.Key).Value);
+
+        // No icon limit, so "Add All" would put every sensor on the panel: owner said not to offer it.
+        var addAll = window.SelectedPage!.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add All Items To Tray");
+        Assert.False(addAll.IsEnabled);
+        Assert.Contains("Not offered", ToolTip.GetTip(addAll) as string);
     }
 
     [AvaloniaFact]

@@ -234,8 +234,6 @@ public sealed class App : Application
         if (_settings.TrayIcons.Any(t => ResolveTrayId(t) == sensorId)) return new TrayState(true, false, null);
         var item = _hub.Inventory.FirstOrDefault(i => i.Id == sensorId);
         if (item?.Unit == "flag") return new TrayState(false, false, "Yes/No readings can't be shown as a tray value");
-        if (_settings.TrayIcons.Count >= AppSettings.MaxTrayIcons)
-            return new TrayState(false, false, $"The tray already has {AppSettings.MaxTrayIcons} icons, the most OpenHW shows");
         return new TrayState(false, true, null);
     }
 

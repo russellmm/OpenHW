@@ -112,7 +112,7 @@ public sealed class TrayIconsWindow : Window
                     Heading("Tray icons"),
                     new TextBlock
                     {
-                        Text = $"Each icon shows one sensor's value on a colored tile, and keeps that sensor live even when its group is collapsed. Up to {AppSettings.MaxTrayIcons}.",
+                        Text = "Each icon shows one sensor's value on a colored tile, and keeps that sensor live even when its group is collapsed.",
                         Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
                     },
                     _trayRows,
@@ -225,7 +225,6 @@ public sealed class TrayIconsWindow : Window
         }
         if (_settings.TrayIcons.Count == 0)
             _trayRows.Children.Add(new TextBlock { Text = "No tray icons. Closing the window then leaves OpenHW running with nothing on screen: open it again from the app grid (it shows the running copy), or quit with File → Exit.", Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap });
-        _add.IsEnabled = _settings.TrayIcons.Count < AppSettings.MaxTrayIcons;
     }
 
     // The presets, the icon's own custom color when it has one, and "Custom…" to pick any color.
@@ -310,7 +309,7 @@ public sealed class TrayIconsWindow : Window
 
     private void AddSensor()
     {
-        if (_results.SelectedItem is not ListBoxItem { Tag: string id } || _settings.TrayIcons.Count >= AppSettings.MaxTrayIcons || InTray(id)) return;
+        if (_results.SelectedItem is not ListBoxItem { Tag: string id } || InTray(id)) return;
         // Next colour not already in use, so new icons are told apart at a glance.
         var used = _settings.TrayIcons.Select(t => t.Colour).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var colour = AppSettings.Colours.Select(c => c.Hex).FirstOrDefault(h => !used.Contains(h)) ?? AppSettings.Colours[0].Hex;

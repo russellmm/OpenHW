@@ -36,7 +36,7 @@ public sealed class SettingsTests
         }));
         var settings = AppSettings.Load();
         Assert.Equal(2, settings.PollSeconds);
-        Assert.Equal(AppSettings.MaxTrayIcons, settings.TrayIcons.Count);
+        Assert.Equal(20, settings.TrayIcons.Count); // no limit on tray icons (0.20.2)
         Assert.Equal("#123456", settings.TrayIcons[0].Colour); // custom colors are kept…
         Assert.All(settings.TrayIcons.Skip(1), t => Assert.Equal(AppSettings.Colours[0].Hex, t.Colour)); // …anything else isn't
     }

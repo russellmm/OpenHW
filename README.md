@@ -41,7 +41,7 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 `src/OpenHW.App/Tray/` implements the StatusNotifierItem and dbusmenu D-Bus interfaces directly, so each
 icon is a picture we draw (value on a colored tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
-colors, are chosen in **File → Tray Icons…** (up to 8; default one CPU-temperature icon on red); tray sensors stay
+colors, are chosen in **File → Tray Icons…** (as many as you like; default one CPU-temperature icon on red); tray sensors stay
 live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile, followed by a short
 unit when there is one — ° for temperatures (full size, "32°"), a small W, V, A or % ("55W", "87%"); other units
 (MHz, RPM, MB…) are left off because the values are already shortened ("4.5k"). **Show units on the tiles** in Tray
@@ -346,7 +346,7 @@ fixes only. The version is set once in `Directory.Build.props` (app, helper and 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
 highlight, expand/collapse all, reset) with HWiNFO's sensor menu (graphs, rename, hide, monitoring, logging, alerts,
 layout and value customization), HWiNFO's Sensor Settings / Settings dialogs behind the footer gear (layout only so
-far), up to 8 tray icons, CSV logging, alerts with desktop notifications, power-mode
+far), any number of tray icons, CSV logging, alerts with desktop notifications, power-mode
 switching that keeps boost working, all-core and per-core CPU frequency caps, CPU and GPU power limits, and the
 root helper for NVMe SMART, RAPL, DIMM and VR sensors, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
 Planned work is tracked in [ROADMAP.md](ROADMAP.md).
