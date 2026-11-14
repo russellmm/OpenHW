@@ -5,3 +5,4 @@ obj/
 .idea/
 dist/
 tools/tray-hover-test/out/
+tools/bmc-probe/out/

@@ -100,6 +100,49 @@ public static partial class SensorExplanations
         R(@"CHIPSET\d+ 1\.0V|CHIPSET\d+ 1\.8V", "A chipset supply rail. It should hold steady at its nominal voltage."),
         R(@"VIN2|VIN9", "A Super I/O input with no published meaning on this board. Shown because HWiNFO shows it; values " +
             "are raw (×1)."),
+        // ── Board management controller (IPMI): names as the BMC reports them ─────────────────────────────────
+        R(@"\+VCORE_0|\+VCORE_1", "A CPU core voltage rail as the BMC measures it. Threadripper PRO has two core rails, " +
+            "each feeding half of the core dies; it rises with clock and load (~0.8 V idle, up to ~1.3 V at boost).", HardwareKind.Voltage),
+        R(@"\+VSOC", "The CPU's SoC rail (I/O die, memory controllers, Infinity Fabric), as the BMC measures it. Fixed by BIOS settings."),
+        R(@"\+VDDIO", "The CPU's memory I/O rail, as the BMC measures it; set from the memory profile in BIOS."),
+        R(@"\+VDD_11_S3", "The memory power rail (1.1 V class) feeding the DIMMs' PMICs and the memory controllers' VDDIO_Mem, as the BMC measures it."),
+        R(@"\+CHIPSET_1\.8V|\+CHIPSET_1\.05V", "A chipset supply rail, as the BMC measures it. It should hold steady at its nominal voltage."),
+        R(@"\+3\.3V", "The PSU's 3.3 V rail, as the BMC measures it. Within ±5 % (3.14–3.47 V) is healthy."),
+        R(@"\+5VSB|\+3\.3VSB", "A standby rail: powered whenever the PSU is plugged in, even with the PC off (the BMC runs from it)."),
+        R(@"CPU Package Temp", "CPU package temperature as the BMC reads it from the CPU (AMD SB-TSI/APML). It should " +
+            "track CPU (Tctl/Tdie); the BMC's fan control uses it.", HardwareKind.Temperature),
+        R(@"TR\d+ Temperature", "The board's thermistor header (T_SENSOR), read by the BMC. It reads only with a probe plugged in."),
+        R(@"LAN Temp", "Temperature of the onboard 10 GbE network controller, read by the BMC. These chips run warm; under ~95 °C is fine."),
+        R(@"DIMM[A-H]\d_Temp", "Temperature of one DIMM, read by the BMC from the module's thermal sensor — every slot, " +
+            "including DIMMs whose SPD hub Linux hasn't bound. DDR5 slows refresh above ~85 °C; under ~60 °C is comfortable."),
+        R(@"PCIE\d+ Temp", "Temperature near one PCIe slot, read by the BMC — mostly the card in it. It reads only when the " +
+            "slot's sensor reports (an empty slot shows nothing)."),
+        R(@"CPU_FAN", "Speed of the fan on the CPU_FAN header, read by the BMC.", HardwareKind.Tach),
+        R(@"CHA_FAN\d+", "Speed of a case fan on a chassis fan header, read by the BMC. 0 RPM means stopped or not connected."),
+        R(@"W_PUMP\+", "Speed of the pump on the W_PUMP+ header, read by the BMC. A pump at 0 RPM means no coolant flow — " +
+            "the CPU will overheat quickly."),
+        R(@"USB4_FAN|M\.2_FAN", "Speed of the small fan cooling the board's USB4 controller or M.2 heatsink, read by the BMC."),
+        R(@"VRME_HS_FAN|VRMW_HS_FAN", "Speed of the small fan on the east or west VRM heatsink, read by the BMC. 0 RPM is " +
+            "normal when the VRMs are cool."),
+        R(@"PSU\d+ Power In|PSU\d+ Power Out", "Power into or out of a power supply, from the PSU's own meter (PMBus). " +
+            "Only redundant/server PSUs report it."),
+        R(@"PSU\d+ (Temp|Voltage|Current|FAN|Slow FAN\d+)", "A power supply's own reading (PMBus), passed on by the BMC. " +
+            "Only redundant/server PSUs report it."),
+        // ── Super I/O inputs on a board without a profile: the chip's own names ────────────────────────────────
+        R(@"in\d+", "A Super I/O voltage input as the chip measures it at the pin. No board profile names it yet, so the board's " +
+            "divider isn't applied: a +12 V or +5 V rail reads about 1 V here. The BMC group (if any) shows the board's rails by name.",
+            HardwareKind.Voltage),
+        R(@"fan\d+", "A Super I/O fan input. No board profile says which header it is yet; compare with the BMC's named " +
+            "fans (same speeds) to tell.", HardwareKind.Tach),
+        R(@"SYSTIN", "The Super I/O's system thermistor — usually the motherboard near the chip. Unmapped on this board."),
+        R(@"AUXTIN\d+", "An auxiliary Super I/O temperature input. Unmapped on this board: it may be a real board sensor or " +
+            "an open pin (constant or implausible values)."),
+        R(@"PECI Agent \d+ Calibration", "The CPU temperature the Super I/O reads over PECI/SB-TSI, offset for its fan " +
+            "control; it sits well below Tctl. For the CPU itself, use CPU (Tctl/Tdie)."),
+        R(@"PCH_CHIP_CPU_MAX_TEMP|PCH_CHIP_TEMP|PCH_CPU_TEMP|PCH_MCH_TEMP", "A Super I/O register for an Intel chipset (PCH) " +
+            "reading. AMD boards don't feed it, so it reads 0 °C."),
+        R(@"USB4|M\.2", "Speed of the small fan on the board's USB4 controller or M.2 heatsink, from the ASUS embedded controller.",
+            HardwareKind.Tach),
         // ── Super I/O and EC temperatures ──────────────────────────────────────────────────────────────────────
         R(@"Motherboard", "Motherboard temperature from the Super I/O's system sensor — roughly the air inside the case near the board."),
         R(@"Temp2", "A board sensor (Super I/O AUXTIN0) whose location ASUS doesn't publish. It cools when fans speed up " +
@@ -116,7 +159,7 @@ public static partial class SensorExplanations
         R(@"Water Pump\+", "Speed of the pump on the W_PUMP+ header. A pump at 0 RPM means no coolant flow — the CPU " +
             "will overheat quickly."),
         R(@"CPU_Opt", "Speed of a fan on the CPU_OPT header (a second CPU-cooler fan). 0 RPM if none is connected."),
-        R(@"VRM_E HS|VRM_W HS", "Speed of the small fan on the east or west VRM heatsink."),
+        R(@"VRM_E HS|VRM_W HS|VRME HS|VRMW HS", "Speed of the small fan on the east or west VRM heatsink."),
         // ── Memory ─────────────────────────────────────────────────────────────────────────────────────────────
         R(@"SPD Hub Temperature.*", "Temperature of a DDR5 DIMM, from the SPD hub chip on the module. DDR5 starts slowing " +
             "refresh above ~85 °C; under ~60 °C is comfortable."),

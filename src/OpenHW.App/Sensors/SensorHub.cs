@@ -23,8 +23,11 @@ public sealed class SensorHub : IDisposable
 
     public SensorHub()
     {
-        _engines = [_system, _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), new EdacEngine(), _nvme, new NetworkEngine(), _nvidia];
+        _engines = [_system, _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), Bmc, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia];
     }
+
+    /// <summary>The board management controller (IPMI through the helper); the hardware check reads its full sensor list.</summary>
+    public BmcEngine Bmc { get; } = new();
 
     public SensorStatistics Statistics { get; } = new();
 
@@ -109,6 +112,9 @@ public sealed class SensorHub : IDisposable
         (_readNvidia, _readSmbus, _readSmart) = (nvidia, smbus, smart);
         _rediscover = true;
     }
+
+    /// <summary>Rediscover at the next poll instead of waiting for the five-second cadence.</summary>
+    public void Rediscover() => _rediscover = true;
 
     private bool IsOn(ISensorEngine engine) => engine switch
     {

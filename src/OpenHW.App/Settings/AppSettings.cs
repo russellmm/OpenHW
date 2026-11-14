@@ -157,7 +157,7 @@ public sealed class AppSettings
     }
 
     /// <summary>Points tray icons for a renumbered hwmon sensor at its current id; true (unsaved) if any moved.</summary>
-    public bool Remap(Sensors.HwmonRenumbering renumbering)
+    public bool Remap(Sensors.ISensorIdMap renumbering)
     {
         var changed = false;
         foreach (var icon in TrayIcons)

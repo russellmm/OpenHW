@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHW privileged helper (NVMe SMART, DIMM and VR sensors, CPU frequency caps, GPU and CPU power limits)
+Description=OpenHW privileged helper (NVMe SMART, DIMM, VR and BMC sensors, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
 # With GPU Lending installed, the card filter must be in force before the login screen and the desktop can open the
 # lent card: the helper writes a drop-in (openhw-helper.service.d/lending.conf) that orders it before them, and
@@ -61,6 +61,9 @@ DeviceAllow=char-nvidia rw
 DeviceAllow=char-nvidiactl rw
 # DDR5 DIMM thermal sensors/PMICs and the board's PMBus VR, through /dev/i2c-N (reads, and the PMIC ADC select).
 DeviceAllow=char-i2c rw
+# The board management controller (IPMI, /dev/ipmi0): read-only commands only — sensor repository, readings,
+# thresholds. The device has to be opened read-write to send requests.
+DeviceAllow=char-ipmidev rw
 LockPersonality=true
 RestrictRealtime=true
 

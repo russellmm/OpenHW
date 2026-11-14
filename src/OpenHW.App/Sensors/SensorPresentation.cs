@@ -113,6 +113,8 @@ public static partial class SensorPresentation
         if (key.StartsWith("dimm:", StringComparison.Ordinal)) return (3, DimmEngine.Title(key));
         if (key.StartsWith("board-vr:", StringComparison.Ordinal))
             return (6, $"{vendor} {machine.BoardName} ({BoardVrs.For(machine.BoardVendor, machine.BoardName)?.Chip ?? sample.Source})");
+        if (key == BmcEngine.GroupKey)
+            return (6, $"{vendor} {machine.BoardName} (BMC: {sample.Source.Split(' ')[0]})");
         if (key == "edac") return (4, "Memory Controller: EDAC");
         if (key.StartsWith("gpu:", StringComparison.Ordinal))
         {

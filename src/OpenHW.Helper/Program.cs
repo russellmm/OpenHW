@@ -5,7 +5,7 @@ using OpenHW.Hardware;
 
 // openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, cpufreq ceilings,
 // GPU power limits (NVML), the CPU socket power limit (HSMP), and those limits' boot-time values in the owner's
-// boot services' config; RAPL energy, the DDR5 DIMM and board VR sensors on the SMBus, and every NVIDIA GPU
+// boot services' config; RAPL energy, the DDR5 DIMM and board VR sensors on the SMBus, the BMC's sensors (IPMI), and every NVIDIA GPU
 // reading for the window (so the desktop app never opens a card). It serves fixed,
 // validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path.
 // `openhw-helper --once <command>` answers one command on stdout and exits (for checking a build with sudo).
@@ -27,6 +27,7 @@ var ddr5 = new Ddr5Reader(smbus);
 var vr = new BoardVrReader(smbus, BoardVrs.ForThisBoard());
 using var gpus = new SharedGpuEngine();
 using var card = new CardFilter(setup: new LendingSetup());
+using var bmc = new BmcReader();
 
 if (args is ["--once", .. var command] && command.Length > 0)
 {
@@ -34,14 +35,14 @@ if (args is ["--once", .. var command] && command.Length > 0)
     // Only the card filter's status: changing it from a process that exits at once would leave the kernel filter
     // without the daemon that classifies new cgroups.
     var cardRead = command is ["cardfilter"] ? card : null;
-    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead).HandleLine(string.Join(' ', command)));
+    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc).HandleLine(string.Join(' ', command)));
     return 0;
 }
 
 using var gpuPower = new GpuPowerLimits();
 // Lending the card to a VM: both NVML users let go of every card for the handoff, and open again afterwards.
 using var lending = new CardLending(card, () => { gpus.Suspend(); gpuPower.Suspend(); }, () => { gpus.Resume(); gpuPower.Resume(); });
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending);
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
 // boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
 try { card.Start(TimeSpan.FromSeconds(60)); }

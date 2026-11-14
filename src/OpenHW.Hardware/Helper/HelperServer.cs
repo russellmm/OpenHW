@@ -25,7 +25,8 @@ public static class HelperSocket
 /// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
 /// Root-only reads: <c>nvmesmart</c>, <c>rapl</c> (the RAPL package and core energy counters), <c>ddr5</c> (each DIMM's
 /// thermal sensors and PMIC; the PMIC's ADC select R30 is the one register set, and restored) and <c>vr</c> (this
-/// board's known PMBus VR, reads only) — neither takes arguments: buses and addresses come from sysfs and fixed
+/// board's known PMBus VR, reads only) and <c>bmc</c> (the BMC's threshold sensors over IPMI, read-only commands; see
+/// <see cref="BmcReader"/>) — none takes arguments: buses and addresses come from sysfs and fixed
 /// tables — and the NVIDIA GPUs for the window, so the app never opens a card: <c>gpus</c> (the rows),
 /// <c>gpuread</c> (their values) and <c>gpulimits</c> (the Power Limits window's list), as <see cref="GpuWire"/>.
 /// The card filter (<see cref="CardFilter"/>): <c>cardfilter</c> (status, holders), <c>cardfilter on|off</c>,
@@ -37,9 +38,9 @@ public static class HelperSocket
 /// assigned), <c>lend</c> and <c>vmreturn</c> (both start in the background; follow them with <c>lendstatus</c>).
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null)
 {
-    public const string Version = "11";
+    public const string Version = "12";
 
     public string HandleLine(string line)
     {
@@ -134,6 +135,10 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "vr" when parts.Length == 1:
                 if (vr?.Read() is not { } sample) return "err no known board VR";
                 return "ok " + BoardVrReader.Format(sample);
+
+            case "bmc" when parts.Length == 1: // read-only: the board management controller's threshold sensors (IPMI)
+                if (bmc is null) return "err no BMC";
+                return bmc.Read(TimeSpan.FromSeconds(20)) is { } reply ? "ok " + GpuWire.Encode(reply) : "err " + (bmc.Error ?? "BMC not ready");
 
             case "gpus" when parts.Length == 1:
                 return gpus is null ? "err GPUs unavailable" : "ok " + GpuWire.Encode(gpus.Discover());
@@ -259,7 +264,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -310,7 +315,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc);
         try
         {
             using (client)

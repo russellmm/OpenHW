@@ -41,7 +41,7 @@ public sealed class ViewState
     }
 
     /// <summary>Moves collapsed groups and expanded rows of renumbered hwmon chips onto their current keys; true if any moved.</summary>
-    public bool Remap(Sensors.HwmonRenumbering renumbering) =>
+    public bool Remap(Sensors.ISensorIdMap renumbering) =>
         Sensors.HwmonRenumbering.Remap(CollapsedGroups, renumbering.Group) | Sensors.HwmonRenumbering.Remap(ExpandedSensors, renumbering.Id);
 
     public void Save()

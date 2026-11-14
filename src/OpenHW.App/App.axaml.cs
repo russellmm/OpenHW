@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using OpenHW.Hardware;
 using OpenHW.App.Alerts;
+using OpenHW.App.HardwareCheck;
 using OpenHW.App.Power;
 using OpenHW.App.Sensors;
 using OpenHW.App.Settings;
@@ -64,7 +65,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -113,6 +114,8 @@ public sealed class App : Application
             _poll = new Timer(_ => Poll(), null, period, period);
             BuildTrayMenu(lifetime);
             _ = RebuildTrayAsync();
+            _hardwareCheckTimer.Tick += (_, _) => { _hardwareCheckTimer.Stop(); _ = StartupHardwareCheckAsync(); };
+            _hardwareCheckTimer.Start();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -681,6 +684,91 @@ public sealed class App : Application
                 choice => Dispatcher.UIThread.Post(() => answer(choice)));
         public void Save() => app._settings.Save();
         public void OpenPage() => Dispatcher.UIThread.Post(app.ShowGpuLending);
+    }
+
+    // ── Hardware Check ───────────────────────────────────────────────────────────────────────────────────────
+
+    // Long enough for the BMC's first answer (its sensor list takes a while over KCS) and a few inventory refreshes.
+    private readonly DispatcherTimer _hardwareCheckTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private HardwareCheckWindow? _hardwareCheck;
+    private bool _gpuLent;
+
+    private void ShowHardwareCheck()
+    {
+        if (_hardwareCheck is null)
+        {
+            WindowPlaces.Track(_hardwareCheck = new HardwareCheckWindow(new HardwareCheckActions(this)), "hardware-check");
+            _hardwareCheck.Closed += (_, _) => _hardwareCheck = null;
+        }
+        else _hardwareCheck.Refresh();
+        _hardwareCheck.Show();
+        _hardwareCheck.Activate();
+    }
+
+    /// <summary>
+    /// Once per start: compare the hardware with what OpenHW saved last time. Opens Hardware Check when something
+    /// needs a look (a changed part, saved settings pointing at missing sensors, a broken setup); otherwise just keeps
+    /// the snapshot current. Skipped while a card is lent (its sensors are away, not gone).
+    /// </summary>
+    private async Task StartupHardwareCheckAsync()
+    {
+        _gpuLent = await Task.Run(() =>
+        {
+            try { return GpuWire.Decode<LendStatus>(HelperClient.Request("lendstatus", receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes))?.Lent ?? false; }
+            catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException) { return false; }
+        });
+        if (_exiting) return;
+        var model = new HardwareCheckActions(this).Build();
+        if (model.NeedsAttention && !_gpuLent) ShowHardwareCheck();
+        else if (model.Changes.Count == 0) model.Now.Save();
+    }
+
+    private sealed class HardwareCheckActions(App app) : IHardwareCheckActions
+    {
+        public IReadOnlyList<HardwareItem> Inventory => app._hub.Inventory;
+        public SensorPresentation.MachineInfo Machine => app._hub.Machine;
+
+        public HardwareCheckModel Build()
+        {
+            var inventory = app._hub.Inventory;
+            var before = HardwareSnapshot.Load();
+            return HardwareCheckModel.Build(app._hub, before, app._settings, app._alerts.Store, app._gpuLent);
+        }
+
+        public void Move(StaleReference stale, string newId) =>
+            Apply(new SensorIdMap(new Dictionary<string, string> { [stale.Id] = newId }));
+
+        public void Remove(StaleReference stale)
+        {
+            SensorCustomizations.Current.Forget(stale.Id);
+            if (app._alerts.Store.Snapshot().Any(r => r.SensorId == stale.Id))
+                app._alerts.Store.Update(() => app._alerts.Store.Rules.RemoveAll(r => r.SensorId == stale.Id));
+            if (app._settings.TrayIcons.RemoveAll(t => t.SensorId == stale.Id) > 0)
+            {
+                app._settings.Save();
+                _ = app.RebuildTrayAsync();
+            }
+            app._window?.RebuildTree();
+        }
+
+        private void Apply(ISensorIdMap map)
+        {
+            SensorCustomizations.Current.Remap(map);
+            app._alerts.Store.Remap(map);
+            app._window?.Remap(map);
+            if (app._settings.Remap(map))
+            {
+                app._settings.Save();
+                _ = app.RebuildTrayAsync();
+            }
+            app._window?.RebuildTree();
+        }
+
+        public void Accept() => Build().Now.Save();
+
+        public void ShowGpuLending() => app.ShowGpuLending();
+
+        public void ShowPowerLimits() => app.ShowPowerLimits();
     }
 
     private void ShowGpuLending()

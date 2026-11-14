@@ -16,6 +16,7 @@ internal static class Program
     {
         Gen0Budget(args);
         if (args.Contains("--dump")) return Dump();
+        if (args.Contains("--hardware-check")) return HardwareCheckReport();
         Instance = Settings.SingleInstance.Claim();
         if (Instance is null) return 0; // the running OpenHW was asked to show its window
         StartInTray = args.Contains("--tray");
@@ -114,12 +115,31 @@ internal static class Program
     private static extern int execve(string path, string?[] argv, string?[] envp);
 
     /// <summary>Prints the sensor tree as the window shows it (two samples, so usage deltas exist).</summary>
+    // The BMC's first answer comes off the sampling thread (its SDR read takes a while): wait for it, up to 30 s.
+    private static Sensors.SensorHub SampledHub()
+    {
+        var hub = new Sensors.SensorHub();
+        hub.Sample();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        do { Thread.Sleep(1000); hub.Sample(); } while (hub.Bmc.Pending && clock.Elapsed < TimeSpan.FromSeconds(30));
+        hub.Rediscover(); // picks the BMC group up
+        hub.Sample();
+        return hub;
+    }
+
+    /// <summary>--hardware-check: File → Hardware Check as text, without a display; changes nothing.</summary>
+    private static int HardwareCheckReport()
+    {
+        using var hub = SampledHub();
+        var model = HardwareCheck.HardwareCheckModel.Build(hub, HardwareCheck.HardwareSnapshot.Load(), Settings.AppSettings.Load(),
+            Alerts.AlertStore.Load(), gpuLent: false);
+        Console.Write(model.Report());
+        return 0;
+    }
+
     private static int Dump()
     {
-        using var hub = new Sensors.SensorHub();
-        hub.Sample();
-        Thread.Sleep(1000);
-        hub.Sample();
+        using var hub = SampledHub();
         var items = hub.Inventory.ToDictionary(i => i.Id);
         void Print(Sensors.SensorView view, string indent)
         {

@@ -31,6 +31,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>The footer gear: HWiNFO's Sensor Settings dialog (scaffolding for now); null falls back to ShowSettings.</summary>
     public Action? ShowSensorSettings { get; init; }
 
+    /// <summary>File → Hardware Check… (what changed, stale saved settings, what isn't read).</summary>
+    public Action? ShowHardwareCheck { get; init; }
+
     /// <summary>Power → GPU Lending… (the card filter's setup page).</summary>
     public Action? ShowGpuLending { get; init; }
 
@@ -173,7 +176,7 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>Keeps collapsed groups and expanded rows of hwmon chips whose kernel number changed.</summary>
-    public void Remap(HwmonRenumbering renumbering)
+    public void Remap(ISensorIdMap renumbering)
     {
         if (_view.Remap(renumbering)) _view.Save();
     }
@@ -699,6 +702,7 @@ public sealed class MainWindow : Window
         {
             if (c.ShowAlerts is { } alerts) file.Items.Add(Item("_Alerts…", alerts));
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
+            if (c.ShowHardwareCheck is { } hardwareCheck) file.Items.Add(Item("_Hardware Check…", hardwareCheck));
             if (c.ShowSensorSettings is { } sensorSettings) file.Items.Add(Item("Sensor Setti_ngs…", sensorSettings)); // the footer gear
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());

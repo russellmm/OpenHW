@@ -82,7 +82,7 @@ public sealed class AlertStore
     public void Update(Action edit) => Change(edit);
 
     /// <summary>Points rules for a renumbered hwmon sensor at its current id; saves if any moved.</summary>
-    public void Remap(HwmonRenumbering renumbering)
+    public void Remap(ISensorIdMap renumbering)
     {
         if (Snapshot().All(r => renumbering.Id(r.SensorId) == r.SensorId)) return;
         Change(() => { foreach (var rule in Rules) rule.SensorId = renumbering.Id(rule.SensorId); });

@@ -3,13 +3,27 @@ using OpenHW.Hardware;
 
 namespace OpenHW.App.Sensors;
 
+/// <summary>Where a saved sensor id or group key points now; anything it doesn't know comes back unchanged.</summary>
+public interface ISensorIdMap
+{
+    string Id(string id);
+    string Group(string key);
+}
+
+/// <summary>An explicit map (the hardware check's moves): listed ids and group keys move, the rest stay.</summary>
+public sealed class SensorIdMap(IReadOnlyDictionary<string, string> ids, IReadOnlyDictionary<string, string>? groups = null) : ISensorIdMap
+{
+    public string Id(string id) => ids.GetValueOrDefault(id, id);
+    public string Group(string key) => groups?.GetValueOrDefault(key, key) ?? key;
+}
+
 /// <summary>
 /// hwmon ids and group keys carry the kernel's hwmon number ("hwmon:amd_hsmp_hwmon:9:power:1", "asusec (hwmon12)"),
 /// which can change at any boot as drivers register in a different order. This maps a saved id or key that is no
 /// longer present to the current one with the same chip and channel — only when exactly one matches, so chips that
 /// appear more than once (nvme, spd5118) are never guessed at. Anything else comes back unchanged.
 /// </summary>
-public sealed partial class HwmonRenumbering
+public sealed partial class HwmonRenumbering : ISensorIdMap
 {
     private readonly HashSet<string> _ids;
     private readonly HashSet<string> _groups;

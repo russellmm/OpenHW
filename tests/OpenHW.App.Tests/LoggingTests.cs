@@ -62,7 +62,7 @@ public sealed class LogColumnTests
         foreach (var id in new[] { drive, fclk, cpu }) custom.SetLogged(id, true);
         var columns = SensorLogger.ColumnsFor(hub);
         Assert.Equal([cpu, fclk, drive], columns.Select(c => c.Id)); // window order: CPU group before the drives
-        Assert.Equal("CPU [#0]: AMD Ryzen Threadripper 9970X: Enhanced: CPU (Tctl/Tdie) [°C]", columns[0].Header);
+        Assert.Equal($"CPU [#0]: {hub.Machine.CpuModel}: Enhanced: CPU (Tctl/Tdie) [°C]", columns[0].Header); // this machine's CPU
 
         custom.SetDisabled(fclk, true);          // monitoring off: left out even though chosen
         custom.Rename(cpu, "Threadripper");

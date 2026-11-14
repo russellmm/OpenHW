@@ -97,7 +97,7 @@ public sealed class SensorCustomizations
     public bool HasCustomOrder => GroupOrder.Count > 0 || RowOrder.Count > 0;
 
     /// <summary>Moves every choice made for a renumbered hwmon sensor or group onto its current id; saves if any moved.</summary>
-    public void Remap(HwmonRenumbering renumbering)
+    public void Remap(ISensorIdMap renumbering)
     {
         var changed = HwmonRenumbering.Remap(Names, renumbering.Id);
         changed |= HwmonRenumbering.Remap(Hidden, renumbering.Id);
@@ -109,6 +109,13 @@ public sealed class SensorCustomizations
         foreach (var rows in RowOrder.Values) changed |= HwmonRenumbering.Remap(rows, renumbering.Id);
         if (changed) Change(() => { });
     }
+
+    /// <summary>Drops every choice made for a sensor that is gone for good (Hardware Check → Remove).</summary>
+    public void Forget(string id) => Change(() =>
+    {
+        Names.Remove(id); Hidden.Remove(id); Disabled.Remove(id); Logged.Remove(id); Values.Remove(id);
+        foreach (var rows in RowOrder.Values) rows.Remove(id);
+    });
 
     /// <summary>
     /// Puts <paramref name="items"/> in the user's order: the items <paramref name="order"/> names take the

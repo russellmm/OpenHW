@@ -3,6 +3,30 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.21.0 — 2026-11-14
+
+- **Board management controller (BMC) sensors.** On boards with a BMC that Linux exposes as `/dev/ipmi0` (here the
+  Pro WS WRX90E-SAGE SE's ASPEED AST2600), a new group shows every sensor the BMC reads, under the board's own
+  names: the voltage rails (+VCORE_0/1, +VSOC, +VDDIO, +VDD_11_S3, chipset, +12V/+5V/+3.3V and standby, VBAT),
+  CPU package, LAN and per-slot PCIe temperatures, a temperature for **every** DIMM slot, every fan header (CPU_FAN,
+  CHA_FAN1–5, W_PUMP+, USB4, M.2, VRM heatsinks) and PSU readings where the PSU reports them. Tooltips list the
+  BMC's own warning and critical limits. Sensors the BMC can't read right now (no PSU telemetry, empty slot,
+  disabled header) stay out of the list until they read. openhw-helper reads the BMC (protocol 12, new `bmc`
+  command) with read-only IPMI commands only — sensor repository, readings, thresholds — and keeps the readings
+  fresh on its own thread, since a full sweep over the KCS interface is slow.
+- **File → Hardware Check…**: what changed since OpenHW last saw this machine (motherboard, BIOS, CPU, memory, BMC,
+  sensor chips, GPUs and drives — added, gone or moved to another slot), saved settings that point at sensors that
+  aren't here any more (tray icons, alerts, logging, names, hidden, custom values) with the sensor each most likely
+  became — **Move** or **Remove** — and what OpenHW can't fully read on this machine, with the fix where there is
+  one (a kernel driver to load, an old helper, a stale GPU Lending card, DIMMs only the BMC can see, a board
+  without a profile). OpenHW keeps a snapshot of the hardware in `~/.config/openhw/hardware.json`; about 30 s
+  after it starts it compares, and opens Hardware Check by itself when something needs a look (not while a card
+  is lent to the VM). `openhw --hardware-check` prints the same report without a display. It also flags boot GPU
+  power limits (Power Limits → at boot) set for PCI slots that no longer hold a card — they go by slot, so a GPU that
+  moved can get another card's value.
+- Explanations for the BMC's sensors and for the raw Super I/O and EC names of a board OpenHW has no profile for.
+- Fixed: a live-machine test assumed the TRX50 workstation's CPU.
+
 ## 0.20.2 — 2026-10-28
 
 - **No limit on tray icons** (was 8): File → Tray Icons… and Sensor Settings → Tray Icon → Show In Tray add as

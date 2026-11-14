@@ -119,6 +119,7 @@ units on the tiles** and **Hover** turn the tiles' units and the hover details o
 | `HsmpEngine` | AMD HSMP platform device (no root): FCLK, MCLK, core clock limit, active frequency limit and its source, C0 residency, DRAM bandwidth, PROCHOT |
 | `RaplEngine` | RAPL package and core energy → power, through openhw-helper (`rapl`; the counters are root-only) |
 | `DimmEngine` | Per DDR5 DIMM: TS0/TS1, PMIC rails (VDD, VDDQ, VPP, 1.8 V, 1.0 V, VIN), power, alarms — helper `ddr5` (SMBus) |
+| `BmcEngine` | The board management controller over IPMI (`/dev/ipmi0`, root-only), through openhw-helper (`bmc`): the BMC's threshold sensors under the board's names — voltage rails, CPU/LAN/PCIe-slot/DIMM temperatures, every fan header, PSU readings |
 | `BoardVrEngine` | A known board's PMBus VR (TRX50-SAGE: Infineon XDPE19283B, memory controller rail) — helper `vr` (SMBus) |
 | `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters — runs in openhw-helper; the window gets it through `HelperGpuEngine` (`gpus`, `gpuread`) |
 | `NvmeEngine` | NVMe SMART health and live activity |
@@ -149,7 +150,7 @@ PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only script
 ## Menu and shortcuts
 
 The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
-Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
+Hardware Check…, Sensor Settings…, Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
 Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
 Power Limits… Ctrl+L, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
 all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
@@ -207,6 +208,26 @@ Logging** ends it.
 **Columns and window**: drag a column header's right edge to resize the column everywhere (double-click it for the
 default width); long names trim with "…". Column widths and the window's size, position and maximized state are
 saved in `~/.config/openhw/view.json`.
+
+## Hardware Check
+
+**File → Hardware Check…** answers "did OpenHW notice the new hardware?". Linux loads the kernel drivers by itself
+at boot (udev); what OpenHW adds is knowing what each sensor is, and remembering your choices per sensor. The check
+shows:
+
+- **What changed** since OpenHW last saw the machine: motherboard, BIOS, CPU, memory size, BMC, sensor chips, GPUs and
+  drives (added, gone, or moved to another PCIe slot). OpenHW keeps a snapshot in `~/.config/openhw/hardware.json`;
+  **Save as current hardware** updates it.
+- **Saved settings for sensors that aren't here**: tray icons, alerts, logged, renamed, hidden and customized sensors
+  whose sensor is gone — with the sensor it most likely became (★: same name family and kind, e.g. the old board's
+  "Water Pump+" → the BMC's W_PUMP+, or a drive's temperature by drive identity), **Move** or **Remove**.
+- **What OpenHW can't fully read here**, with the fix where there is one: a BMC whose kernel driver isn't loaded, an
+  openhw-helper too old to read it, DIMMs only the BMC can see, a board without a Super I/O profile (raw `in0…` pin
+  voltages), no known board VR, a GPU Lending card that isn't in the machine any more.
+
+About 30 s after it starts (time for the BMC's first answer), OpenHW runs the check and opens the window when
+something needs a look; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
+`openhw --hardware-check` prints the same report without a display and changes nothing.
 
 ## Alerts
 
@@ -298,7 +319,8 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, the read-only
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
-`ddr5`, `vr`, `rapl`, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+`ddr5`, `vr`, `rapl`, `bmc` (the board management controller's sensors over IPMI: Get Device ID, the SDR repository,
+Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
@@ -306,7 +328,7 @@ at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
 `/etc/openhw` and `/sys/fs/bpf` (the card filter), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d` and `/etc/libvirt/hooks/qemu.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
-`/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs and `/dev/i2c-*`).
+`/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
