@@ -120,7 +120,7 @@ units on the tiles** and **Hover** turn the tiles' units and the hover details o
 | `RaplEngine` | RAPL package and core energy → power, through openhw-helper (`rapl`; the counters are root-only) |
 | `DimmEngine` | Per DDR5 DIMM: TS0/TS1, PMIC rails (VDD, VDDQ, VPP, 1.8 V, 1.0 V, VIN), power, alarms — helper `ddr5` (SMBus) |
 | `BmcEngine` | The board management controller over IPMI (`/dev/ipmi0`, root-only), through openhw-helper (`bmc`): the BMC's threshold sensors under the board's names — voltage rails, CPU/LAN/PCIe-slot/DIMM temperatures, every fan header, PSU readings |
-| `BoardVrEngine` | A known board's PMBus VR (TRX50-SAGE: Infineon XDPE19283B, memory controller rail) — helper `vr` (SMBus) |
+| `BoardVrEngine` | A known board's PMBus VR (TRX50-SAGE: Infineon XDPE19283B, memory controller rail) — helper `vr` (SMBus); none mapped on the WRX90E-SAGE SE yet |
 | `NvidiaEngine` | NVML: temps, fans, power, clocks, load, memory, video clock, PCIe link/throughput, encoder/decoder, P-state, limiters — runs in openhw-helper; the window gets it through `HelperGpuEngine` (`gpus`, `gpuread`) |
 | `NvmeEngine` | NVMe SMART health and live activity |
 | `EdacEngine` | Memory-controller corrected/uncorrected error counts |
@@ -272,7 +272,7 @@ if the kernel doesn't keep them. They last until reboot; OpenHW remembers the on
 `~/.config/openhw/cpufreq-caps.json`. With **Re-apply these caps when OpenHW starts**, they are written back each time OpenHW starts —
 after a reboot too, when Start at login is on (Settings); only the cores with a saved cap are touched.
 
-Power saver turns CPU boost off and the kernel holds every ceiling at the base clock (4.0 GHz on the 9970X).
+Power saver turns CPU boost off and the kernel holds every ceiling at the base clock (4.0 GHz on both the Threadripper 9970X and the PRO 9975WX).
 Leaving it normally restores the previous ceiling, but a ceiling stored while boost was off — e.g. a "hardware
 maximum" written in power-saver, which is the base clock then — survives, and Performance silently stays at base
 clock. So whenever a profile change (from OpenHW, GNOME or `powerprofilesctl`) turns boost back on, OpenHW puts
@@ -377,8 +377,11 @@ fixes only. The version is set once in `Directory.Build.props` (app, helper and 
 
 Sensor tree window (HWiNFO layout: device groups, collapsible per-core rows, Current/Min/Max/Average, changed-value
 highlight, expand/collapse all, reset) with HWiNFO's sensor menu (graphs, rename, hide, monitoring, logging, alerts,
-layout and value customization), HWiNFO's Sensor Settings / Settings dialogs behind the footer gear (layout only so
-far), any number of tray icons, CSV logging, alerts with desktop notifications, power-mode
-switching that keeps boost working, all-core and per-core CPU frequency caps, CPU and GPU power limits, and the
-root helper for NVMe SMART, RAPL, DIMM and VR sensors, cpufreq ceilings and power limits. Ships as a .deb (see [Install](#install)).
-Planned work is tracked in [ROADMAP.md](ROADMAP.md).
+layout and value customization), HWiNFO's Sensor Settings / Settings dialogs behind the footer gear (what OpenHW
+already had is connected; the rest is being connected item by item), any number of tray icons, CSV logging, alerts
+with desktop notifications, power-mode switching that keeps boost working, all-core and per-core CPU frequency caps,
+CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending to a VM, BMC sensors over IPMI,
+board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
+change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
+card filter. Ships as a .deb (see [Install](#install)). **Next: fan control** — planned in [ROADMAP.md](ROADMAP.md),
+which tracks all planned work.

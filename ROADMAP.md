@@ -4,6 +4,55 @@ Planned work, roughly in priority order within each section. Writes are validate
 keeping the GUI unprivileged. Behaviour is derived from the hardware's own interfaces (ranges, readback) — not
 copied from openfan-linux, which OpenHW never references.
 
+## Fan control — next (owner, 2026-11-14)
+
+The machine is now the ASUS Pro WS WRX90E-SAGE SE (NCT6798 Super I/O, AST2600 BMC, ASUS EC) with a TR PRO 9975WX,
+1× RTX 5060 Ti and 2× RTX PRO 6000. Fan readings come from three places: the Super I/O (`fan1–7` = CHA_FAN1, CPU_FAN,
+CHA_FAN2, CHA_FAN3, CHA_FAN4, CHA_FAN5, W_PUMP+), the ASUS EC (CPU_OPT, USB4, M.2, VRM heatsink fans) and the BMC
+(all headers, read-only so far). Same rules as every other write: fixed helper commands, ranges from the hardware,
+readback, menu entry first.
+
+0. [ ] **Decide with the owner: OpenHW and OpenFan side by side.** OpenFan is installed and its helper
+   (`openfan-helper.service`, "GPU, BMC fan and hardware helper") holds the fan controls today: the NCT6798's
+   `pwm1–7` are group-writable by `openfan`, and all seven headers are in the chip's automatic mode
+   (`pwmN_enable` = 5). Two programs writing the same fans would fight. Options: OpenHW controls fans only when
+   OpenFan isn't running (detect it; independence rule: optional knowledge, no dependency); per-header ownership; or
+   OpenHW takes over and OpenFan is retired for fans. Don't build on OpenFan's code.
+1. [ ] **Find out who drives each header**, read-only first: the Super I/O's `pwmN` / `pwmN_enable` modes and auto
+   points, whether the BMC overrides them (server boards often let the BMC own fan control: IPMI fan modes, ASUS OEM
+   commands — check the ASMB11 documentation), and which headers the EC drives. Then, with the owner's OK and a
+   restore path, one guarded write per header to see the RPM follow.
+2. [ ] **Helper commands** (protocol 13): set a header to manual duty or back to automatic (`pwmN_enable` = the mode
+   found at start), with per-header floors (pump and CPU fan never below a safe minimum), readback, and **restore
+   to automatic** when the helper stops, the app disconnects or a curve's sensor goes stale (a watchdog in the
+   helper, not the app).
+3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
+   owns every GPU handle; never on a card that is lent to the VM.
+4. [ ] **UI** (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
+   OpenHW reads (incl. BMC temperatures and GPU temperatures), with hysteresis and a minimum; a clear "automatic"
+   default. Saved per header, applied when OpenHW starts (opt-in, like CPU caps).
+5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never
+   pushed further; pump/CPU minimums can't be lowered from the UI without an explicit override.
+
+## After the board swap (2026-11-14, 0.21.0–0.22.0)
+
+- [x] **BMC sensors** over IPMI (`/dev/ipmi0`, helper `bmc`, read-only commands): rails, DIMM/LAN/PCIe-slot
+      temperatures, all fan headers (0.21.0).
+- [x] **Hardware Check** (File → Hardware Check…): what changed, saved settings pointing at missing sensors with
+      suggested moves, what isn't read; opens itself at start when needed (0.21.0).
+- [x] **GPUs by identity, not PCI slot**: GPU Lending follows its card by GPU UUID; boot power limits name the card
+      (`nvidia-smi -i GPU-…`) (0.21.0).
+- [x] **WRX90E-SAGE SE board profile** for the NCT6798, named after the BMC's sensors and matched against them
+      (0.22.0, `tools/bmc-probe/match.py`, docs/board-profiles.md).
+- [x] GPU Lending survives libvirt being down; a missing card can be replaced while its filter is on (0.22.0).
+- [ ] Confirm the WRX90E's unconfirmed inputs: in11 vs in14 (+VDD_11_S3) with a BIOS memory-voltage change; in8
+      VBAT and in9 VTT; fan5 (CHA_FAN4) with a fan on that header. A HWiNFO capture would name in12/in14.
+- [ ] **The other 4 DIMMs' SPD sideband** (voltages, PMIC power): Linux bound SPD hubs on only two of the memory
+      buses. Needs a root scan of the others, which the BMC shares — careful; the BMC already gives all 8 temperatures.
+- [ ] **WRX90E board VR**: find out whether this board has a PMBus VR worth mapping (the TRX50's XDPE19283B entry
+      doesn't apply).
+- [ ] BMC: discrete sensors (CPU_ECC, Memory_Train_ERR, PSU presence…) and the BMC's event log (SEL), read-only.
+
 ## GPU lending to a VM (replaces RTXinVM) — agreed with the owner 2026-10-25
 
 Goal: one root helper, no `rtxgpu` launcher. When the VM isn't using the card, every Linux program can use both RTX
@@ -60,8 +109,7 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [x] **Where the 4.0 GHz clamp comes from**: not the boot sequence (booted in power-saver, switched to Performance
       with both apps closed → full 5.49 GHz). It's a 4.0 GHz value stored while boost is off, e.g. OpenFan's
       Hardware maximum pressed in power-saver.
-- [ ] **Fan control** (to decide) — hwmon PWM and NVIDIA fan speed with restore-to-auto on disconnect, from the
-      hwmon `pwmN`/`pwmN_enable` interface and NVML's fan-control calls.
+- [ ] **Fan control** — next; see [Fan control](#fan-control--next-owner-2026-11-14) at the top.
 
 ## Root-only readings (via openhw-helper)
 
@@ -72,14 +120,17 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 ## More sensors (HWiNFO parity)
 
 Compared against the HWiNFO captures in `reference/`. Method for board mappings: [docs/board-profiles.md](docs/board-profiles.md).
+Items marked *TRX50* apply to the Pro WS TRX50-SAGE WIFI A, which is no longer in the owner's machine (replaced by
+the WRX90E-SAGE SE in November 2026); its profile stays for anyone with that board.
 
 - [x] **Super I/O voltages named and scaled** on the TRX50-SAGE (in0–in16; in17 hidden) — `BoardProfiles`.
 - [x] **in6 CPU Core1 confirmed** (×1.11) by a per-CCD load sweep — see docs/board-profiles.md.
-- [ ] **Confirm in13 CPU VSOC** (×1.11) with a BIOS SoC-voltage change. in15 VIN9 follows temperature, not load.
+- [ ] *TRX50* — **Confirm in13 CPU VSOC** (×1.11) with a BIOS SoC-voltage change (needs that board). in15 VIN9 follows temperature, not load.
 - [x] **Super I/O temperatures and fans named** on this board, by behaviour (docs/board-profiles.md). Still inferred:
       CPU (PECI/TSI calibration) and CPU (Weighted Value) (Virtual_TEMP) — confirm with a longer cross-OS run.
 - [x] Show the chip as HWiNFO names it (Nuvoton **NCT6701D**) (0.5.0).
-- [ ] Profiles for more boards (same method; contributions need a HWiNFO capture + raw Linux values).
+- [x] **WRX90E-SAGE SE** (NCT6798) — from its BMC (0.22.0); see "After the board swap".
+- [ ] Profiles for more boards (same method; a HWiNFO capture + raw Linux values, or a BMC to compare against).
 - [ ] **CPU "Enhanced" telemetry** (HWiNFO reads AMD SMU/SVI3, not the Super I/O):
   - AMD HSMP metrics: the kernel already exposes many without root on the HSMP platform device
     (`/sys/devices/platform/AMDI0097:00/`): `fclk_input`, `mclk_input`, `cclk_freq_limit_input`, `clk_fmax`/`clk_fmin`,
@@ -96,8 +147,8 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
 - [x] **DDR5 PMIC rails** per DIMM (VDD/VDDQ/VPP, 1.8V/1.0V VOUT, VIN, total power, PMIC alarms) and the TS0/TS1
       sensors, through the helper's `ddr5` (0.10.0). Reads, plus the PMIC's ADC select (R30) — owner-approved, the
       one register HWiNFO also sets — only on a PMIC whose vendor id matches the SPD's, restored after each sweep.
-- [ ] **ASUS EC VRM data**: VRM Vcore0/1 VOUT, IOUT, POUT (HWiNFO shows them); Linux's `asus_ec_sensors` exposes
-      only temperatures and fans on this board — needs the EC register map for this model, and a way to call the
+- [ ] **ASUS EC VRM data**: VRM Vcore0/1 VOUT, IOUT, POUT (HWiNFO shows them on the TRX50); Linux's `asus_ec_sensors` exposes
+      only temperatures and fans — needs the EC register map for this model, and a way to call the
       board's ACPI BREC method for registers the driver doesn't list (acpi_call DKMS or a driver patch). Deferred
       (owner, 2026-10-25).
 - [x] **GPU extras** where NVML has them: 1 s average power, PCIe error counters (0.5.0). Hotspot / memory-junction
@@ -105,7 +156,7 @@ Compared against the HWiNFO captures in `reference/`. Method for board mappings:
 
 ## Resource use
 
-Measured 2026-10-22 on the TRX50 workstation (per 2 s poll, background thread): NVIDIA ~156 ms wall / ~37 ms CPU,
+Measured 2026-10-22 on the TRX50 workstation (before the board swap) (per 2 s poll, background thread): NVIDIA ~156 ms wall / ~37 ms CPU,
 hwmon ~74 ms wall / ~4 ms CPU, everything else under 2 ms combined. Two reads dominate:
 NVML PCIe throughput (~42 ms per GPU — NVML samples each counter for 20 ms) and NVMe hwmon temperatures (5–19 ms
 per drive — each read is an admin command to the drive, which can also wake it from a low-power state).
