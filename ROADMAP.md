@@ -12,16 +12,27 @@ CHA_FAN2, CHA_FAN3, CHA_FAN4, CHA_FAN5, W_PUMP+), the ASUS EC (CPU_OPT, USB4, M.
 (all headers, read-only so far). Same rules as every other write: fixed helper commands, ranges from the hardware,
 readback, menu entry first.
 
-0. [ ] **Decide with the owner: OpenHW and OpenFan side by side.** OpenFan is installed and its helper
-   (`openfan-helper.service`, "GPU, BMC fan and hardware helper") holds the fan controls today: the NCT6798's
-   `pwm1–7` are group-writable by `openfan`, and all seven headers are in the chip's automatic mode
-   (`pwmN_enable` = 5). Two programs writing the same fans would fight. Options: OpenHW controls fans only when
-   OpenFan isn't running (detect it; independence rule: optional knowledge, no dependency); per-header ownership; or
-   OpenHW takes over and OpenFan is retired for fans. Don't build on OpenFan's code.
-1. [ ] **Find out who drives each header**, read-only first: the Super I/O's `pwmN` / `pwmN_enable` modes and auto
-   points, whether the BMC overrides them (server boards often let the BMC own fan control: IPMI fan modes, ASUS OEM
-   commands — check the ASMB11 documentation), and which headers the EC drives. Then, with the owner's OK and a
-   restore path, one guarded write per header to see the RPM follow.
+0. [x] **Decided (owner, 2026-11-14): OpenHW takes over the fans; the aim is to run only OpenHW**, retiring
+   OpenFan. Until it's gone, the two must never write the same fans: OpenHW's fan control stays off while OpenFan's
+   helper (`openfan-helper.service`) is running, and the Fan Control page says so and offers to stop it (optional
+   knowledge only — OpenHW never needs OpenFan). Everything OpenFan does for fans (Super I/O headers, GPU fans, BMC
+   fans) has to exist in OpenHW before OpenFan is uninstalled; built from the hardware's interfaces, not OpenFan's code.
+1. [ ] **Find out who drives each header** — read-only survey done 2026-11-14:
+   - **NCT6798**: all seven `pwmN` in automatic mode 5 (SmartFan IV), every curve on **temp8 "PECI Agent 0
+     Calibration", which is dead on this board (flat 11 °C)** — so the chip's curves sit at their lowest point: duty
+     51/255 (20 %) on pwm1–6, CHA_FAN4's curve 153, pump pwm7 fixed at 255.
+   - **Chassis fans are driven by something else**: under 60 s of all-core load (280 W) the NCT6798's duty stayed 51
+     while CHA_FAN1 went 2106 → 3284 RPM, CHA_FAN2 722 → 1195, CHA_FAN3 612 → 1154, CHA_FAN5 1521 → 2323, and back at idle —
+     almost certainly the BMC's own fan control.
+   - **CPU_FAN stayed ~520 RPM and W_PUMP+ ~3900 RPM** through the load, matching the NCT6798's 20 % / 100 % — likely
+     these two follow the Super I/O, in which case **the CPU fan never responds to CPU temperature**. Needs one guarded
+     write to confirm (with OpenFan's helper stopped; restore mode 5 after).
+   - **ASUS EC / WMI**: readings only, no PWM controls.
+   - **BMC** = the ASUS IPMI Expansion Card (AST2600 at PCI d6:00.0, AMI MegaRAC firmware). Its web UI's Fan Control
+     has Generic / Full speed / Customized (duty per temperature, chosen temperature source; no temperature → CPU
+     temperature → else 60 %). The ASUS manual documents **no** IPMI command for fan mode or duty (only `raw 0x30`
+     FRU unlock 0x17, PSU address 0x96, hardware version 0x98). Routes to control it: Redfish over the BMC's USB host
+     NIC (needs the owner's BMC credentials) or OEM IPMI commands verified with ASUS — not guessed.
 2. [ ] **Helper commands** (protocol 13): set a header to manual duty or back to automatic (`pwmN_enable` = the mode
    found at start), with per-header floors (pump and CPU fan never below a safe minimum), readback, and **restore
    to automatic** when the helper stops, the app disconnects or a curve's sensor goes stale (a watchdog in the
