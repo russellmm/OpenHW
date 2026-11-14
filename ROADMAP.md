@@ -24,15 +24,20 @@ readback, menu entry first.
    - **Chassis fans are driven by something else**: under 60 s of all-core load (280 W) the NCT6798's duty stayed 51
      while CHA_FAN1 went 2106 → 3284 RPM, CHA_FAN2 722 → 1195, CHA_FAN3 612 → 1154, CHA_FAN5 1521 → 2323, and back at idle —
      almost certainly the BMC's own fan control.
-   - **CPU_FAN stayed ~520 RPM and W_PUMP+ ~3900 RPM** through the load, matching the NCT6798's 20 % / 100 % — likely
-     these two follow the Super I/O, in which case **the CPU fan never responds to CPU temperature**. Needs one guarded
-     write to confirm (with OpenFan's helper stopped; restore mode 5 after).
+   - **CPU_FAN stayed ~520 RPM and W_PUMP+ ~3900 RPM** through the load. **Guarded write test (owner-approved,
+     2026-11-14, `tools/fan-probe/cpu-fan-test.sh`)**: with OpenFan's helper stopped, pwm2 set to 60 % then 100 % →
+     CPU_FAN stayed 506–519 RPM; restored to mode 5 and OpenFan restarted. **The NCT6798's PWM outputs drive none of the
+     visible headers — it only measures them. All fan control on this board is the BMC's** (CPU_FAN's flat ~510 RPM
+     at 280 W is the BMC's choice for that header).
    - **ASUS EC / WMI**: readings only, no PWM controls.
    - **BMC** = the ASUS IPMI Expansion Card (AST2600 at PCI d6:00.0, AMI MegaRAC firmware). Its web UI's Fan Control
      has Generic / Full speed / Customized (duty per temperature, chosen temperature source; no temperature → CPU
      temperature → else 60 %). The ASUS manual documents **no** IPMI command for fan mode or duty (only `raw 0x30`
      FRU unlock 0x17, PSU address 0x96, hardware version 0x98). Routes to control it: Redfish over the BMC's USB host
      NIC (needs the owner's BMC credentials) or OEM IPMI commands verified with ASUS — not guessed.
+   - **So fan control here = BMC + NVML.** Next decision (owner): the route to the BMC's fan modes/duty — Redfish
+     over the BMC's USB host NIC (owner's BMC login, stored root-only for the helper) or in-band OEM IPMI commands
+     confirmed with ASUS. The Super I/O path below stays for boards whose Super I/O does drive fans.
 2. [ ] **Helper commands** (protocol 13): set a header to manual duty or back to automatic (`pwmN_enable` = the mode
    found at start), with per-header floors (pump and CPU fan never below a safe minimum), readback, and **restore
    to automatic** when the helper stops, the app disconnects or a curve's sensor goes stale (a watchdog in the
