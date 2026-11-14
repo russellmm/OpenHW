@@ -262,8 +262,17 @@ public sealed class CardFilter : IDisposable
     {
         lock (_gate)
         {
-            var chosen = pci is null ? null : CardDevices.List(_procRoot).FirstOrDefault(c => c.Pci == pci) ?? throw new ArgumentException("no such NVIDIA card");
-            if (_settings.Enabled) throw new ArgumentException("turn the filter off before choosing another card");
+            var cards = CardDevices.List(_procRoot);
+            var chosen = pci is null ? null : cards.FirstOrDefault(c => c.Pci == pci) ?? throw new ArgumentException("no such NVIDIA card");
+            if (_settings.Enabled)
+            {
+                // A filter for a card that isn't in the machine guards nothing: turn it off, so a card can be chosen
+                // again after a slot move or a board swap. A present card's filter must be turned off by hand.
+                if (_settings.Card is { } current && cards.Any(c => c.Pci == current))
+                    throw new ArgumentException("turn the filter off before choosing another card");
+                Disengage();
+                _settings.Enabled = false;
+            }
             _settings.Card = pci;
             _settings.CardUuid = chosen?.Uuid;
             if (pci is not null && _settings.Entries.Count == 0)

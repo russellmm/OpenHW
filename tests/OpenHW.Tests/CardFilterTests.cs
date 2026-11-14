@@ -47,6 +47,29 @@ public sealed class CardFilterTests : IDisposable
     }
 
     [Fact]
+    public void AMissingCardsFilterDoesntBlockChoosingAgain()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "etc"));
+        // The owner's settings after the board swap: filter on, for a slot that's empty now (no UUID recorded yet).
+        File.WriteAllText(Path.Combine(_root, "etc", "card-filter.json"), """{"Card":"0000:e1:00.0","Enabled":true}""");
+        SwapBoard();
+        using var filter = Filter();
+        Assert.Equal("0000:c1:00.0", filter.SelectCard("0000:c1:00.0"));
+        var status = filter.Status();
+        Assert.Equal(("0000:c1:00.0", false), (status.Card, status.Enabled)); // off until the owner ticks it again
+        Assert.Contains(Pro2, SettingsJson);
+    }
+
+    [Fact]
+    public void APresentCardsFilterMustBeTurnedOffFirst()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "etc"));
+        File.WriteAllText(Path.Combine(_root, "etc", "card-filter.json"), """{"Card":"0000:11:00.0","Enabled":true}""");
+        using var filter = Filter();
+        Assert.Throws<ArgumentException>(() => filter.SelectCard("0000:e1:00.0"));
+    }
+
+    [Fact]
     public void OldSettingsAdoptTheCardsIdentityAndNeverFilterAnotherCardInItsSlot()
     {
         Directory.CreateDirectory(Path.Combine(_root, "etc"));

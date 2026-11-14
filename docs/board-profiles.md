@@ -17,6 +17,12 @@ the board maker. HWiNFO names and scales them from a per-board database; OpenHW 
    - change that voltage in the BIOS and see which input follows (definitive).
 4. **Record** the mapping with `Confirmed: false` until step 3 is done, and keep the evidence table below current.
 
+**Boards with a BMC** (0.21.0+) can be mapped on Linux alone: the BMC reads many of the same rails and fan headers
+through its own ADC and names them. `tools/bmc-probe/match.py <out.csv>` runs an idle → per-CCD → all-core sweep and
+records every Super I/O input next to every BMC sensor (through openhw-helper's `bmc`, no root). A pin is matched
+when raw × a plausible divider equals the BMC's value at every step and, for moving rails, moves with it. Rails the
+BMC doesn't read keep the chip's names.
+
 ## ASUS Pro WS TRX50-SAGE WIFI A — Nuvoton NCT6701D (Linux driver: nct6799)
 
 Raw values read on Linux, 2026-10-22; HWiNFO 8.54 values from `reference/` captures on the same machine.
@@ -119,3 +125,51 @@ the same order.
 
 Without HWiNFO, the BIOS image names the rails and their Nuvoton pins, and a load test separates the core rails.
 See [hwinfo-research.md](hwinfo-research.md).
+
+
+## ASUS Pro WS WRX90E-SAGE SE — Nuvoton NCT6798 (Linux driver: nct6798), named after its BMC
+
+Board fitted early November 2026 (BIOS 1405, Threadripper PRO 9975WX). The ASPEED AST2600 BMC (IPMI, firmware 2.01)
+reads the same rails and headers, so the profile uses **the BMC's names**. Data: `reference/wrx90e-2026-11-14/match.csv`
+(`tools/bmc-probe/match.py`, 13 steps × 5 samples, power-saver profile — boost off, 4.0 GHz — 64–280 W). No HWiNFO
+capture on this board yet.
+
+| Pin | Raw | Name (BMC's) | × | Scaled | BMC | Evidence |
+|---|---|---|---|---|---|---|
+| in0 | 0.776–0.872 V | +VCORE_0 | 1.11 | 0.861–0.968 V | 0.872–0.976 V | follows at every step; rises with CCD3-only load while in6 stays flat |
+| in1 | 1.024 V | +5V | 5 | 5.120 V | 5.088 V | value |
+| in2 | 3.392–3.408 V | AVSB | 1 | | — | chip's analog standby supply; no BMC sensor |
+| in3 | 3.264–3.280 V | +3.3V | 1 | | 3.264 V | value (chip pin 3VCC) |
+| in4 | 0.992–1.000 V | +12V | 12 | 11.90–12.00 V | 11.82 V | value (1 %; the two ADCs differ) |
+| in5 | 0.984–0.992 V | +VDDIO | 1.11 | 1.092–1.101 V | 1.104 V | value |
+| in6 | 0.688–0.888 V | +VCORE_1 | 1.11 | 0.764–0.986 V | 0.770–0.987 V | follows at every step (r = 0.91); flat under CCD3-only load |
+| in7 | 3.392–3.408 V | 3VSB | 1 | | (+3.3VSB 3.264) | chip's own standby supply, a different point than the BMC's |
+| in8 | 3.264–3.280 V | VBAT | 1 | | (VBAT 3.072) | **unconfirmed**: ~0.2 V above the BMC's VBAT — likely the switched backup supply while on |
+| in9 | 3.264–3.280 V | VTT | 1 | | — | **unconfirmed** (chip pin name) |
+| in10 | 1.056 V | +CHIPSET_1.05V | 1 | | 1.062 V | value |
+| in11 | 1.264 V | +VDD_11_S3 | 1 | | 1.260–1.270 V | **unconfirmed**: in14 reads the same; change the memory voltage in BIOS to tell |
+| in12 | 1.040 V | (in12) | | | — | no BMC counterpart |
+| in13 | 0.808 V | +VSOC | 1.11 | 0.897 V | 0.904 V | value (one ADC step) |
+| in14 | 1.256–1.264 V | (in14) | | | — | no BMC counterpart; same value as in11 |
+
+The BMC's +CHIPSET_1.8V (1.86 V) has no Super I/O pin. Note the dividers differ from the TRX50 for in11 (×1 here).
+
+**Core rails by CCD** (step means, pin × 1.11 / BMC): CCD3-only load raises +VCORE_0 (0.968 / 0.968 V) and leaves
++VCORE_1 at idle (0.801 / 0.810 V); CCD0, CCD1 and CCD2 loads raise both, CCD1/CCD2 more on +VCORE_1.
+
+| Fan | RPM | BMC header | Evidence |
+|---|---|---|---|
+| fan1 | 2070–3154 | CHA_FAN1 | mean \|diff\| 26 RPM, r = 0.95 |
+| fan2 | 506–525 | CPU_FAN | ~510 vs 480 (BMC reports in 120 RPM steps) |
+| fan3 | 703–1124 | CHA_FAN2 | 42 RPM (131 against CHA_FAN3) |
+| fan4 | 611–1116 | CHA_FAN3 | the remaining header; 600–960 on the BMC |
+| fan5 | 0 | CHA_FAN4 | **unconfirmed**: no fan; BMC shows CHA_FAN4 disabled; header order |
+| fan6 | 1528–2235 | CHA_FAN5 | 36 RPM, r = 0.93 |
+| fan7 | 3857–3913 | W_PUMP+ | 25 RPM |
+
+CPU_OPT, USB4_FAN, M.2_FAN and the VRM heatsink fans aren't on the Super I/O (the ASUS EC and the BMC read them).
+
+**Temperatures**: none matches a BMC sensor, so the chip's names stay — SYSTIN (33–34 °C, flat), CPUTIN (38–42.5 °C,
+follows CPU Package Temp, r = 0.71), AUXTIN0 (32–44 °C, falls as load rises, r = −0.58 with Tctl, like the TRX50's
+"Temp2"), AUXTIN4 (26–27 °C). Hidden as open pins: AUXTIN1 (23 °C flat), AUXTIN2/3 (12–13 °C flat), PECI Agent 0
+Calibration (11 °C flat — not fed here, unlike the TRX50) and the four PCH_* registers (0 °C).

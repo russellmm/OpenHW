@@ -101,28 +101,28 @@ public static partial class SensorExplanations
         R(@"VIN2|VIN9", "A Super I/O input with no published meaning on this board. Shown because HWiNFO shows it; values " +
             "are raw (×1)."),
         // ── Board management controller (IPMI): names as the BMC reports them ─────────────────────────────────
-        R(@"\+VCORE_0|\+VCORE_1", "A CPU core voltage rail as the BMC measures it. Threadripper PRO has two core rails, " +
+        R(@"\+VCORE_0|\+VCORE_1", "A CPU core voltage rail. Threadripper PRO has two core rails, " +
             "each feeding half of the core dies; it rises with clock and load (~0.8 V idle, up to ~1.3 V at boost).", HardwareKind.Voltage),
-        R(@"\+VSOC", "The CPU's SoC rail (I/O die, memory controllers, Infinity Fabric), as the BMC measures it. Fixed by BIOS settings."),
-        R(@"\+VDDIO", "The CPU's memory I/O rail, as the BMC measures it; set from the memory profile in BIOS."),
-        R(@"\+VDD_11_S3", "The memory power rail (1.1 V class) feeding the DIMMs' PMICs and the memory controllers' VDDIO_Mem, as the BMC measures it."),
-        R(@"\+CHIPSET_1\.8V|\+CHIPSET_1\.05V", "A chipset supply rail, as the BMC measures it. It should hold steady at its nominal voltage."),
-        R(@"\+3\.3V", "The PSU's 3.3 V rail, as the BMC measures it. Within ±5 % (3.14–3.47 V) is healthy."),
+        R(@"\+VSOC", "The CPU's SoC rail (I/O die, memory controllers, Infinity Fabric). Fixed by BIOS settings."),
+        R(@"\+VDDIO", "The CPU's memory I/O rail; set from the memory profile in BIOS."),
+        R(@"\+VDD_11_S3", "The memory power rail (1.1 V class) feeding the DIMMs' PMICs and the memory controllers' VDDIO_Mem."),
+        R(@"\+CHIPSET_1\.8V|\+CHIPSET_1\.05V", "A chipset supply rail. It should hold steady at its nominal voltage."),
+        R(@"\+3\.3V", "The PSU's 3.3 V rail. Within ±5 % (3.14–3.47 V) is healthy."),
         R(@"\+5VSB|\+3\.3VSB", "A standby rail: powered whenever the PSU is plugged in, even with the PC off (the BMC runs from it)."),
         R(@"CPU Package Temp", "CPU package temperature as the BMC reads it from the CPU (AMD SB-TSI/APML). It should " +
             "track CPU (Tctl/Tdie); the BMC's fan control uses it.", HardwareKind.Temperature),
-        R(@"TR\d+ Temperature", "The board's thermistor header (T_SENSOR), read by the BMC. It reads only with a probe plugged in."),
-        R(@"LAN Temp", "Temperature of the onboard 10 GbE network controller, read by the BMC. These chips run warm; under ~95 °C is fine."),
-        R(@"DIMM[A-H]\d_Temp", "Temperature of one DIMM, read by the BMC from the module's thermal sensor — every slot, " +
+        R(@"TR\d+ Temperature", "The board's thermistor header (T_SENSOR). It reads only with a probe plugged in."),
+        R(@"LAN Temp", "Temperature of the onboard 10 GbE network controller. These chips run warm; under ~95 °C is fine."),
+        R(@"DIMM[A-H]\d_Temp", "Temperature of one DIMM from the module's thermal sensor — every slot, " +
             "including DIMMs whose SPD hub Linux hasn't bound. DDR5 slows refresh above ~85 °C; under ~60 °C is comfortable."),
-        R(@"PCIE\d+ Temp", "Temperature near one PCIe slot, read by the BMC — mostly the card in it. It reads only when the " +
+        R(@"PCIE\d+ Temp", "Temperature near one PCIe slot — mostly the card in it. It reads only when the " +
             "slot's sensor reports (an empty slot shows nothing)."),
-        R(@"CPU_FAN", "Speed of the fan on the CPU_FAN header, read by the BMC.", HardwareKind.Tach),
-        R(@"CHA_FAN\d+", "Speed of a case fan on a chassis fan header, read by the BMC. 0 RPM means stopped or not connected."),
-        R(@"W_PUMP\+", "Speed of the pump on the W_PUMP+ header, read by the BMC. A pump at 0 RPM means no coolant flow — " +
+        R(@"CPU_FAN", "Speed of the fan on the CPU_FAN header.", HardwareKind.Tach),
+        R(@"CHA_FAN\d+", "Speed of a case fan on a chassis fan header. 0 RPM means stopped or not connected."),
+        R(@"W_PUMP\+", "Speed of the pump on the W_PUMP+ header. A pump at 0 RPM means no coolant flow — " +
             "the CPU will overheat quickly."),
-        R(@"USB4_FAN|M\.2_FAN", "Speed of the small fan cooling the board's USB4 controller or M.2 heatsink, read by the BMC."),
-        R(@"VRME_HS_FAN|VRMW_HS_FAN", "Speed of the small fan on the east or west VRM heatsink, read by the BMC. 0 RPM is " +
+        R(@"USB4_FAN|M\.2_FAN", "Speed of the small fan cooling the board's USB4 controller or M.2 heatsink."),
+        R(@"VRME_HS_FAN|VRMW_HS_FAN", "Speed of the small fan on the east or west VRM heatsink. 0 RPM is " +
             "normal when the VRMs are cool."),
         R(@"PSU\d+ Power In|PSU\d+ Power Out", "Power into or out of a power supply, from the PSU's own meter (PMBus). " +
             "Only redundant/server PSUs report it."),

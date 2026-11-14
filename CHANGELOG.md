@@ -3,6 +3,21 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.22.0 — 2026-11-14
+
+- **Board profile for the ASUS Pro WS WRX90E-SAGE SE** (Super I/O NCT6798), named after the board's own BMC: the
+  voltage rails get the BMC's names and dividers (+VCORE_0, +VCORE_1, +VSOC, +VDDIO, +5V, +12V, +3.3V,
+  +CHIPSET_1.05V, +VDD_11_S3 …), so +12V reads 12 V instead of 1 V at the pin; the seven fan inputs are the BMC's
+  headers (CHA_FAN1–5, CPU_FAN, W_PUMP+); open temperature pins and the Intel-only PCH registers are hidden. Matched
+  on Linux alone by reading the Super I/O and the BMC side by side across an idle → per-CCD → all-core sweep
+  (`tools/bmc-probe/match.py`; evidence in docs/board-profiles.md). Four inputs stay flagged as unconfirmed.
+- Fixed: **GPU Lending grayed everything out when libvirt was down** ("openhw-helper isn't answering: virsh: error:
+  failed to connect to the hypervisor"). Only the VM list depends on libvirt now; the page says libvirt isn't
+  answering and the card and filter stay usable.
+- Fixed: **a card that's no longer in the machine couldn't be replaced** while its filter was on (the card list was
+  disabled). Choosing a card now turns off a filter that guards a missing card; tick "Keep this card away" again
+  afterwards.
+
 ## 0.21.0 — 2026-11-14
 
 - **Board management controller (BMC) sensors.** On boards with a BMC that Linux exposes as `/dev/ipmi0` (here the

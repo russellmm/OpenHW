@@ -130,7 +130,10 @@ public sealed class HardwareCheckTests
             Assert.Equal(Coverage.OpenGpuLending, lending.Action);
             Assert.Contains("Set up for card 0000:e1:00.0", lending.Text);
             Assert.Contains(notes, n => n.Area == "Memory" && n.Text.StartsWith("8 DIMMs installed (BMC), 4 readable"));
-            Assert.Contains(notes, n => n.Area == "Motherboard" && n.Text.StartsWith("No board profile for Pro WS WRX90E-SAGE SE (nct6798)"));
+            Assert.DoesNotContain(notes, n => n.Text.StartsWith("No board profile")); // the WRX90E has one (named after its BMC)
+            var unknown = new HardwareSnapshot { BoardVendor = "ASUSTeK COMPUTER INC.", Board = "Pro WS W790E-SAGE SE", Chips = ["nct6798"] };
+            Assert.Contains(Coverage.Check(unknown, [], true, new Coverage.Probe(_ => false, _ => "", () => "12", etc)),
+                n => n.Area == "Motherboard" && n.Text.StartsWith("No board profile for Pro WS W790E-SAGE SE (nct6798)"));
             Assert.DoesNotContain(notes, n => n.Area == "BMC");
             var boot = notes.Single(n => n.Area == "Power limits");
             Assert.True(boot.Warning);

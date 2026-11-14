@@ -131,7 +131,8 @@ units on the tiles** and **Hover** turn the tiles' units and the hover details o
 that sample. The engines are read-only; writes (caps, power limits) go through the helper.
 
 Super I/O inputs are named per board (`BoardProfiles`): on the Pro WS TRX50-SAGE WIFI A the voltages, temperatures
-and fans carry HWiNFO's names, matched by measurement — evidence in [docs/board-profiles.md](docs/board-profiles.md).
+and fans carry HWiNFO's names, and on the Pro WS WRX90E-SAGE SE the names its BMC uses (matched against the BMC's
+own readings) — evidence in [docs/board-profiles.md](docs/board-profiles.md).
 Open-pin inputs HWiNFO doesn't list are hidden; mappings still inferred are flagged in their tooltips.
 
 NVMe SMART needs root, so `NvmeEngine` reads it through OpenHW's own helper (below); without it, drive health

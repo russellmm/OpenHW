@@ -83,6 +83,49 @@ public static class BoardProfiles
             ["fan5"] = new("Chassis 4"),
             ["fan6"] = new("Water Pump+"),
         }, ChipName: "Nuvoton NCT6701D"),
+
+        // Named after the board's own BMC (ASPEED AST2600), whose sensors read the same rails and headers: matched by
+        // value and by behaviour across an idle → per-CCD → all-core sweep read from both at once
+        // (tools/bmc-probe/match.py, reference/wrx90e-2026-11-14/, docs/board-profiles.md). No HWiNFO capture yet.
+        new("ASUSTeK", "Pro WS WRX90E-SAGE SE", "nct67", new Dictionary<string, RailMapping>
+        {
+            ["in0"] = new("+VCORE_0", LowRailDivider),       // follows the BMC's +VCORE_0 at every step, incl. CCD3-only load
+            ["in1"] = new("+5V", 5),                         // 5.12 V; BMC +5V 5.09 V
+            ["in2"] = new("AVSB", Note: "The Super I/O's analog standby supply; the BMC has no matching sensor"),
+            ["in3"] = new("+3.3V"),                          // 3VCC: 3.264 V = BMC +3.3V
+            ["in4"] = new("+12V", 12),                       // 11.9–12.0 V; BMC +12V 11.82 V
+            ["in5"] = new("+VDDIO", LowRailDivider),         // 0.992 × 1.11 = 1.101 V; BMC +VDDIO 1.104 V
+            ["in6"] = new("+VCORE_1", LowRailDivider),       // follows the BMC's +VCORE_1 at every step (flat under CCD3-only load)
+            ["in7"] = new("3VSB", Note: "The Super I/O's own 3.3 V standby supply; reads ~0.13 V above the BMC's +3.3VSB (another point on the rail)"),
+            ["in8"] = new("VBAT", Confirmed: false,
+                Note: "Reads ~0.2 V above the BMC's VBAT (3.26 vs 3.07 V): likely the battery-backed supply switched from 3VSB while " +
+                      "the PC is on. For the coin cell itself, use the BMC's VBAT"),
+            ["in9"] = new("VTT", Confirmed: false, Note: "Reads 3.26 V like +3.3V; which board rail it is isn't known"),
+            ["in10"] = new("+CHIPSET_1.05V"),                // 1.056 V; BMC 1.062 V
+            ["in11"] = new("+VDD_11_S3", Confirmed: false,
+                Note: "1.264 V = the BMC's +VDD_11_S3, but in14 reads the same; a BIOS memory-voltage change would tell them apart"),
+            ["in13"] = new("+VSOC", LowRailDivider),         // 0.808 × 1.11 = 0.897 V; BMC +VSOC 0.904 V (one ADC step)
+            // in12 (1.040 V) and in14 (1.256 V) have no BMC counterpart: left under the chip's names. CHIPSET_1.8V isn't on the Super I/O.
+
+            // Temperatures: none matches a BMC sensor, so the chip's names stay. Flat, implausible ones are open pins.
+            ["temp4"] = new("AUXTIN1", Hidden: true),        // 23 °C flat through the sweep
+            ["temp5"] = new("AUXTIN2", Hidden: true),        // 12 °C flat
+            ["temp6"] = new("AUXTIN3", Hidden: true),        // 12–13 °C flat
+            ["temp8"] = new("PECI Agent 0 Calibration", Hidden: true), // 11 °C flat: not fed on this board (TRX50: tracked Tctl)
+            ["temp9"] = new("PCH_CHIP_CPU_MAX_TEMP", Hidden: true),    // 0 °C: Intel PCH registers
+            ["temp10"] = new("PCH_CHIP_TEMP", Hidden: true),
+            ["temp11"] = new("PCH_CPU_TEMP", Hidden: true),
+            ["temp12"] = new("PCH_MCH_TEMP", Hidden: true),
+
+            // Fans, matched sample by sample against the BMC's headers (it reports in 120 RPM steps).
+            ["fan1"] = new("CHA_FAN1"),                      // mean |diff| 26 RPM, r = 0.95
+            ["fan2"] = new("CPU_FAN"),                       // ~510 RPM vs 480
+            ["fan3"] = new("CHA_FAN2"),                      // 42 RPM (vs 131 for CHA_FAN3)
+            ["fan4"] = new("CHA_FAN3"),                      // the remaining one, 611–1116 RPM vs 600–960
+            ["fan5"] = new("CHA_FAN4", Confirmed: false, Note: "0 RPM; the BMC shows CHA_FAN4 as disabled (no fan). Inferred from header order"),
+            ["fan6"] = new("CHA_FAN5"),                      // 36 RPM, r = 0.93
+            ["fan7"] = new("W_PUMP+"),                       // 3857–3913 RPM vs 3840
+        }, ChipName: "Nuvoton NCT6798"),
     ];
 
     private static readonly Dictionary<string, HardwareKind> InputKinds = new()

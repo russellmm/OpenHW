@@ -133,6 +133,8 @@ public sealed class GpuLendingWindow : Window
         Refresh();
     }
 
+    private string? _vmError;
+
     /// <summary>Re-reads the helper's status and redraws (every 2 s while open).</summary>
     public void Refresh()
     {
@@ -142,7 +144,17 @@ public sealed class GpuLendingWindow : Window
             _now = GpuWire.Decode<CardFilterStatus>(_request("cardfilter"));
             _lendNow = GpuWire.Decode<LendStatus>(_request("lendstatus"));
             if (_lendNow is not null) _lending.Follow(_lendNow);
-            if (_vms.Count == 0 || _now?.Card is not null && _lendNow?.Vm is null) _vms = GpuWire.Decode<List<LendVm>>(_request("cardvms")) ?? [];
+            _vmError = null;
+            if (_vms.Count == 0 || _now?.Card is not null && _lendNow?.Vm is null)
+            {
+                // libvirt is its own service: when it's down only the VM list is missing — the card and the filter
+                // still work and stay usable here.
+                try { _vms = GpuWire.Decode<List<LendVm>>(_request("cardvms")) ?? []; }
+                catch (IOException ex) when (!ex.Message.Contains("unknown command", StringComparison.Ordinal))
+                {
+                    _vmError = ex.Message.Replace("openhw-helper: err ", "").Split('\n')[0];
+                }
+            }
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException)
         {
@@ -168,8 +180,12 @@ public sealed class GpuLendingWindow : Window
                 foreach (var c in s?.Cards ?? []) _card.Items.Add(new ComboBoxItem { Content = $"{c.Name} ({Short(c.Pci)})", Tag = c.Pci });
             }
             _card.SelectedItem = _card.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == (s?.Card ?? "none"));
-            _card.IsEnabled = s is not null && !s.Enabled; // another card only while the filter is off
-            ToolTip.SetTip(_card, s?.Enabled == true ? "Turn the filter off to choose another card." : null);
+            // Another card only while the filter is off — unless the chosen card isn't in the machine (a slot move or a
+            // new board): then the filter guards nothing, and the helper turns it off as the new card is chosen.
+            var missing = s?.Card is { } chosen && s.Cards.All(c => c.Pci != chosen);
+            _card.IsEnabled = s is not null && (!s.Enabled || missing);
+            ToolTip.SetTip(_card, s?.Enabled == true && !missing ? "Turn the filter off to choose another card."
+                : missing ? $"The chosen card ({Short(s!.Card!)}) isn't in this machine. Choose it again; the filter is turned off until you tick it." : null);
             _enabled.IsEnabled = s?.Card is not null;
             _enabled.IsChecked = s?.Enabled == true;
             _filterState.Text = s is null ? "" : FilterState(s);
@@ -198,7 +214,9 @@ public sealed class GpuLendingWindow : Window
             _lend.IsEnabled = _return.IsEnabled = false;
             return;
         }
-        if (choices.Count == 0) _lendNotes.Children.Add(Footnote("No VM has this card assigned (a PCI hostdev in its libvirt definition)."));
+        if (_vmError is not null)
+            _lendNotes.Children.Add(Footnote($"libvirt isn't answering, so the VMs can't be listed: {_vmError}. Check it with: systemctl status libvirtd", Bad));
+        else if (choices.Count == 0) _lendNotes.Children.Add(Footnote("No VM has this card assigned (a PCI hostdev in its libvirt definition)."));
         var busy = l.Stage is not ("idle" or "lent" or "failed" or "returned");
         _lendState.Text = l.Vm is null ? "Choose the VM." :
             busy ? $"{l.Vm}: {l.Stage}…" :
