@@ -35,9 +35,22 @@ readback, menu entry first.
      temperature → else 60 %). The ASUS manual documents **no** IPMI command for fan mode or duty (only `raw 0x30`
      FRU unlock 0x17, PSU address 0x96, hardware version 0x98). Routes to control it: Redfish over the BMC's USB host
      NIC (needs the owner's BMC credentials) or OEM IPMI commands verified with ASUS — not guessed.
-   - **So fan control here = BMC + NVML.** Next decision (owner): the route to the BMC's fan modes/duty — Redfish
-     over the BMC's USB host NIC (owner's BMC login, stored root-only for the helper) or in-band OEM IPMI commands
-     confirmed with ASUS. The Super I/O path below stays for boards whose Super I/O does drive fans.
+   - **So fan control here = BMC + NVML.** The BMC is onboard (AST2600, AMI MegaRAC) and runs **Redfish over the
+     BIOS's Redfish Host Interface** (BIOS: Advanced → Redfish Host Interface Settings, on by default): the PC's USB
+     NIC `enx36dbecc2f9a6` (169.254.x) reaches it at **https://169.254.0.17**, inside the machine only. Reads work
+     **without a login** (service root, Chassis/Self, Thermal, Managers/Self). `/redfish/v1/Chassis/Self/Thermal` →
+     `Oem` holds the fan control: `"Mode": "Manual"` and `"PWM"`: 8 channels (`Index` 0–7), each `Source` (1 here,
+     presumably CPU) and five points `Temperature1–5` / `FanDuty1–5` (%). Today: ch0 20 % to 65 °C then 100 % at 70 °C
+     (CPU_FAN — why it sat at ~510 RPM through 65 °C), ch1/2/3/5 20→40→70→100 % (chassis), ch4 60→100 % (CHA_FAN4),
+     ch6 100 % (pump), ch7 unused — the same curves the BIOS Q-Fan writes into the NCT6798. Channel → header mapping
+     inferred, to verify. Writes (PATCH of that `Oem` block) presumably need a BMC account: not tried.
+   - **Plan for the BMC route** (owner to set up the account): a dedicated BMC user for OpenHW (BMC web UI → User
+     Management, or BIOS → Server Mgmt → BMC User Settings → Add User), entered once in OpenHW's Fan Control page and
+     stored by the helper root-only (`/etc/openhw/bmc-login`, 0600) — never in the user's config. The helper's sandbox
+     gets network access to 169.254.0.17 only (`IPAddressAllow=169.254.0.17`, `IPAddressDeny=any`, AF_INET) and pins
+     the BMC's self-signed certificate on first use. Then: read the mode and curves (no login), save the originals,
+     verify the channel → header map one channel at a time, write curves/mode with readback, restore on request.
+     Check whether the BIOS re-pushes Q-Fan curves to the BMC at boot (if so OpenHW re-applies at start).
 2. [ ] **Helper commands** (protocol 13): set a header to manual duty or back to automatic (`pwmN_enable` = the mode
    found at start), with per-header floors (pump and CPU fan never below a safe minimum), readback, and **restore
    to automatic** when the helper stops, the app disconnects or a curve's sensor goes stale (a watchdog in the
