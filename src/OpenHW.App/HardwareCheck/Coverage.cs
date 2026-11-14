@@ -14,11 +14,12 @@ public sealed record CoverageNote(string Area, string Text, bool Warning = false
 /// </summary>
 public static class Coverage
 {
+    private static string ShortBus(string bus) => bus.Length >= 7 ? bus[^7..].ToUpperInvariant() : bus;
+
     public const string OpenGpuLending = "Open GPU Lending…";
     public const string OpenPowerLimits = "Open Power Limits…";
-    public const string BootGpuLimitsFile = "/etc/systemd/system/nvidia-power-limit.service.d/openhw.conf";
 
-    public sealed record Probe(Func<string, bool> Exists, Func<string, string> ReadText, Func<string?> HelperProtocol);
+    public sealed record Probe(Func<string, bool> Exists, Func<string, string> ReadText, Func<string?> HelperProtocol, string Etc = "/etc");
 
     public static Probe Live => new(p => File.Exists(p) || Directory.Exists(p), SysFs.ReadText, () =>
     {
@@ -26,7 +27,8 @@ public static class Coverage
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException) { return null; }
     });
 
-    public static List<CoverageNote> Check(HardwareSnapshot now, IReadOnlyList<HardwareItem> inventory, bool bmcAnswered, Probe probe)
+    public static List<CoverageNote> Check(HardwareSnapshot now, IReadOnlyList<HardwareItem> inventory, bool bmcAnswered, Probe probe,
+        HardwareSnapshot? before = null)
     {
         var notes = new List<CoverageNote>();
 
@@ -73,32 +75,54 @@ public static class Coverage
         if (BoardVrs.For(now.BoardVendor, now.Board) is null)
             notes.Add(new("Motherboard", "No known PMBus voltage regulator for this board, so no VR group (only the TRX50-SAGE's is mapped)."));
 
-        // ── GPU Lending's card ──
-        var filter = probe.ReadText("/etc/openhw/card-filter.json");
+        // ── GPU Lending's card: chosen by UUID since 0.21.0, and followed to its current slot when the helper starts ──
+        var filter = probe.ReadText(Path.Combine(probe.Etc, "openhw", "card-filter.json"));
         if (filter.Length > 0)
         {
             try
             {
                 using var doc = JsonDocument.Parse(filter);
-                if (doc.RootElement.TryGetProperty("Card", out var card) && card.GetString() is { Length: > 0 } pci
-                    && !probe.Exists("/sys/bus/pci/devices/" + pci))
+                var pci = doc.RootElement.TryGetProperty("Card", out var c) ? c.GetString() : null;
+                var uuid = doc.RootElement.TryGetProperty("CardUuid", out var u) ? u.GetString() : null;
+                var card = uuid is null ? null : now.Gpus.FirstOrDefault(g => string.Equals(g.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
+                const string vmHint = " If the card moved, also check the VM's PCI device (virt-manager → the VM → its PCI host device): libvirt names it by slot.";
+                if (uuid is not null && card is null)
+                    notes.Add(new("GPU Lending", $"The card chosen for lending ({uuid}) isn't in this machine.", Warning: true,
+                        Fix: "Choose a card in Power → GPU Lending.", Action: OpenGpuLending));
+                else if (uuid is null && pci is { Length: > 0 } && !probe.Exists("/sys/bus/pci/devices/" + pci))
                     notes.Add(new("GPU Lending", $"Set up for card {pci}, which isn't in this machine any more " +
-                        $"(GPUs now: {string.Join(", ", now.Gpus.Select(g => g.Pci))}). The card filter hides nothing and Lend won't work.",
-                        Warning: true, Fix: "Choose the card again in Power → GPU Lending.", Action: OpenGpuLending));
+                        $"(GPUs now: {string.Join(", ", now.Gpus.Select(g => g.Pci))}). The card filter hides nothing and Lend won't work. " +
+                        "(Settings from before 0.21.0 name the slot, not the card; from now on the card is followed to any slot.)",
+                        Warning: true, Fix: "Choose the card again in Power → GPU Lending." + vmHint, Action: OpenGpuLending));
+                else if (card is not null && pci is not null && !BootPowerLimits.SameBus(pci, card.Pci))
+                    notes.Add(new("GPU Lending", $"The lending card moved from {pci} to {card.Pci}; openhw-helper follows it at its next start.",
+                        Fix: "sudo systemctl restart openhw-helper (or reboot)." + vmHint));
             }
             catch (JsonException) { }
         }
-        // ── Boot GPU power limits: OpenHW's drop-in names cards by PCI address ──
-        var dropIn = probe.ReadText(BootGpuLimitsFile);
-        var present = now.Gpus.Select(g => g.Pci.ToUpperInvariant()).ToHashSet();
-        var bootLimits = System.Text.RegularExpressions.Regex.Matches(dropIn, @"-i 0*([0-9A-Fa-f]{1,4}:)?([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\.[0-7]) -pl ([0-9]+)")
-            .Select(m => (Pci: m.Groups[2].Value.ToUpperInvariant(), Watts: m.Groups[3].Value)).ToList();
-        var missing = bootLimits.Where(b => !present.Contains(b.Pci)).ToList();
-        if (missing.Count > 0)
-            notes.Add(new("Power limits", $"Boot GPU power limits are set for {string.Join(", ", bootLimits.Select(b => $"{b.Pci} ({b.Watts} W)"))}, " +
-                $"but {string.Join(", ", missing.Select(b => b.Pci))} {(missing.Count == 1 ? "has" : "have")} no GPU now (GPUs: {string.Join(", ", now.Gpus.Select(g => $"{g.Pci} {g.Name}"))}). " +
-                "The limits go by slot, so a card that moved may get another card's value, or none.",
-                Warning: true, Fix: "Set each card's \"at boot\" value again in Power → Power Limits.", Action: OpenPowerLimits));
+
+        // ── Boot GPU power limits: lines naming a PCI slot don't follow a card that moves ──
+        var boot = new BootPowerLimits(probe.Etc);
+        var slotNotes = new List<string>();
+        foreach (var (bus, watts, openhw) in boot.SlotLines())
+        {
+            var whose = openhw ? "OpenHW (from before 0.21.0)" : BootPowerLimits.GpuUnit;
+            var here = now.Gpus.FirstOrDefault(g => BootPowerLimits.SameBus(g.Pci, bus));
+            var was = before?.Gpus.FirstOrDefault(g => BootPowerLimits.SameBus(g.Pci, bus));
+            if (here is null) slotNotes.Add($"{whose} sets {watts} W for slot {ShortBus(bus)}, which has no GPU now");
+            else if (was is not null && was.Uuid != here.Uuid) slotNotes.Add($"{whose} sets {watts} W for slot {ShortBus(bus)}, which now holds {here.Name} instead of {was.Name}");
+        }
+        foreach (var (uuid, watts) in boot.CardLines().Where(c => now.Gpus.All(g => !string.Equals(g.Uuid, c.Key, StringComparison.OrdinalIgnoreCase))))
+            slotNotes.Add($"OpenHW keeps {watts} W at boot for card {uuid}, which isn't in this machine");
+        if (slotNotes.Count > 0)
+            notes.Add(new("Power limits", "Boot GPU power limits: " + string.Join("; ", slotNotes) + ". " +
+                $"GPUs now: {string.Join(", ", now.Gpus.Select(g => $"{g.Pci} {g.Name}"))}.",
+                Warning: true,
+                Fix: "Set each card's \"at boot\" value in Power → Power Limits: OpenHW then names the card itself (by UUID), so it " +
+                     $"follows the card to any slot and wins over {BootPowerLimits.GpuUnit}'s per-slot lines. OpenHW doesn't edit that unit; " +
+                     "its lines for empty slots just fail harmlessly once OpenHW's drop-in is in place.",
+                Action: OpenPowerLimits));
+
         return notes.OrderByDescending(n => n.Warning).ToList();
     }
 }

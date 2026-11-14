@@ -67,6 +67,9 @@ public sealed class LinuxIpmiTransport : IIpmiTransport
 
             var deadline = Environment.TickCount64 + _timeoutMs;
             var buffer = new byte[256];
+            // Allocated once: the loop can go round many times (events, stale replies, EAGAIN).
+            var raddr = stackalloc byte[32];
+            var recv = stackalloc byte[48];
             while (true)
             {
                 var left = (int)(deadline - Environment.TickCount64);
@@ -74,10 +77,8 @@ public sealed class LinuxIpmiTransport : IIpmiTransport
                 var pfd = new Native.PollFd { fd = _fd, events = 1 /* POLLIN */ };
                 if (Native.poll(ref pfd, 1, left) <= 0) continue;
 
-                var raddr = stackalloc byte[32];
                 fixed (byte* b = buffer)
                 {
-                    var recv = stackalloc byte[48];
                     new Span<byte>(recv, 48).Clear();
                     *(nint*)(recv + 8) = (nint)raddr;
                     *(uint*)(recv + 16) = 32;

@@ -250,9 +250,13 @@ the CPU back to `/etc/hsmp-control/ppt_mw`. A live limit lasts until reboot.
 **At boot** sets the value applied at every boot, in the existing boot services rather than a new one: the CPU's goes
 in `/etc/hsmp-control/ppt_mw` for `hsmp-control-apply.service` (100–300 W, the range hsmp-control accepts — a value
 outside it would silently not apply), and a card's goes in OpenHW's own drop-in,
-`/etc/systemd/system/nvidia-power-limit.service.d/openhw.conf`, which repeats the unit's `nvidia-smi` lines with the
-changed cards. The unit file itself is never edited; **Unit value** (or deleting the drop-in) returns to it. Without
-the boot service installed, the row says so and stays read-only.
+`/etc/systemd/system/nvidia-power-limit.service.d/openhw.conf`. The drop-in names the **card**, not its slot
+(`nvidia-smi -i GPU-<uuid> -pl <W>`), so a card keeps its limit when it moves to another PCIe slot or a new
+motherboard. It repeats the unit's own per-slot lines first and OpenHW's per-card lines after them (OpenHW's win), each
+allowed to fail on its own (`ExecStart=-…`), so an empty slot can't stop the other cards' limits. The unit file itself
+is never edited; **Unit value** (or deleting the drop-in) returns to it. The "At boot" row shows what that card will
+really get, wherever it sits. Hardware Check flags per-slot lines whose slot is empty or holds another card now.
+Without the boot service installed, the row says so and stays read-only.
 
 ## Power modes and CPU frequency caps
 
@@ -281,6 +285,11 @@ only when clicked. Code:
 **Power → GPU Lending…** lends one NVIDIA card to a libvirt VM (e.g. a Windows VM with the card passed through)
 without logging out, and gets it back — the job RTXinVM did before, folded into OpenHW (2026-10-26).
 
+- **The card is chosen by identity** (its GPU UUID, in `/etc/openhw/card-filter.json` as `CardUuid`), not by slot:
+  each time openhw-helper starts it finds the card's current PCI address, and the udev rule and filter follow it.
+  Settings from before 0.21.0 had only the address; the card found there gets its UUID recorded. If the card is
+  gone and another sits in its old slot, nothing is filtered. The VM's own PCI host device is libvirt's and names a
+  slot: after moving the card, check it in virt-manager.
 - **Card filter.** One card is kept away from the programs on a list, so nothing that can't let go of it (the GNOME
   desktop, the login screen, OpenHW's own window, which all draw with the GPU) ever opens it. Everything else — any
   terminal, vLLM, Unsloth Studio, llama.cpp, nvidia-smi — sees both cards whenever the VM isn't using one. It's a

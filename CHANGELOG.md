@@ -22,8 +22,13 @@ once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
   without a profile). OpenHW keeps a snapshot of the hardware in `~/.config/openhw/hardware.json`; about 30 s
   after it starts it compares, and opens Hardware Check by itself when something needs a look (not while a card
   is lent to the VM). `openhw --hardware-check` prints the same report without a display. It also flags boot GPU
-  power limits (Power Limits → at boot) set for PCI slots that no longer hold a card — they go by slot, so a GPU that
-  moved can get another card's value.
+  power-limit lines that name a PCI slot which is now empty or holds another card.
+- **GPUs are no longer tied to PCI slots.** GPU Lending remembers its card by GPU UUID and follows it to its current
+  slot whenever openhw-helper starts (older settings adopt the UUID of the card in their slot; a different card in
+  the old slot is never filtered). Boot GPU power limits name the card (`nvidia-smi -i GPU-<uuid>`) instead of its
+  slot, come after nvidia-power-limit.service's own per-slot lines so they win, and every line may fail on its own,
+  so an empty slot no longer stops the remaining cards' limits. OpenHW's per-slot lines from before are dropped at the
+  next change (which card they meant can't be known after a move); Hardware Check lists them.
 - Explanations for the BMC's sensors and for the raw Super I/O and EC names of a board OpenHW has no profile for.
 - Fixed: a live-machine test assumed the TRX50 workstation's CPU.
 

@@ -11,11 +11,54 @@ public sealed class CardFilterTests : IDisposable
     public CardFilterTests()
     {
         // A fake /proc with the three NVIDIA cards as this machine lists them.
-        foreach (var (pci, minor, model) in new[] { ("0000:01:00.0", 1, "NVIDIA GeForce RTX 5060 Ti"), ("0000:11:00.0", 2, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"), ("0000:e1:00.0", 0, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition") })
-        {
-            var dir = Directory.CreateDirectory(Path.Combine(_root, "proc", "driver", "nvidia", "gpus", pci)).FullName;
-            File.WriteAllText(Path.Combine(dir, "information"), $"Model: \t\t {model}\nDevice Minor: \t {minor}\n");
-        }
+        foreach (var (pci, minor, model, uuid) in new[] { ("0000:01:00.0", 1, "NVIDIA GeForce RTX 5060 Ti", Ti), ("0000:11:00.0", 2, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", Pro1), ("0000:e1:00.0", 0, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", Pro2) })
+            AddCard(pci, minor, model, uuid);
+    }
+
+    private const string Ti = "GPU-551a52fc-c5ce-c335-e0d7-81fc00948a65", Pro1 = "GPU-d0f36b3b-abad-1a42-0e65-e78da2139da3", Pro2 = "GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0";
+
+    private void AddCard(string pci, int minor, string model, string uuid)
+    {
+        var dir = Directory.CreateDirectory(Path.Combine(_root, "proc", "driver", "nvidia", "gpus", pci)).FullName;
+        File.WriteAllText(Path.Combine(dir, "information"), $"Model: \t\t {model}\nDevice Minor: \t {minor}\nGPU UUID: \t {uuid}\n");
+    }
+
+    // A new motherboard: every card on another bus address.
+    private void SwapBoard()
+    {
+        Directory.Delete(Path.Combine(_root, "proc", "driver", "nvidia", "gpus"), recursive: true);
+        AddCard("0000:11:00.0", 0, "NVIDIA GeForce RTX 5060 Ti", Ti);
+        AddCard("0000:c1:00.0", 1, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", Pro2);
+        AddCard("0000:f1:00.0", 2, "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", Pro1);
+    }
+
+    private string SettingsJson => File.ReadAllText(Path.Combine(_root, "etc", "card-filter.json"));
+
+    [Fact]
+    public void TheChosenCardIsFollowedByIdentityToItsNewSlot()
+    {
+        using (var filter = Filter()) filter.SelectCard("0000:e1:00.0");
+        Assert.Contains(Pro2, SettingsJson);
+        SwapBoard();
+        using var after = Filter();
+        after.Start();
+        Assert.Equal("0000:c1:00.0", after.Status().Card); // the same card, not whatever sits at e1 (nothing) or 11 (the 5060 Ti)
+        Assert.Contains(Pro2, after.Status().Cards.Single(c => c.Pci == "0000:c1:00.0").Uuid);
+    }
+
+    [Fact]
+    public void OldSettingsAdoptTheCardsIdentityAndNeverFilterAnotherCardInItsSlot()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "etc"));
+        File.WriteAllText(Path.Combine(_root, "etc", "card-filter.json"), """{"Card":"0000:11:00.0","Enabled":false}""");
+        using (var filter = Filter()) filter.Start();
+        Assert.Contains(Pro1, SettingsJson); // adopted from the card at 11:00.0 (pre-0.21.0 settings had only the address)
+        SwapBoard(); // 11:00.0 is now the 5060 Ti; the chosen PRO 6000 went to f1
+        using (var filter = Filter()) { filter.Start(); Assert.Equal("0000:f1:00.0", filter.Status().Card); }
+        Directory.Delete(Path.Combine(_root, "proc", "driver", "nvidia", "gpus", "0000:f1:00.0"), recursive: true);
+        AddCard("0000:f1:00.0", 2, "NVIDIA GeForce RTX 5090", "GPU-00000000-0000-0000-0000-000000000000"); // card swapped out
+        using (var filter = Filter()) { filter.Start(); Assert.Null(filter.Status().Card); }
+        Assert.Contains(Pro1, SettingsJson); // still remembered, in case it comes back
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);

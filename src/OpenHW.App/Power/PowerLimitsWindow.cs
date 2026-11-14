@@ -72,11 +72,11 @@ public sealed class PowerLimitsWindow : Window
                 g.MinMW, g.MaxMW, g.LimitMW,
                 mw => $"gpupower {uuid} {mw}", ("Default", $"gpupower {uuid} default"),
                 BootRow($"GPU{index - 1}", _boot.GpuServiceInstalled,
-                    () => _boot.GpuBoot().TryGetValue(g.BusId, out var b)
-                        ? $"At boot: {W(b.MilliWatts)} ({(b.Source == BootLimitSource.OpenHW ? "OpenHW, via its drop-in" : BootPowerLimits.GpuUnit)})"
+                    () => _boot.GpuBoot(_gpusNow).TryGetValue(uuid, out var b)
+                        ? $"At boot: {W(b.MilliWatts)} ({(b.Source == BootLimitSource.OpenHW ? "OpenHW, follows this card" : BootPowerLimits.GpuUnit + ", by slot")})"
                         : "At boot: driver default",
                     $"At boot: driver default ({BootPowerLimits.GpuUnit} isn't installed)",
-                    g.MinMW, g.MaxMW, _boot.GpuBoot().TryGetValue(g.BusId, out var current) ? current.MilliWatts : g.LimitMW,
+                    g.MinMW, g.MaxMW, _boot.GpuBoot(_gpusNow).TryGetValue(uuid, out var current) ? current.MilliWatts : g.LimitMW,
                     w => $"gpupowerboot {uuid} {w}", ("Unit value", $"gpupowerboot {uuid} default"))));
         }
         if (sections.Children.Count == 0)

@@ -10,6 +10,13 @@ public sealed class BootPowerLimitTests : IDisposable
     private string Units => Path.Combine(_etc, "systemd", "system");
     private string DropIn => Path.Combine(Units, "nvidia-power-limit.service.d", "openhw.conf");
     private const string Gpu0 = "00000000:01:00.0", Gpu1 = "00000000:11:00.0", Gpu2 = "00000000:E1:00.0";
+    private const string Ti = "GPU-551a52fc-c5ce-c335-e0d7-81fc00948a65", Pro1 = "GPU-d0f36b3b-abad-1a42-0e65-e78da2139da3", Pro2 = "GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0";
+
+    private static GpuPowerLimit Card(string uuid, string bus) => new(uuid, "card", bus, 0, 0, 0, 600_000, null);
+
+    // The TRX50 layout the unit was written for, and the WRX90E's after the board swap (same cards, other slots).
+    private static readonly GpuPowerLimit[] Trx50 = [Card(Ti, Gpu0), Card(Pro1, Gpu1), Card(Pro2, Gpu2)];
+    private static readonly GpuPowerLimit[] Wrx90 = [Card(Ti, "00000000:11:00.0"), Card(Pro2, "00000000:C1:00.0"), Card(Pro1, "00000000:F1:00.0")];
 
     public BootPowerLimitTests()
     {
@@ -35,49 +42,63 @@ public sealed class BootPowerLimitTests : IDisposable
     {
         var boot = new BootPowerLimits(_etc);
         Assert.Equal(250_000, boot.CpuBootMW());
-        var gpus = boot.GpuBoot();
-        Assert.Equal(new BootLimit(150_000, BootLimitSource.BootService), gpus[Gpu0]);
-        Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), gpus[Gpu2]);
+        var gpus = boot.GpuBoot(Trx50);
+        Assert.Equal(new BootLimit(150_000, BootLimitSource.BootService), gpus[Ti]);
+        Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), gpus[Pro2]);
     }
 
     [Fact]
-    public void CpuBootLimitStaysInHsmpControlsRange()
+    public void AGpuBootLimitNamesTheCardNotItsSlot()
     {
         var boot = new BootPowerLimits(_etc);
-        Assert.Throws<ArgumentException>(() => boot.SetCpu(350_000)); // hsmp-control would refuse it at boot
-        Assert.Throws<ArgumentException>(() => boot.SetCpu(90_000));
-        boot.SetCpu(280_000);
-        Assert.Equal(280_000, boot.CpuBootMW());
-        boot.SetCpu(null);
-        Assert.Null(boot.CpuBootMW());
-    }
-
-    [Fact]
-    public void AGpuBootLimitGoesInADropInThatKeepsTheOtherCards()
-    {
-        var boot = new BootPowerLimits(_etc);
-        boot.SetGpu(Gpu1, 300);
+        boot.SetGpu(Pro1, 300);
         var dropIn = File.ReadAllText(DropIn);
         Assert.Contains("ExecStart=\n", dropIn); // replaces the unit's list rather than appending to it
-        Assert.Contains("nvidia-smi -pm 1", dropIn);
-        Assert.Contains($"-i {Gpu0} -pl 150", dropIn);
-        Assert.Contains($"-i {Gpu1} -pl 300", dropIn);
-        Assert.Contains($"-i {Gpu2} -pl 250", dropIn);
-        Assert.Equal(new BootLimit(300_000, BootLimitSource.OpenHW), boot.GpuBoot()[Gpu1]);
+        Assert.Contains("ExecStart=-/usr/bin/nvidia-smi -pm 1", dropIn);
+        Assert.Contains($"ExecStart=-/usr/bin/nvidia-smi -i {Gpu0} -pl 150", dropIn); // the unit's lines, each allowed to fail
+        Assert.Contains($"ExecStart=-/usr/bin/nvidia-smi -i {Pro1} -pl 300", dropIn);
+        Assert.True(dropIn.IndexOf($"-i {Gpu1} -pl 250", StringComparison.Ordinal) < dropIn.IndexOf($"-i {Pro1}", StringComparison.Ordinal)); // OpenHW's line wins
+        Assert.Equal(new BootLimit(300_000, BootLimitSource.OpenHW), boot.GpuBoot(Trx50)[Pro1]);
         Assert.DoesNotContain("-pl 300", File.ReadAllText(Path.Combine(Units, "nvidia-power-limit.service"))); // unit untouched
+        Assert.Throws<ArgumentException>(() => boot.SetGpu(Gpu1, 200)); // never by slot again
+    }
+
+    [Fact]
+    public void AfterABoardSwapOpenHWsLimitsFollowTheCardsAndTheUnitsGoBySlot()
+    {
+        var boot = new BootPowerLimits(_etc);
+        boot.SetGpu(Ti, 150);
+        boot.SetGpu(Pro1, 300);
+        var gpus = boot.GpuBoot(Wrx90);
+        Assert.Equal(new BootLimit(150_000, BootLimitSource.OpenHW), gpus[Ti]);   // now at 11:00.0, still 150 W
+        Assert.Equal(new BootLimit(300_000, BootLimitSource.OpenHW), gpus[Pro1]); // now at F1:00.0
+        Assert.False(gpus.ContainsKey(Pro2)); // C1:00.0: no line for it (the unit's E1 line has nothing in its slot)
+        Assert.Equal(3, boot.SlotLines().Count);
+    }
+
+    [Fact]
+    public void AnOldSlotDropInIsReplacedAtTheNextWrite()
+    {
+        File.WriteAllText(DropIn, $"[Service]\nExecStart=\nExecStart=/usr/bin/nvidia-smi -i {Gpu1} -pl 300\n");
+        var boot = new BootPowerLimits(_etc);
+        Assert.Contains(boot.SlotLines(), l => l.OpenHW && l.Bus == Gpu1);
+        Assert.Equal(new BootLimit(300_000, BootLimitSource.OpenHW), boot.GpuBoot(Wrx90)[Ti]); // the 5060 Ti now sits at 11:00.0
+        boot.SetGpu(Pro2, 280);
+        Assert.DoesNotContain(boot.SlotLines(), l => l.OpenHW);
+        Assert.Equal(280, boot.CardLines()[Pro2]);
     }
 
     [Fact]
     public void BackToTheUnitsValueRemovesTheDropIn()
     {
         var boot = new BootPowerLimits(_etc);
-        boot.SetGpu(Gpu1, 300);
-        boot.SetGpu(Gpu2, 200);
-        boot.SetGpu(Gpu1, null);
-        Assert.True(File.Exists(DropIn)); // Gpu2 still differs
-        boot.SetGpu(Gpu2, null);
+        boot.SetGpu(Pro1, 300);
+        boot.SetGpu(Pro2, 200);
+        boot.SetGpu(Pro1, null);
+        Assert.True(File.Exists(DropIn)); // Pro2 still set
+        boot.SetGpu(Pro2, null);
         Assert.False(File.Exists(DropIn));
-        Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), boot.GpuBoot()[Gpu1]);
+        Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), boot.GpuBoot(Trx50)[Pro1]);
     }
 
     [Fact]
@@ -86,7 +107,7 @@ public sealed class BootPowerLimitTests : IDisposable
         File.Delete(Path.Combine(Units, "nvidia-power-limit.service"));
         File.Delete(Path.Combine(Units, "hsmp-control-apply.service"));
         var boot = new BootPowerLimits(_etc);
-        Assert.Throws<IOException>(() => boot.SetGpu(Gpu0, 160));
+        Assert.Throws<IOException>(() => boot.SetGpu(Ti, 160));
         Assert.Throws<IOException>(() => boot.SetCpu(200_000));
         Assert.False(File.Exists(DropIn));
         Assert.Equal(250_000, boot.CpuBootMW());

@@ -112,8 +112,8 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                     return $"err {w} W is outside {gpu.MinMW / 1000} to {gpu.MaxMW / 1000} W for {gpu.Name}";
                 try
                 {
-                    boot.SetGpu(gpu.BusId, watts);
-                    return "ok " + (boot.GpuBoot().TryGetValue(gpu.BusId, out var b) ? (b.MilliWatts / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture) : "none");
+                    boot.SetGpu(gpu.Uuid, watts);
+                    return "ok " + (boot.GpuBoot(gpuPower.Read()).TryGetValue(gpu.Uuid, out var b) ? (b.MilliWatts / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture) : "none");
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
             }

@@ -17,8 +17,14 @@ public sealed class CardFilterEntry
 /// <summary>/etc/openhw/card-filter.json: which card is lent, whether the filter is on, and the list.</summary>
 public sealed class CardFilterSettings
 {
-    /// <summary>PCI address of the card to keep away from listed programs ("0000:e1:00.0"), or null for none.</summary>
+    /// <summary>
+    /// Where the chosen card is now ("0000:c1:00.0"), or null for none. Not the card's identity — that's
+    /// <see cref="CardUuid"/>; the address is found again from it whenever the helper starts, so moving the card to
+    /// another slot (or a new motherboard) doesn't lose it.
+    /// </summary>
     public string? Card { get; set; }
+    /// <summary>The chosen card's own identity (NVIDIA's GPU UUID), which stays with the card in any slot.</summary>
+    public string? CardUuid { get; set; }
     /// <summary>The libvirt VM (system connection) the card is lent to; it must have the card assigned as a hostdev.</summary>
     public string? Vm { get; set; }
     public bool Enabled { get; set; }
@@ -94,7 +100,7 @@ public static partial class CardPatterns
 
 /// <summary>An NVIDIA card the filter could lend, and its device nodes.</summary>
 public sealed record CardNode(string Path, uint Major, uint Minor);
-public sealed record NvidiaCard(string Pci, string Name);
+public sealed record NvidiaCard(string Pci, string Name, string? Uuid = null);
 
 public static class CardDevices
 {
@@ -104,8 +110,10 @@ public static class CardDevices
         if (!Directory.Exists(dir)) return [];
         return Directory.EnumerateDirectories(dir).Select(d =>
         {
-            var model = File.ReadLines(Path.Combine(d, "information")).FirstOrDefault(l => l.StartsWith("Model:", StringComparison.Ordinal));
-            return new NvidiaCard(Path.GetFileName(d).ToLowerInvariant(), model?[6..].Trim() ?? "");
+            var lines = File.ReadLines(Path.Combine(d, "information")).ToList();
+            var model = lines.FirstOrDefault(l => l.StartsWith("Model:", StringComparison.Ordinal));
+            var uuid = lines.FirstOrDefault(l => l.StartsWith("GPU UUID:", StringComparison.Ordinal))?[9..].Trim();
+            return new NvidiaCard(Path.GetFileName(d).ToLowerInvariant(), model?[6..].Trim() ?? "", uuid is { Length: > 0 } ? uuid : null);
         }).OrderBy(c => c.Pci, StringComparer.Ordinal).ToList();
     }
 
@@ -176,6 +184,7 @@ public sealed class CardFilter : IDisposable
                 Directory.CreateDirectory(Path.GetDirectoryName(_bootPath)!);
                 File.WriteAllText(_bootPath, _settings.Uninstalled ? "uninstalled" : "installed");
             }
+            FollowCard();
             try { ApplyFiles(reload: false); } // e.g. after an upgrade from a version without the drop-in
             catch (IOException) { } // logged; never keeps the filter from starting
             if (_settings.Uninstalled || !_settings.Enabled || _settings.Card is not { } card) return;
@@ -184,6 +193,42 @@ public sealed class CardFilter : IDisposable
             var deadline = DateTime.UtcNow + (waitForCard ?? TimeSpan.Zero);
             while (DateTime.UtcNow < deadline && CardStillComingUp(card)) Thread.Sleep(250);
             Engage();
+        }
+    }
+
+    /// <summary>
+    /// The card is chosen by identity, not slot: finds where the card with <see cref="CardFilterSettings.CardUuid"/>
+    /// sits now and moves <see cref="CardFilterSettings.Card"/> there (the udev rule follows in ApplyFiles). Settings
+    /// from before 0.21.0 have only an address: the card found there gets its UUID recorded. A card that isn't listed
+    /// (lent to the VM on VFIO, or taken out) keeps its last address.
+    /// </summary>
+    private void FollowCard()
+    {
+        if (_settings.Card is null && _settings.CardUuid is null) return;
+        var cards = CardDevices.List(_procRoot);
+        if (_settings.CardUuid is { } uuid)
+        {
+            var found = cards.FirstOrDefault(c => string.Equals(c.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
+            if (found is not null && found.Pci != _settings.Card)
+            {
+                Console.WriteLine($"openhw-helper: GPU Lending: card {uuid} moved from {_settings.Card} to {found.Pci}");
+                _settings.Card = found.Pci;
+                Save();
+            }
+            // Gone, and another card sits at its old address: never filter that one by mistake. The UUID stays, so
+            // the card is found again if it comes back.
+            else if (found is null && cards.FirstOrDefault(c => c.Pci == _settings.Card) is { Uuid: { } other }
+                     && !string.Equals(other, uuid, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"openhw-helper: GPU Lending: card {uuid} isn't in this machine; {_settings.Card} is another card now");
+                _settings.Card = null;
+                Save();
+            }
+        }
+        else if (cards.FirstOrDefault(c => c.Pci == _settings.Card) is { Uuid: { } adopted })
+        {
+            _settings.CardUuid = adopted;
+            Save();
         }
     }
 
@@ -217,9 +262,10 @@ public sealed class CardFilter : IDisposable
     {
         lock (_gate)
         {
-            if (pci is not null && CardDevices.List(_procRoot).All(c => c.Pci != pci)) throw new ArgumentException("no such NVIDIA card");
+            var chosen = pci is null ? null : CardDevices.List(_procRoot).FirstOrDefault(c => c.Pci == pci) ?? throw new ArgumentException("no such NVIDIA card");
             if (_settings.Enabled) throw new ArgumentException("turn the filter off before choosing another card");
             _settings.Card = pci;
+            _settings.CardUuid = chosen?.Uuid;
             if (pci is not null && _settings.Entries.Count == 0)
             {
                 _settings.Entries = CardFilterSettings.Defaults(_gdmUid);

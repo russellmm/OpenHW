@@ -110,25 +110,43 @@ public sealed class HardwareCheckTests
         var now = HardwareSnapshot.Take(Wrx90, new("ASUSTeK COMPUTER INC.", "Pro WS WRX90E-SAGE SE", "TR PRO", []), "AST2600", Name);
         now.DimmsReadable = 4;
         now.DimmsBmc = 8;
-        var files = new Dictionary<string, string>
+        // A fake /etc as the swap left it: lending set up by slot (pre-0.21.0), boot limits by slot in the unit and the drop-in.
+        var etc = Directory.CreateTempSubdirectory("openhw-hwcheck-etc").FullName;
+        try
         {
-            ["/etc/openhw/card-filter.json"] = """{"Card":"0000:e1:00.0","Enabled":true}""",
-            ["/dev/ipmi0"] = "", ["/sys/bus/acpi/devices/IPI0001:00"] = "",
-            [Coverage.BootGpuLimitsFile] = "ExecStart=/usr/bin/nvidia-smi -i 00000000:01:00.0 -pl 150\nExecStart=/usr/bin/nvidia-smi -i 00000000:C1:00.0 -pl 300\n",
-        };
-        var notes = Coverage.Check(now, Wrx90, bmcAnswered: true,
-            new Coverage.Probe(files.ContainsKey, p => files.GetValueOrDefault(p, ""), () => "12"));
-        var lending = notes.First();
-        Assert.True(lending.Warning);
-        Assert.Equal(("GPU Lending", Coverage.OpenGpuLending), (lending.Area, lending.Action));
-        Assert.Contains("0000:e1:00.0", lending.Text);
-        Assert.Contains(notes, n => n.Area == "Memory" && n.Text.StartsWith("8 DIMMs installed (BMC), 4 readable"));
-        Assert.Contains(notes, n => n.Area == "Motherboard" && n.Text.StartsWith("No board profile for Pro WS WRX90E-SAGE SE (nct6798)"));
-        Assert.DoesNotContain(notes, n => n.Area == "BMC");
-        var boot = notes.Single(n => n.Area == "Power limits");
-        Assert.True(boot.Warning);
-        Assert.Contains("but 01:00.0 has no GPU now", boot.Text); // C1:00.0 still has a card
-        Assert.Equal(Coverage.OpenPowerLimits, boot.Action);
+            var units = Directory.CreateDirectory(Path.Combine(etc, "systemd", "system", "nvidia-power-limit.service.d")).Parent!.FullName;
+            Directory.CreateDirectory(Path.Combine(etc, "openhw"));
+            File.WriteAllText(Path.Combine(etc, "openhw", "card-filter.json"), """{"Card":"0000:e1:00.0","Enabled":true}""");
+            File.WriteAllText(Path.Combine(units, "nvidia-power-limit.service"),
+                "[Service]\nExecStart=/usr/bin/nvidia-smi -i 00000000:01:00.0 -pl 150\nExecStart=/usr/bin/nvidia-smi -i 00000000:C1:00.0 -pl 250\n");
+            File.WriteAllText(Path.Combine(units, "nvidia-power-limit.service.d", "openhw.conf"),
+                "[Service]\nExecStart=\nExecStart=/usr/bin/nvidia-smi -i 00000000:01:00.0 -pl 150\nExecStart=/usr/bin/nvidia-smi -i 00000000:C1:00.0 -pl 300\n");
+            var devices = new HashSet<string> { "/dev/ipmi0", "/sys/bus/acpi/devices/IPI0001:00" };
+            var before = new HardwareSnapshot { Gpus = [new("GPU-old", "RTX PRO 6000 (old)", "C1:00.0")] };
+            var notes = Coverage.Check(now, Wrx90, bmcAnswered: true,
+                new Coverage.Probe(devices.Contains, p => File.Exists(p) ? File.ReadAllText(p) : "", () => "12", etc), before);
+            var lending = notes.Single(n => n.Area == "GPU Lending");
+            Assert.True(lending.Warning);
+            Assert.Equal(Coverage.OpenGpuLending, lending.Action);
+            Assert.Contains("Set up for card 0000:e1:00.0", lending.Text);
+            Assert.Contains(notes, n => n.Area == "Memory" && n.Text.StartsWith("8 DIMMs installed (BMC), 4 readable"));
+            Assert.Contains(notes, n => n.Area == "Motherboard" && n.Text.StartsWith("No board profile for Pro WS WRX90E-SAGE SE (nct6798)"));
+            Assert.DoesNotContain(notes, n => n.Area == "BMC");
+            var boot = notes.Single(n => n.Area == "Power limits");
+            Assert.True(boot.Warning);
+            Assert.Equal(Coverage.OpenPowerLimits, boot.Action);
+            Assert.Contains("nvidia-power-limit.service sets 150 W for slot 01:00.0, which has no GPU now", boot.Text);
+            Assert.Contains("OpenHW (from before 0.21.0) sets 300 W for slot C1:00.0, which now holds RTX PRO 6000 Blackwell Workstation Edition instead of RTX PRO 6000 (old)", boot.Text);
+
+            // Chosen by UUID (0.21.0): a moved card is followed, a missing one is called out.
+            File.WriteAllText(Path.Combine(etc, "openhw", "card-filter.json"), """{"Card":"0000:e1:00.0","CardUuid":"GPU-bbbb"}""");
+            var moved = Coverage.Check(now, Wrx90, true, new Coverage.Probe(devices.Contains, p => File.Exists(p) ? File.ReadAllText(p) : "", () => "12", etc));
+            Assert.Contains(moved, n => n.Area == "GPU Lending" && !n.Warning && n.Text.Contains("moved from 0000:e1:00.0 to F1:00.0"));
+            File.WriteAllText(Path.Combine(etc, "openhw", "card-filter.json"), """{"Card":"0000:e1:00.0","CardUuid":"GPU-gone"}""");
+            var gone = Coverage.Check(now, Wrx90, true, new Coverage.Probe(devices.Contains, p => File.Exists(p) ? File.ReadAllText(p) : "", () => "12", etc));
+            Assert.Contains(gone, n => n.Area == "GPU Lending" && n.Warning && n.Text.Contains("GPU-gone"));
+        }
+        finally { Directory.Delete(etc, recursive: true); }
     }
 
     [Fact]

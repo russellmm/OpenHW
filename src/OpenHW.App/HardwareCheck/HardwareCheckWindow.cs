@@ -26,7 +26,7 @@ public sealed record HardwareCheckModel(HardwareSnapshot? Before, HardwareSnapsh
         var custom = SensorCustomizations.Current;
         var stale = StaleReferences.Find(SavedChoices(settings, alerts, custom), inventory, before, now,
             SensorPresentation.BuiltInName, custom.Names, gpuLent);
-        var notes = Coverage.Check(now, inventory, hub.Bmc.Available, Coverage.Live);
+        var notes = Coverage.Check(now, inventory, hub.Bmc.Available, Coverage.Live, before);
         return new HardwareCheckModel(before, now, changes, stale, notes);
     }
 
