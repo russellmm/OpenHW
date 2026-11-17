@@ -282,7 +282,7 @@ public sealed class BmcTests
     {
         using var reader = new BmcReader(() => new FakeBmc());
         var session = new HelperSession(new NoSmart(), bmc: reader);
-        Assert.Equal("ok 17", session.HandleLine("ping"));
+        Assert.Equal("ok 18", session.HandleLine("ping"));
         Assert.Equal(3, GpuWire.Decode<List<BmcStateWire>>(session.HandleLine("bmcstates")[3..])!.Count);
         Assert.Equal(0, GpuWire.Decode<BmcSelReply>(session.HandleLine("bmcsel")[3..])!.Entries);
         Assert.Equal("err no BMC", new HelperSession(new NoSmart()).HandleLine("bmcsel"));
@@ -336,7 +336,7 @@ public sealed class BmcTests
         var dir = Directory.CreateTempSubdirectory("openhw-thresh-").FullName;
         using var reader = new BmcReader(() => new FakeBmc(), Path.Combine(dir, "o.json"), () => "m") { Log = _ => { } };
         var session = new HelperSession(new NoSmart(), bmc: reader);
-        Assert.Equal("ok 17", session.HandleLine("ping"));
+        Assert.Equal("ok 18", session.HandleLine("ping"));
         Assert.Contains(GpuWire.Decode<List<BmcFanThresholds>>(session.HandleLine("bmcthresh")[3..])!, f => f.Name == "CHA_FAN2");
         Assert.StartsWith("ok ", session.HandleLine("bmcthresh CHA_FAN2 0 120 240"));
         Assert.Equal("err invalid sensor name", session.HandleLine("bmcthresh ../x 0 120 240"));

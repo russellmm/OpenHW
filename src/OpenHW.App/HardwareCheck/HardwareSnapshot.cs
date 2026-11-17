@@ -34,13 +34,22 @@ public sealed class HardwareSnapshot
     public string Bmc { get; set; } = "";
     public List<string> Networks { get; set; } = [];
 
+    /// <summary>
+    /// BIOS Setup's options as the BMC publishes them (Setup → Publish HII Resources): attribute name → value in words.
+    /// Empty when the BMC didn't answer; then the check neither compares nor forgets them.
+    /// </summary>
+    public Dictionary<string, string> BiosSettings { get; set; } = [];
+
+    /// <summary>Attribute name → its Setup label, for naming what changed.</summary>
+    public Dictionary<string, string> BiosLabels { get; set; } = [];
+
     /// <summary>The sensor ids that existed — so a later check can name what a missing saved sensor was.</summary>
     public Dictionary<string, string> SensorNames { get; set; } = [];
 
     public static string FilePath => Path.Combine(Settings.AppSettings.ConfigDir, "hardware.json");
 
     public static HardwareSnapshot Take(IReadOnlyList<HardwareItem> inventory, Sensors.SensorPresentation.MachineInfo machine,
-        string bmc, Func<HardwareItem, string> displayName)
+        string bmc, Func<HardwareItem, string> displayName, BiosSettingsReply? bios = null)
     {
         var gpus = inventory.Where(i => i.Backend == "nvml" && i.Id.StartsWith("nvml:GPU-", StringComparison.Ordinal))
             .GroupBy(i => i.Id.Split(':')[1])
@@ -66,6 +75,10 @@ public sealed class HardwareSnapshot
             Networks = inventory.Where(i => i.Group.StartsWith("net:", StringComparison.Ordinal)).Select(i => i.Group[4..])
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(),
             SensorNames = inventory.ToDictionary(i => i.Id, displayName, StringComparer.Ordinal),
+            BiosSettings = bios?.Settings.Where(s => s.Value is not null).GroupBy(s => s.Name, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Value!, StringComparer.Ordinal) ?? [],
+            BiosLabels = bios?.Settings.GroupBy(s => s.Name, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Display, StringComparer.Ordinal) ?? [],
         };
     }
 
@@ -157,6 +170,18 @@ public static class HardwareDiff
 
         foreach (var net in now.Networks.Except(old.Networks)) changes.Add(new("Network", "New: " + net));
         foreach (var net in old.Networks.Except(now.Networks)) changes.Add(new("Network", "Gone: " + net));
+
+        // BIOS Setup options (from the BMC): only when both sides have them; a new BIOS version resets many at once.
+        if (old.BiosSettings.Count > 0 && now.BiosSettings.Count > 0)
+        {
+            var changed = now.BiosSettings.Where(s => old.BiosSettings.TryGetValue(s.Key, out var was) && was != s.Value)
+                .Select(s => $"{now.BiosLabels.GetValueOrDefault(s.Key, s.Key)}: {old.BiosSettings[s.Key]} → {s.Value}")
+                .Order(StringComparer.OrdinalIgnoreCase).ToList();
+            const int Listed = 12;
+            foreach (var line in changed.Take(changed.Count > Listed + 1 ? Listed : changed.Count)) changes.Add(new("BIOS setting", line));
+            if (changed.Count > Listed + 1)
+                changes.Add(new("BIOS setting", $"…and {changed.Count - Listed} more (File → BIOS Settings… shows every option)"));
+        }
         return changes;
     }
 

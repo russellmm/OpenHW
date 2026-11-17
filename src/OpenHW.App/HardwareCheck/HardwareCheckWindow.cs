@@ -31,16 +31,18 @@ public sealed record HardwareCheckModel(HardwareSnapshot? Before, HardwareSnapsh
     }
 
     public static HardwareCheckModel Build(SensorHub hub, HardwareSnapshot? before, Settings.AppSettings settings,
-        Alerts.AlertStore alerts, bool gpuLent)
+        Alerts.AlertStore alerts, bool gpuLent, BiosSettingsReply? bios = null, BmcAccessReply? access = null)
     {
         var inventory = hub.Inventory;
         var bmc = hub.Bmc.Controller is { } c ? c.Controller : "";
-        var now = HardwareSnapshot.Take(inventory, hub.Machine, bmc, SensorPresentation.BuiltInName);
+        var now = HardwareSnapshot.Take(inventory, hub.Machine, bmc, SensorPresentation.BuiltInName, bios);
+        // The BMC didn't answer this time: keep the saved BIOS settings rather than forget them.
+        if (bios is null && before is not null) (now.BiosSettings, now.BiosLabels) = (before.BiosSettings, before.BiosLabels);
         var changes = before is null ? [] : HardwareDiff.Compare(before, now, gpuLent);
         var custom = SensorCustomizations.Current;
         var stale = StaleReferences.Find(SavedChoices(settings, alerts, custom), inventory, before, now,
             SensorPresentation.BuiltInName, custom.Names, gpuLent);
-        var notes = Coverage.Check(now, inventory, hub.Bmc.Available, Coverage.Live, before);
+        var notes = Coverage.Check(now, inventory, hub.Bmc.Available, Coverage.Live, before, access);
         return new HardwareCheckModel(before, now, changes, stale, notes);
     }
 

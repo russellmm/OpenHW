@@ -37,7 +37,7 @@ if (args is ["--once", .. var command] && command.Length > 0)
     var cardRead = command is ["cardfilter"] ? card : null;
     // Fans: status only (a one-shot process can't hold a zone: it would give it back as it exits).
     using var fansRead = command is ["fans"] ? FanDriver.Live() : null;
-    var redfishRead = command is ["fansources"] ? BmcRedfish.Live() : null; // read-only
+    var redfishRead = command is ["fansources"] or ["biossettings"] or ["bmcaccess"] ? BmcRedfish.Live() : null; // read-only
     Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc, fans: fansRead, redfish: redfishRead).HandleLine(string.Join(' ', command)));
     return 0;
 }

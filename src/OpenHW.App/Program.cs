@@ -133,7 +133,7 @@ internal static class Program
     {
         using var hub = SampledHub();
         var model = HardwareCheck.HardwareCheckModel.Build(hub, HardwareCheck.HardwareSnapshot.Load(), Settings.AppSettings.Load(),
-            Alerts.AlertStore.Load(), gpuLent: false);
+            Alerts.AlertStore.Load(), gpuLent: false, HardwareCheck.BmcInfo.BiosSettings().Value, HardwareCheck.BmcInfo.Access().Value);
         Console.Write(model.Report());
         return 0;
     }

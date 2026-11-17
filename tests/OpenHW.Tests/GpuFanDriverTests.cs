@@ -79,7 +79,7 @@ public sealed class GpuFanDriverTests
         var nvml = new FakeNvml();
         using var driver = new GpuFanDriver(nvml, otherController: () => null);
         var session = new HelperSession(new NoSmart(), gpuFans: driver);
-        Assert.Equal("ok 17", session.HandleLine("ping"));
+        Assert.Equal("ok 18", session.HandleLine("ping"));
         Assert.Equal($"ok {Fan0} 55", session.HandleLine($"gpufanset {A} {Fan0} 55"));
         Assert.StartsWith("err", session.HandleLine($"gpufanset {A} {Fan0} 101"), StringComparison.Ordinal);
         Assert.StartsWith("err", session.HandleLine($"gpufanset nottoken {Fan0} 50"), StringComparison.Ordinal);

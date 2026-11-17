@@ -3,6 +3,23 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.36.0 — 2026-11-17
+
+- **File → BIOS Settings…** (read-only): every BIOS Setup option the BIOS publishes to the BMC when Setup → "Publish
+  HII Resources" is on — 1,295 on the WRX90E (BIOS 1405, registry BiosAttributeRegistryA5496.14.5.0) — with label,
+  current value, default, internal name and help text. Search (all words, any field) and "Only changed from default".
+  Read over Redfish through the helper (new `biossettings`); passwords are never included. Setup's checkboxes, which
+  AMI publishes as true/false values with "None"/"Disabled" choices, show as Enabled/Disabled.
+- **Hardware Check: BIOS settings changed since the saved snapshot** ("Enable Hibernation: Disabled → Enabled"; the
+  first 12, then a count). The snapshot (`~/.config/openhw/hardware.json`) keeps the settings; it's also kept current
+  at start whenever nothing changed, even when a warning opens the check.
+- **Hardware Check warns when the BMC's Redfish service answers this PC without a password** (host interface in
+  "AuthNone" mode, credential bootstrapping as HostInterfaceAdministrator — as found on the WRX90E), with how to lock
+  it down. New helper `bmcaccess`.
+- **Redfish reads fall back to the stored BMC login** when the BMC asks for one (401/403), so fan sources and BIOS
+  settings keep working once the host interface requires authentication. Gzip-stored registry files are read.
+- Helper **protocol 18**.
+
 ## 0.35.0 — 2026-11-17
 
 - **Fan alarm thresholds**: Fan Control → a BMC fan card's ⋮ → **Alarm thresholds…** sets the RPM below which the BMC

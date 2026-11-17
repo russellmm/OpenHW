@@ -44,12 +44,12 @@ public static class HelperSocket
 /// <c>gpufanrelease &lt;token&gt; &lt;id|all&gt;</c>; <c>fanbeat</c> renews both kinds of lease.
 /// Protocol 16, read-only BMC: <c>bmcstates</c> (discrete sensors' asserted states), <c>bmcsel</c> (the System Event Log).
 /// Protocol 17, fan alarm thresholds: <c>bmcthresh</c> (list), <c>bmcthresh &lt;sensor&gt; &lt;lnr&gt; &lt;lcr&gt; &lt;lnc&gt;</c> (RPM),
-/// <c>bmcthreshoriginal &lt;sensor&gt;</c>.
+/// <c>bmcthreshoriginal &lt;sensor&gt;</c>. Protocol 18, Redfish reads: <c>biossettings</c>, <c>bmcaccess</c>.
 /// Replies are "ok …" or "err …".
 /// </summary>
 public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null)
 {
-    public const string Version = "17";
+    public const string Version = "18";
 
     public string HandleLine(string line)
     {
@@ -175,6 +175,17 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 catch (ArgumentException ex) { return "err " + ex.Message; }
                 catch (IOException ex) { return "err " + ex.Message; }
             }
+
+            // Redfish reads (protocol 18): Setup's published options, and whether the BMC lets this PC in without a login.
+            case "biossettings" when parts.Length == 1:
+                if (redfish is null) return "err Redfish unavailable";
+                try { return "ok " + GpuWire.Encode(redfish.ReadBiosSettings()); }
+                catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
+
+            case "bmcaccess" when parts.Length == 1:
+                if (redfish is null) return "err Redfish unavailable";
+                try { return "ok " + GpuWire.Encode(redfish.ReadAccess()); }
+                catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
 
             case "bmcthreshoriginal" when parts.Length == 2:
                 if (bmc is null) return "err no BMC";

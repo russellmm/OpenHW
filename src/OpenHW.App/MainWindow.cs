@@ -37,6 +37,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>File → BMC Status &amp; Event Log… (discrete sensors and the SEL, read-only).</summary>
     public Action? ShowBmcLog { get; init; }
 
+    /// <summary>File → BIOS Settings… (Setup's options as the BIOS publishes them to the BMC; read-only).</summary>
+    public Action? ShowBiosSettings { get; init; }
+
     /// <summary>Power → Fan Control… (the fan driver's zones).</summary>
     public Action? ShowFanControl { get; init; }
 
@@ -710,6 +713,7 @@ public sealed class MainWindow : Window
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
             if (c.ShowHardwareCheck is { } hardwareCheck) file.Items.Add(Item("_Hardware Check…", hardwareCheck));
             if (c.ShowBmcLog is { } bmcLog) file.Items.Add(Item("_BMC Status & Event Log…", bmcLog));
+            if (c.ShowBiosSettings is { } biosSettings) file.Items.Add(Item("B_IOS Settings…", biosSettings));
             if (c.ShowSensorSettings is { } sensorSettings) file.Items.Add(Item("Sensor Setti_ngs…", sensorSettings)); // the footer gear
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());

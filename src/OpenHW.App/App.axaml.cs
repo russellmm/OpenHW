@@ -66,7 +66,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowBiosSettings = ShowBiosSettings, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -709,6 +709,29 @@ public sealed class App : Application
     // ── BMC status & event log ───────────────────────────────────────────────────────────────────────────────
 
     private HardwareCheck.BmcLogWindow? _bmcLog;
+    private HardwareCheck.BiosSettingsWindow? _biosSettings;
+
+    private void ShowBiosSettings()
+    {
+        if (_biosSettings is null)
+        {
+            WindowPlaces.Track(_biosSettings = new HardwareCheck.BiosSettingsWindow(), "bios-settings");
+            _biosSettings.Closed += (_, _) => _biosSettings = null;
+        }
+        _biosSettings.Show();
+        _biosSettings.Activate();
+    }
+
+    // What the BMC publishes over Redfish, for Hardware Check (BIOS settings changed, the host interface left open).
+    // Read off the UI thread at the start-up check and whenever Hardware Check opens; null until read (or unreadable).
+    private volatile BiosSettingsReply? _bios;
+    private volatile BmcAccessReply? _bmcAccess;
+
+    private void ReadBmcInfo()
+    {
+        if (BmcInfo.BiosSettings() is ({ } bios, _)) _bios = bios;
+        if (BmcInfo.Access() is ({ } access, _)) _bmcAccess = access;
+    }
 
     private void ShowBmcLog()
     {
@@ -745,6 +768,12 @@ public sealed class App : Application
         else _hardwareCheck.Refresh();
         _hardwareCheck.Show();
         _hardwareCheck.Activate();
+        // Fresh BMC answers (the owner may just have locked the host interface down): refresh the window when they're in.
+        _ = Task.Run(() =>
+        {
+            ReadBmcInfo();
+            Dispatcher.UIThread.Post(() => _hardwareCheck?.Refresh());
+        });
     }
 
     /// <summary>
@@ -756,13 +785,15 @@ public sealed class App : Application
     {
         _gpuLent = await Task.Run(() =>
         {
+            ReadBmcInfo();
             try { return GpuWire.Decode<LendStatus>(HelperClient.Request("lendstatus", receiveTimeoutMs: 8000, maxReplyBytes: GpuWire.MaxReplyBytes))?.Lent ?? false; }
             catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException) { return false; }
         });
         if (_exiting) return;
         var model = new HardwareCheckActions(this).Build();
+        // No changes: keep the snapshot current (it also takes the BIOS settings' first baseline), even if a warning opens the check.
+        if (model.Changes.Count == 0) model.Now.Save();
         if (model.NeedsAttention && !_gpuLent && model.Signature != _settings.HardwareCheckSeen) ShowHardwareCheck();
-        else if (model.Changes.Count == 0) model.Now.Save();
     }
 
     private sealed class HardwareCheckActions(App app) : IHardwareCheckActions
@@ -774,7 +805,7 @@ public sealed class App : Application
         {
             var inventory = app._hub.Inventory;
             var before = HardwareSnapshot.Load();
-            return HardwareCheckModel.Build(app._hub, before, app._settings, app._alerts.Store, app._gpuLent);
+            return HardwareCheckModel.Build(app._hub, before, app._settings, app._alerts.Store, app._gpuLent, app._bios, app._bmcAccess);
         }
 
         public void Move(StaleReference stale, string newId) =>
