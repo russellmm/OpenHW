@@ -66,7 +66,7 @@ readback, menu entry first.
    refuses takeovers while OpenFan's `/var/lib/openfan/bmc-restore.json` exists. **Flash limits**: faster at once;
    slower after 30 s since the last write and ≥ 3 % lower (else "pending"); writes counted per zone. Protocol 13:
    `fans [token]`, `fanset`, `fanrelease`, `fanbeat`. App: Power → Fan Control… (status), `openhw --fan-test`.
-   Tests on OpenFan's captured firmware replies. **To do**: the owner's guarded `--fan-test` of every zone; the flash
+   Tests on OpenFan's captured firmware replies; read check on the real BMC passed (2026-11-16). **To do**: the owner's guarded `--fan-test` of every zone; the flash
    persistence check (write a zone, BMC warm reset, read back).
 3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
    owns every GPU handle; never on a card that is lent to the VM.
