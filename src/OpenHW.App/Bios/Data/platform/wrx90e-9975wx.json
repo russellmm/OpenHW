@@ -1,0 +1,142 @@
+{
+  "profile_name": "Mock 9975WX + 8x32GB Kingston FURY Renegade Pro (not probed)",
+  "source": "mock",
+  "variant": "SHP",
+  "cpu": {
+    "brand": "AMD Ryzen Threadripper PRO 9975WX 32-Cores",
+    "cores": 32,
+    "ccds": 4,
+    "speed_mhz": 4000
+  },
+  "memory": {
+    "dimms_populated": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "dimm_size_gb": 32,
+    "oc_profiles": "both",
+    "part_number": "KF556R28RBE2-32",
+    "kit": "2 x KF556R28RBE2K4-128 (8 x 32GB DDR5-5600 CL28 ECC RDIMM)",
+    "spd": {
+      "source": "Kingston datasheet KF556R28RBE2K4-128, Rev. A 01/23/24",
+      "jedec": {
+        "name": "Default (JEDEC)",
+        "speed": 4800,
+        "cl": 40,
+        "trcd": 39,
+        "trp": 39,
+        "tras": 77,
+        "trc": 116,
+        "volt": 1.1
+      },
+      "expo": [
+        {
+          "name": "EXPO Profile #0",
+          "speed": 5600,
+          "cl": 28,
+          "trcd": 34,
+          "trp": 34,
+          "volt": 1.35
+        },
+        {
+          "name": "EXPO Profile #1",
+          "speed": 5200,
+          "cl": 36,
+          "trcd": 40,
+          "trp": 40,
+          "volt": 1.25
+        }
+      ],
+      "xmp": [
+        {
+          "name": "XMP Profile #1",
+          "speed": 5600,
+          "cl": 28,
+          "trcd": 34,
+          "trp": 34,
+          "volt": 1.35
+        },
+        {
+          "name": "XMP Profile #2",
+          "speed": 5200,
+          "cl": 36,
+          "trcd": 40,
+          "trp": 40,
+          "volt": 1.25
+        }
+      ]
+    }
+  },
+  "boot_options": [
+    "Windows Boot Manager (P1: Samsung SSD 990 PRO 4TB)",
+    "UEFI: PXE IPv4 Intel(R) Ethernet Controller X710 for 10GBASE-T",
+    "UEFI: PXE IPv6 Intel(R) Ethernet Controller X710 for 10GBASE-T"
+  ],
+  "third_party_pages": [],
+  "text": {
+    "Main|BIOS Vendor": "American Megatrends",
+    "Main|Core Version": "5.36",
+    "Main|Compliancy": "UEFI 2.9; PI 1.8",
+    "Main|BIOS Version": "{bios_version}  x64",
+    "Main|Build Date": "{build_date}",
+    "Main|AGESA Version": "{agesa}",
+    "Main|Brand String": "{cpu_brand}",
+    "Main|CPU Speed": "{cpu_speed} MHz",
+    "Main|Total Memory": "{total_mb} MB",
+    "Main|Memory Frequency": "{mem_freq} MHz",
+    "Main|Intel X710 LAN1 MAC": "10-7C-61-00-00-01",
+    "Main|Intel X710 LAN2 MAC": "10-7C-61-00-00-02",
+    "Ai Tweaker|Target CPU Speed": "{cpu_speed}MHz",
+    "Ai Tweaker|Target DRAM Frequency": "{target_mem_freq}MHz",
+    "Server Mgmt|BMC Self Test Status": "PASSED",
+    "Server Mgmt|BMC Device ID": "32",
+    "Server Mgmt|BMC Device Revision": "1",
+    "Server Mgmt|BMC Firmware Revision": "1.10",
+    "Server Mgmt|IPMI Version": "2.0",
+    "Primary Timings Report|Tcl": "{tcl}",
+    "Primary Timings Report|Trcd": "{trcd}",
+    "Primary Timings Report|Trcd Wr": "{trcd}",
+    "Primary Timings Report|Trcd Rd": "{trcd}",
+    "Primary Timings Report|Trp": "{trp}",
+    "Primary Timings Report|Tras": "{tras}"
+  },
+  "runtime_overrides": [],
+  "hwmon": {
+    "cpu_temp_c": 38,
+    "bclk_mhz": 100.0,
+    "core_voltage": 1.032,
+    "mc_voltage": 1.104,
+    "v12": 12.096,
+    "v5": 5.04,
+    "v3_3": 3.344
+  },
+  "cooler": "none",
+  "hide_items": [
+    {
+      "page": "Onboard Devices Configuration",
+      "prompt": "Wi-Fi Controller",
+      "reason": "the Pro WS WRX90E-SAGE SE has no built-in Wi-Fi."
+    },
+    {
+      "page": "Onboard Devices Configuration",
+      "prompt": "Bluetooth Controller",
+      "reason": "the Pro WS WRX90E-SAGE SE has no built-in Bluetooth."
+    },
+    {
+      "page": "AMD CBS",
+      "prompt": "NewRecordOffset",
+      "reason": "internal AMD bookkeeping value, not a user setting."
+    },
+    {
+      "page": "AMD CBS",
+      "prompt": "Combo CBS",
+      "reason": "internal AMD bookkeeping value, not a user setting."
+    }
+  ]
+}

@@ -232,6 +232,24 @@ something **new** needs a look — closing the window marks what it showed as se
 know about doesn't reopen it at every start; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
 `openhw --hardware-check` prints the same report without a display and changes nothing.
 
+## BIOS Setup
+
+**File → BIOS Setup…** shows this board's BIOS screen (ASUS UEFI BIOS Utility, Advanced Mode) with **this machine's
+current settings** — without rebooting. Every page, setting, choice, default, help text and show/hide rule is decoded
+from the BIOS capsule (`tools/bios-data/`); the values come from the machine's UEFI variables (no root needed). The
+details panel explains each setting in plain English, lists what each choice means and exactly which values are
+allowed, and says why an item is hidden or locked.
+
+Keys as in the real BIOS: ← → tabs, ↑ ↓ items, Enter open/change, + / − step, Esc back, F3 favorites, F4 add/remove
+favorite, F5 optimized defaults, F6 Q-Fan, F9 or Ctrl+F search, F10 save the plan, F12 screenshot, Ctrl+H hidden items.
+
+**OpenHW never writes the BIOS.** Changes you make are a *plan*: F10 saves it (`~/.config/openhw/bios/plan.json`) so
+you can enter it in BIOS Setup at the next boot; once the machine has a planned value it drops off the plan. "Changed
+from defaults" lists (and exports) every setting this machine has away from factory defaults.
+
+**File → BIOS Settings from the BMC…** is the simpler list the BIOS publishes to the BMC over Redfish (Setup → Publish
+HII Resources).
+
 ## Alerts
 
 Right-click a sensor → **Alert settings…** to add rules: alert when it **is above** / **is below** a value (in the unit

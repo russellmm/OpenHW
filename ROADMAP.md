@@ -167,6 +167,11 @@ for). Keep platform code behind interfaces now:
       (0.35.0, Fan Control → ⋮ → Alarm thresholds…).
 - [x] BIOS Setup options via Redfish (Publish HII Resources): File → BIOS Settings…, changes in Hardware Check;
       warning when the BMC's host interface needs no login (0.36.0).
+- [x] **BIOS Setup in OpenHW** (0.37.0): the standalone BIOS emulator ported to C#, with this machine's values from
+      its UEFI variables; changes are a plan (F10), never written.
+- [ ] BIOS Setup: write the plan to the firmware — only behind a strong guard (owner: "later, carefully"): back up every
+      variable first, write one variable at a time, read back, refuse on size/version mismatch.
+- [ ] BIOS Setup: EZ Mode (F7), driver-built pages (SMART, SPD, NVMe lists), more plain-English explanations.
 - [ ] DIMM details from Redfish (part number, rated vs running speed, ranks) — BIOS labels slots only "DIMM 0–7".
 
 ## GPU lending to a VM (replaces RTXinVM) — agreed with the owner 2026-10-25

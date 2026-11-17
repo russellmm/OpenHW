@@ -3,6 +3,26 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.37.0 — 2026-11-17
+
+- **File → BIOS Setup…: the BIOS emulator, inside OpenHW, with this machine's settings.** The standalone Python/Qt
+  emulator (`/mnt/SOLIDIGM/Claude/BIOS`) ported to C#/Avalonia: the ASUS UEFI BIOS Utility (Advanced Mode) screen for
+  the Pro WS WRX90E-SAGE SE — all 371 pages and ~7,600 items with every choice, factory default, help text and
+  show/hide rule decoded from the BIOS 1405 capsule; tabs, breadcrumbs, details panel (plain-English explanation,
+  meaning of each choice, exact allowed values with checked input, glossary, why an item is hidden or locked),
+  search (F9), favorites (F3/F4), hidden items (Ctrl+H), Load Optimized Defaults (F5), ASUS User Profiles, Last
+  Modified, "Changed from defaults" with text export, Q-Fan (F6), hot keys. The engine matches the Python one item for
+  item (5,905 reachable items: same state, value and path).
+- **Real values**: read from the machine's UEFI variables (`/sys/firmware/efi/efivars`, no root needed) — Setup,
+  Ai Tweaker, AMD CBS / Overclocking / PBS, Server Mgmt and the hardware-detection variables the emulator used to
+  guess (34 variables on the WRX90E); the rest fall back to factory defaults. The platform profile (CPU, cores, CCDs,
+  base clock, boot entries, X710 MACs) is probed; the Hardware Monitor panel shows OpenHW's live BMC readings.
+- **Read-only, with a plan**: changes on screen are a plan; F10 saves it (`~/.config/openhw/bios/plan.json`, history
+  in `history.jsonl`) to enter in BIOS Setup; a planned value the machine has taken drops off by itself. Writing the
+  firmware is designed for (behind `IFirmwareVariables`) but not offered.
+- The Redfish list stays as **File → BIOS Settings from the BMC…**. The capsule decoder moved to `tools/bios-data/`
+  (reproduces `bios-1405.json` byte for byte).
+
 ## 0.36.1 — 2026-11-17
 
 - Hardware Check: the open BMC Redfish access is a plain note ("BMC access"), not a red warning — the owner keeps it

@@ -66,7 +66,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowBiosSettings = ShowBiosSettings, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowBiosSettings = ShowBiosSettings, ShowBiosSetup = ShowBiosSetup, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -710,6 +710,31 @@ public sealed class App : Application
 
     private HardwareCheck.BmcLogWindow? _bmcLog;
     private HardwareCheck.BiosSettingsWindow? _biosSettings;
+
+    private Bios.BiosWindow? _biosSetup;
+
+    /// <summary>File → BIOS Setup…: the BIOS screen with this machine's settings (read from its UEFI variables).</summary>
+    private void ShowBiosSetup()
+    {
+        if (_biosSetup is null)
+        {
+            if (Bios.BiosData.Latest() is not { } data)
+            {
+                Console.Error.WriteLine("openhw: no BIOS data (Bios/Data/bios-*.json) next to the app");
+                return;
+            }
+            var machine = new LinuxFirmwareVariables();
+            var state = Bios.BiosModel.DefaultStateDir;
+            var platform = File.Exists(Path.Combine(state, "platform.json"))
+                ? Bios.BiosModel.LoadPlatform(state)
+                : Bios.BiosPlatform.Probe(Bios.BiosModel.LoadPlatform(state), machine);
+            var model = new Bios.BiosModel(Bios.BiosData.Load(data), machine.Available ? machine : null, state, platform);
+            WindowPlaces.Track(_biosSetup = new Bios.BiosWindow(model, id => _hub.Get(id).Current), "bios-setup");
+            _biosSetup.Closed += (_, _) => _biosSetup = null;
+        }
+        _biosSetup.Show();
+        _biosSetup.Activate();
+    }
 
     private void ShowBiosSettings()
     {

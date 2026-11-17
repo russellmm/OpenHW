@@ -48,4 +48,8 @@
     </PropertyGroup>
   </Target>
 
+  <ItemGroup>
+    <!-- BIOS module: the menu database decoded from the BIOS capsule (tools/bios-data), help texts, platform profile. -->
+    <Content Include="Bios/Data/**/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -29,7 +29,7 @@ public sealed class BiosSettingsWindow : Window
     public BiosSettingsWindow(Func<(BiosSettingsReply? Value, string? Error)>? fetch = null)
     {
         _fetch = fetch ?? (() => BmcInfo.BiosSettings());
-        Title = "BIOS Settings";
+        Title = "BIOS Settings from the BMC";
         Width = 960;
         Height = 760;
         Background = Palette.Window;

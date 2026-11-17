@@ -7,3 +7,9 @@ dist/
 tools/tray-hover-test/out/
 tools/bmc-probe/out/
 /IPMI_Expansion_Card_EM_WEB_EN.pdf
+
+# BIOS data sources (tools/bios-data): the capsule and manual stay local
+tools/bios-data/*.CAP
+tools/bios-data/*.cap
+tools/bios-data/*.pdf
+tools/bios-data/__pycache__/
