@@ -72,7 +72,7 @@ Rows (shown when the UPS reports the variable): Input/Output Voltage, Input/Outp
 (`ups.realpower`), UPS Apparent Power (`ups.power`, VA), UPS Power Rating (`ups.realpower.nominal`), Battery Charge,
 Battery Voltage, Battery Runtime (min), UPS Temperature, and flags from `ups.status`: On Battery (OB), Low Battery (LB),
 Replace Battery (RB), UPS Overloaded (OVER). Details carry the driver, firmware and last self-test result. Group "UPS:
-CyberPower CP2000PFCRM2U (NUT)". Live: 120 V in/out, ~20 % load, ~240 W of 1,200 W, battery 100 % / 26.3 V / ~32 min.
+CyberPower CP2000PFCRM2U (NUT)"; whole numbers (`Decimals = 0`, owner's choice, 0.38.2). Live: 120 V in/out, ~20 % load, ~240 W of 1,200 W, battery 100 % / 26.3 V / ~32 min.
 
 ## Tests
 
