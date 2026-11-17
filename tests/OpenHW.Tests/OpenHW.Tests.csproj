@@ -17,4 +17,9 @@
     <ProjectReference Include="..\..\src\OpenHW.Hardware\OpenHW.Hardware.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Live replies from the WRX90E's BMC (no credentials or serials), captured by OpenFan. -->
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

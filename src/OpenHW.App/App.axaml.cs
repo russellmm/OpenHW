@@ -65,7 +65,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -769,6 +769,19 @@ public sealed class App : Application
         public void ShowGpuLending() => app.ShowGpuLending();
 
         public void ShowPowerLimits() => app.ShowPowerLimits();
+    }
+
+    private FanControlWindow? _fanControl;
+
+    private void ShowFanControl()
+    {
+        if (_fanControl is null)
+        {
+            WindowPlaces.Track(_fanControl = new FanControlWindow(_hub), "fan-control");
+            _fanControl.Closed += (_, _) => _fanControl = null;
+        }
+        _fanControl.Show();
+        _fanControl.Activate();
     }
 
     private void ShowGpuLending()

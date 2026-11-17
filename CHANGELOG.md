@@ -3,6 +3,24 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.23.0 — 2026-11-16
+
+- **Fan driver, stage 1** (owner's plan: one fan driver in openhw-helper that OpenHW — and, until it's retired,
+  OpenFan — use). On the ASUS Pro WS WRX90E-SAGE SE the BMC drives every fan header (the Super I/O only measures
+  them), so the driver works through the BMC's own fan zones: CPU_FAN (+ CPU_OPT), CHA_FAN1–5 and W_PUMP+, with
+  ASUS's OEM IPMI commands — ported from OpenFan 0.4.6's tested driver onto OpenHW's own IPMI code (no `ipmitool`,
+  no network, no BMC login). Writes only on the validated board, BMC identity, firmware 2.01 and zone layout.
+- A program **takes a fan over** by asking for a duty (1–100 %; the firmware refuses 0 %), written as a flat curve and
+  read back. The fan goes back to the BMC's own curve when that program **releases it, stops renewing (15 s), the
+  helper stops, or — after a crash — the helper starts again** (each curve is journaled in `/var/lib/openhw` before
+  the first change). One program per fan; nothing is taken over while OpenFan's own BMC driver holds fans.
+- **Flash protection**: a faster duty is written at once; a slower one only 30 s after the last write and in steps of
+  at least 3 %, waiting as "pending" meanwhile. The number of writes per fan is counted and shown.
+- **Power → Fan Control…** shows each fan's live RPM, who controls it, its active curve and its write count.
+  `openhw --fan-test bmc:<n> <1–100> --seconds N` checks one fan: takes it, holds the duty, gives it back and compares
+  the curve. Curves of your own (any sensor, as in OpenFan) come in the next stage.
+- openhw-helper protocol 13: `fans`, `fanset`, `fanrelease`, `fanbeat`; the unit gets `StateDirectory=openhw`.
+
 ## 0.22.0 — 2026-11-14
 
 - **Board profile for the ASUS Pro WS WRX90E-SAGE SE** (Super I/O NCT6798), named after the board's own BMC: the

@@ -36,11 +36,13 @@ public static class HelperSocket
 /// (<see cref="LendingSetup"/>; refused while the card is lent or a lend/return is under way).
 /// Lending (<see cref="CardLending"/>): <c>lendstatus</c>, <c>cardvms</c>, <c>cardvm &lt;name|none&gt;</c> (a VM with the card
 /// assigned), <c>lend</c> and <c>vmreturn</c> (both start in the background; follow them with <c>lendstatus</c>).
+/// Fans (protocol 13, <see cref="FanDriver"/>): <c>fans [token]</c> (status), <c>fanset &lt;token&gt; &lt;zone&gt; &lt;1–100&gt;</c>,
+/// <c>fanrelease &lt;token&gt; &lt;zone|all&gt;</c>, <c>fanbeat &lt;token&gt;</c>.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null)
 {
-    public const string Version = "12";
+    public const string Version = "13";
 
     public string HandleLine(string line)
     {
@@ -139,6 +141,29 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "bmc" when parts.Length == 1: // read-only: the board management controller's threshold sensors (IPMI)
                 if (bmc is null) return "err no BMC";
                 return bmc.Read(TimeSpan.FromSeconds(20)) is { } reply ? "ok " + GpuWire.Encode(reply) : "err " + (bmc.Error ?? "BMC not ready");
+
+            // Fan control (protocol 13): the one writer of fan settings. A client names itself with a random 32-hex
+            // token; its zones go back to their firmware curves when it releases them or stops renewing (15 s).
+            case "fans" when parts.Length is 1 or 2:
+                if (fans is null) return "err fan control unavailable";
+                try { return "ok " + GpuWire.Encode(fans.Status(parts.Length == 2 ? parts[1] : null)); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+
+            case "fanset" or "fanrelease" or "fanbeat":
+                if (fans is null) return "err fan control unavailable";
+                try
+                {
+                    return (parts[0], parts.Length) switch
+                    {
+                        ("fanset", 4) when int.TryParse(parts[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pct)
+                            => "ok " + fans.Set(parts[1], parts[2], pct),
+                        ("fanrelease", 3) => "ok " + fans.Release(parts[1], parts[2]),
+                        ("fanbeat", 2) => "ok " + fans.Beat(parts[1]).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        _ => "err unknown command",
+                    };
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or InvalidDataException) { return "err " + ex.Message; }
 
             case "gpus" when parts.Length == 1:
                 return gpus is null ? "err GPUs unavailable" : "ok " + GpuWire.Encode(gpus.Discover());
@@ -264,7 +289,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -315,7 +340,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans);
         try
         {
             using (client)

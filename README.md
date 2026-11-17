@@ -153,7 +153,7 @@ PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only script
 The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
 Hardware Check…, Sensor Settings…, Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
 Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
-Power Limits… Ctrl+L, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
+Power Limits… Ctrl+L, Fan Control…, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
 all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
 close on the right — power controls are in the Power menu and the tray menu only.
 
@@ -259,6 +259,33 @@ is never edited; **Unit value** (or deleting the drop-in) returns to it. The "At
 really get, wherever it sits. Hardware Check flags per-slot lines whose slot is empty or holds another card now.
 Without the boot service installed, the row says so and stays read-only.
 
+## Fan control
+
+openhw-helper is meant to be the one program that writes fan settings (OpenFan, while it's still installed, is to
+use it too). Stage 1 (0.23.0) is the driver; curves of your own come next.
+
+On the ASUS Pro WS WRX90E-SAGE SE every fan header is driven by the BMC — the NCT6798 Super I/O only measures them
+— so the driver works through the BMC's seven fan zones (CPU_FAN together with CPU_OPT, CHA_FAN1–5, W_PUMP+), using
+ASUS's OEM IPMI commands over `/dev/ipmi0` (`30 0f` reads a zone's curve, `30 0e 04` writes it; ASUS E26328 IPMI
+manual, appendix A). It writes only after the board, the BMC's identity and firmware (2.01) and every zone's layout
+match what was validated; other boards get no fan writes.
+
+- **Taking a fan over**: a program asks for a duty (1–100 %; the firmware refuses 0 %), which the driver writes as a
+  flat curve and reads back. The zone's original curve is first saved to `/var/lib/openhw/fan-restore.json`.
+- **Giving it back**: when the program releases the fan, stops renewing its lease for 15 s, the helper stops, or —
+  after a crash — the helper starts again, the original curve is written back.
+- **Sparing the BMC's flash**: faster is written at once; slower only 30 s after the last write and in steps of 3 % or
+  more (it waits as "pending"). Writes per fan are counted.
+- **One program per fan**, and nothing is taken over while OpenFan's own BMC driver holds fans (its restore journal
+  exists).
+
+**Power → Fan Control…** shows every zone's RPM, who controls it, its active curve and its write count. To check one
+fan from a terminal (it gives the fan back and compares the curve afterwards):
+
+```bash
+openhw --fan-test bmc:1 70 --seconds 10
+```
+
 ## Power modes and CPU frequency caps
 
 The Power menu and the tray menu switch power-profiles-daemon's profile (Power saver / Balanced / Performance —
@@ -330,13 +357,14 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
 `ddr5`, `vr`, `rapl`, `bmc` (the board management controller's sensors over IPMI: Get Device ID, the SDR repository,
-Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the fan driver
+(`fans`, `fanset`, `fanrelease`, `fanbeat` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
 `CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
-`/etc/openhw` and `/sys/fs/bpf` (the card filter), and for GPU Lending's install/uninstall its own drop-in folder,
+`/etc/openhw` and `/sys/fs/bpf` (the card filter), `/var/lib/openhw` (the fan restore journal), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d` and `/etc/libvirt/hooks/qemu.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
 `/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
@@ -383,5 +411,5 @@ with desktop notifications, power-mode switching that keeps boost working, all-c
 CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending to a VM, BMC sensors over IPMI,
 board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
 change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
-card filter. Ships as a .deb (see [Install](#install)). **Next: fan control** — planned in [ROADMAP.md](ROADMAP.md),
+card filter. Ships as a .deb (see [Install](#install)). fan control through the BMC (stage 1: the driver; curves next) — planned in [ROADMAP.md](ROADMAP.md),
 which tracks all planned work.

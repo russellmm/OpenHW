@@ -17,7 +17,7 @@ readback, menu entry first.
    helper (`openfan-helper.service`) is running, and the Fan Control page says so and offers to stop it (optional
    knowledge only — OpenHW never needs OpenFan). Everything OpenFan does for fans (Super I/O headers, GPU fans, BMC
    fans) has to exist in OpenHW before OpenFan is uninstalled; built from the hardware's interfaces, not OpenFan's code.
-1. [ ] **Find out who drives each header** — read-only survey done 2026-11-14:
+1. [x] **Find out who drives each header** — survey done 2026-11-14:
    - **NCT6798**: all seven `pwmN` in automatic mode 5 (SmartFan IV), every curve on **temp8 "PECI Agent 0
      Calibration", which is dead on this board (flat 11 °C)** — so the chip's curves sit at their lowest point: duty
      51/255 (20 %) on pwm1–6, CHA_FAN4's curve 153, pump pwm7 fixed at 255.
@@ -57,13 +57,22 @@ readback, menu entry first.
      the BMC's self-signed certificate on first use. Then: read the mode and curves (no login), save the originals,
      verify the channel → header map one channel at a time, write curves/mode with readback, restore on request.
      Check whether the BIOS re-pushes Q-Fan curves to the BMC at boot (if so OpenHW re-applies at start).
-2. [ ] **Helper commands** (protocol 13): set a header to manual duty or back to automatic (`pwmN_enable` = the mode
-   found at start), with per-header floors (pump and CPU fan never below a safe minimum), readback, and **restore
-   to automatic** when the helper stops, the app disconnects or a curve's sensor goes stale (a watchdog in the
-   helper, not the app).
+2. [x] **Stage 1 — the fan driver in openhw-helper** (0.23.0, owner 2026-11-16: "build stage 1 in openhw-helper";
+   OpenFan's code may be reused). `AsusBmcFans` = OpenFan 0.4.6's `AsusBmcController` ported onto OpenHW's IPMI
+   transport (identity: board, ASUS 2623 / 0x1193, firmware 2.01, aux 22 00 00 00, 8 zones in order ff 00…07, each
+   table's name and curve temperatures; `30 0f N` read, `30 0e 04 N` + 10 bytes write + readback; 0 % refused by the
+   firmware). `FanDriver`: client tokens, one owner per zone, 15 s leases, journal `/var/lib/openhw/fan-restore.json`
+   (machine identity = DMI product UUID), restore on release / lease loss / helper stop / next start after a crash,
+   refuses takeovers while OpenFan's `/var/lib/openfan/bmc-restore.json` exists. **Flash limits**: faster at once;
+   slower after 30 s since the last write and ≥ 3 % lower (else "pending"); writes counted per zone. Protocol 13:
+   `fans [token]`, `fanset`, `fanrelease`, `fanbeat`. App: Power → Fan Control… (status), `openhw --fan-test`.
+   Tests on OpenFan's captured firmware replies. **To do**: the owner's guarded `--fan-test` of every zone; the flash
+   persistence check (write a zone, BMC warm reset, read back).
 3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
    owns every GPU handle; never on a card that is lent to the VM.
-4. [ ] **UI** (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
+4. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
+   BMC DIMM temps; run the loop in the helper; import the owner's `openfan11_14.json` re-pointed to BMC zones) and
+   OpenFan as a client of the driver until it's retired. UI (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
    OpenHW reads (incl. BMC temperatures and GPU temperatures), with hysteresis and a minimum; a clear "automatic"
    default. Saved per header, applied when OpenHW starts (opt-in, like CPU caps).
 5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never

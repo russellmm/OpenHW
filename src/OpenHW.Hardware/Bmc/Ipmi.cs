@@ -221,14 +221,14 @@ public static class IpmiCommands
 {
     private const byte NetFnApp = 0x06, NetFnStorage = 0x0a, NetFnSensor = 0x04;
 
-    public sealed record DeviceId(byte Id, string Firmware, int ManufacturerId, int ProductId);
+    public sealed record DeviceId(byte Id, string Firmware, int ManufacturerId, int ProductId, byte[]? Aux = null);
 
     public static DeviceId? GetDeviceId(IIpmiTransport t)
     {
         var r = t.Send(NetFnApp, 0x01, 0, []);
         if (r.Length < 12 || r[0] != 0) return null;
         var fw = $"{r[3] & 0x7f}.{(r[4] >> 4) * 10 + (r[4] & 0x0f):00}";
-        return new DeviceId(r[1], fw, r[7] | r[8] << 8 | r[9] << 16, r[10] | r[11] << 8);
+        return new DeviceId(r[1], fw, r[7] | r[8] << 8 | r[9] << 16, r[10] | r[11] << 8, r.Length >= 16 ? r[12..16] : null);
     }
 
     /// <summary>Every record in the repository, walked by record id (partial reads with a reservation, 16 bytes at a time).</summary>

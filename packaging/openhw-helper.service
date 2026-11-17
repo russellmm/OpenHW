@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHW privileged helper (NVMe SMART, DIMM, VR and BMC sensors, CPU frequency caps, GPU and CPU power limits)
+Description=OpenHW privileged helper (NVMe SMART, DIMM, VR and BMC sensors, fan control, CPU frequency caps, GPU and CPU power limits)
 Documentation=https://github.com/russellmm/OpenHW
 # With GPU Lending installed, the card filter must be in force before the login screen and the desktop can open the
 # lent card: the helper writes a drop-in (openhw-helper.service.d/lending.conf) that orders it before them, and
@@ -16,6 +16,10 @@ RuntimeDirectory=openhw
 # Kept across stop/start (until reboot): the card filter's "hide now" list lives here, and RTXinVM's switch stops
 # and starts this service around a Windows start.
 RuntimeDirectoryPreserve=yes
+# /var/lib/openhw (0700): the fan driver's restore journal — each zone's original BMC curve, written before the
+# first change so a crash can't leave a fan on OpenHW's setting.
+StateDirectory=openhw
+StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=2
 
@@ -61,8 +65,8 @@ DeviceAllow=char-nvidia rw
 DeviceAllow=char-nvidiactl rw
 # DDR5 DIMM thermal sensors/PMICs and the board's PMBus VR, through /dev/i2c-N (reads, and the PMIC ADC select).
 DeviceAllow=char-i2c rw
-# The board management controller (IPMI, /dev/ipmi0): read-only commands only — sensor repository, readings,
-# thresholds. The device has to be opened read-write to send requests.
+# The board management controller (IPMI, /dev/ipmi0): sensor repository, readings and thresholds, and — on the
+# validated WRX90E board only — the fan zones' curves (FanDriver). The device has to be opened read-write.
 DeviceAllow=char-ipmidev rw
 LockPersonality=true
 RestrictRealtime=true

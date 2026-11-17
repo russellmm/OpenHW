@@ -17,6 +17,7 @@ internal static class Program
         Gen0Budget(args);
         if (args.Contains("--dump")) return Dump();
         if (args.Contains("--hardware-check")) return HardwareCheckReport();
+        if (args.Contains("--fan-test")) return Power.FanTest.Run(args);
         Instance = Settings.SingleInstance.Claim();
         if (Instance is null) return 0; // the running OpenHW was asked to show its window
         StartInTray = args.Contains("--tray");

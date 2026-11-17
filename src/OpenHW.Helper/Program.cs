@@ -5,7 +5,7 @@ using OpenHW.Hardware;
 
 // openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, cpufreq ceilings,
 // GPU power limits (NVML), the CPU socket power limit (HSMP), and those limits' boot-time values in the owner's
-// boot services' config; RAPL energy, the DDR5 DIMM and board VR sensors on the SMBus, the BMC's sensors (IPMI), and every NVIDIA GPU
+// boot services' config; RAPL energy, the DDR5 DIMM and board VR sensors on the SMBus, the BMC's sensors (IPMI) and its fan zones (the one writer of fan settings), and every NVIDIA GPU
 // reading for the window (so the desktop app never opens a card). It serves fixed,
 // validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path.
 // `openhw-helper --once <command>` answers one command on stdout and exits (for checking a build with sudo).
@@ -35,14 +35,19 @@ if (args is ["--once", .. var command] && command.Length > 0)
     // Only the card filter's status: changing it from a process that exits at once would leave the kernel filter
     // without the daemon that classifies new cgroups.
     var cardRead = command is ["cardfilter"] ? card : null;
-    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc).HandleLine(string.Join(' ', command)));
+    // Fans: status only (a one-shot process can't hold a zone: it would give it back as it exits).
+    using var fansRead = command is ["fans"] ? FanDriver.Live() : null;
+    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc, fans: fansRead).HandleLine(string.Join(' ', command)));
     return 0;
 }
 
 using var gpuPower = new GpuPowerLimits();
 // Lending the card to a VM: both NVML users let go of every card for the handoff, and open again afterwards.
 using var lending = new CardLending(card, () => { gpus.Suspend(); gpuPower.Suspend(); }, () => { gpus.Resume(); gpuPower.Resume(); });
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc);
+// Fan control: puts back any curve a crashed run left taken over (journal) before clients can connect.
+using var fans = FanDriver.Live();
+if (fans.Status(null) is { Available: false, Reason: { } why }) Console.WriteLine($"openhw-helper: fan control off: {why}");
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc, fans);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
 // boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
 try { card.Start(TimeSpan.FromSeconds(60)); }
