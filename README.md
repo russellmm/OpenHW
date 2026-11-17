@@ -227,7 +227,8 @@ shows:
   voltages), no known board VR, a GPU Lending card that isn't in the machine any more.
 
 About 30 s after it starts (time for the BMC's first answer), OpenHW runs the check and opens the window when
-something needs a look; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
+something **new** needs a look — closing the window marks what it showed as seen (0.24.2), so a warning you already
+know about doesn't reopen it at every start; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
 `openhw --hardware-check` prints the same report without a display and changes nothing.
 
 ## Alerts
@@ -263,7 +264,8 @@ Without the boot service installed, the row says so and stays read-only.
 
 openhw-helper is meant to be the one program that writes fan settings (OpenFan, while it's still installed, is to
 use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves the BMC runs itself (written once) over
-duties it would have to keep rewriting.
+duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
+behave are in [docs/fan-control.md](docs/fan-control.md).
 
 **Curves the BMC runs (0.24.0)** — Power → Fan Control… → **Edit…** on a fan: tick the BMC temperature sensors it
 follows (CPU Package, TR1 = the T_Sensor header, LAN, each DIMM slot DIMMA1–H1, each PCIe slot PCIE01–07; with several
@@ -424,5 +426,7 @@ with desktop notifications, power-mode switching that keeps boost working, all-c
 CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending to a VM, BMC sensors over IPMI,
 board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
 change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
-card filter. Ships as a .deb (see [Install](#install)). fan control through the BMC (curves the BMC runs; GPU-following curves next) — planned in [ROADMAP.md](ROADMAP.md),
-which tracks all planned work.
+card filter, and fan control through the BMC: curves and sensors the BMC runs itself, set from Power → Fan
+Control… (0.24.x). Ships as a .deb (see [Install](#install)). Next: fans that follow GPU temperatures and an import of
+OpenFan profiles — planned in [ROADMAP.md](ROADMAP.md), which tracks all planned work. Every window and dialog opens
+centred on the primary monitor the first time, then where it was last moved.
