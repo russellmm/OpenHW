@@ -49,7 +49,7 @@ readback, menu entry first.
      password on line 2). **Reads prove nothing here**: over the host interface every GET succeeds without a login,
      even with bogus credentials (so a first "200" test was meaningless). The real test is a session login (POST
      SessionService/Sessions: 201 accepted, 401 refused — a bogus login gets 401): `tools/bmc-probe/login-test.sh
-     <file>`, run by the owner. The web console refuses `openhw` (an AMI web-access setting; maybe not needed). Account list is readable without a login: `/redfish/v1/AccountService/Accounts` (5 = openhw).
+     <file>`, run by the owner on 2026-11-16: **`openhw` accepted (201)**, session closed (204). The web console refuses `openhw` (an AMI web-access setting; maybe not needed). Account list is readable without a login: `/redfish/v1/AccountService/Accounts` (5 = openhw).
      OpenHW's helper reads the login from a root-only copy (to decide: `/etc/openhw/bmc-login` 0600, installed from
      the owner's file) — never in the user's config. Claude never signs in to the BMC itself; authenticated checks are
      run by the owner. The helper's sandbox
