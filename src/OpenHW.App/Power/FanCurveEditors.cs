@@ -81,6 +81,13 @@ internal static class CurveUi
                 "duty change is a write to the BMC's flash (5 % steps, slow-downs held a minute, counted per day).", Warn);
     }
 
+    public static string Describe(FanCurve c, IReadOnlyList<FanSensorChoice> choices) => c.Kind switch
+    {
+        FanCurveKind.Flat => $"flat {c.Percent:0} %",
+        FanCurveKind.Graph => "graph on " + (choices.FirstOrDefault(x => x.Id == c.SensorId)?.Label ?? c.SensorId ?? "no sensor"),
+        _ => $"{c.Function.ToString().ToLowerInvariant()} of {c.Children.Count}",
+    };
+
     public static string Points(IReadOnlyList<FanCurvePoint> p) => string.Join("  ", p.Select(x => $"{x.TemperatureC}°→{x.DutyPercent}%"));
 }
 
@@ -363,88 +370,3 @@ public sealed class GraphEditorWindow : Window
     }
 }
 
-/// <summary>A flat curve: one fixed duty.</summary>
-public sealed class FlatCurveDialog : Window
-{
-    public FlatCurveDialog(FanCurve curve, Action<FanCurve> onOk)
-    {
-        var edit = curve.Clone();
-        CurveUi.Dialog(this, $"Edit flat — {curve.Name}", 420);
-        var name = new TextBox { Text = edit.Name, Width = 220 };
-        var percent = CurveUi.Number(edit.Percent, 1, 100, 1);
-        var body = new StackPanel { Spacing = 8, Margin = new Thickness(14, 10) };
-        body.Children.Add(AlertUi.Row(CurveUi.Label("Name", 70), name));
-        body.Children.Add(AlertUi.Row(CurveUi.Label("Duty", 70), percent, CurveUi.Label("%")));
-        body.Children.Add(new TextBlock { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
-            Text = "A fixed duty. On its own it runs on the BMC; in a mix it works as a floor (max) or a cap (min)." });
-        var buttons = AlertUi.Row(AlertUi.Button("Cancel", Close), AlertUi.Button("Ok", () =>
-        {
-            if (!string.IsNullOrWhiteSpace(name.Text)) edit.Name = name.Text.Trim();
-            edit.Percent = (double)(percent.Value ?? 50);
-            onOk(edit);
-            Close();
-        }));
-        buttons.HorizontalAlignment = HorizontalAlignment.Right;
-        body.Children.Add(buttons);
-        Content = body;
-    }
-}
-
-/// <summary>A mix: the max, min or average of other (non-mix) curves.</summary>
-public sealed class MixCurveDialog : Window
-{
-    private readonly FanCurve _edit;
-    private readonly List<(string Id, CheckBox Box)> _boxes = [];
-
-    public MixCurveDialog(FanCurveSensors sensors, FanCurve curve, Action<FanCurve> onOk)
-    {
-        _edit = curve.Clone();
-        CurveUi.Dialog(this, $"Edit mix — {curve.Name}", 560);
-        var name = new TextBox { Text = _edit.Name, Width = 220 };
-        var function = new ComboBox { Width = 140, ItemsSource = new[] { "Max", "Min", "Average" }, SelectedIndex = (int)_edit.Function };
-        var where = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        var choices = sensors.Choices();
-        void Update()
-        {
-            _edit.Function = (FanMixFunction)Math.Max(0, function.SelectedIndex);
-            _edit.Children = _boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Id).ToList();
-            var library = new Dictionary<string, FanCurve>(sensors.Runner.Store.Library) { [_edit.Id] = _edit };
-            var plan = BmcCurveFit.Plan(_edit, library, sensors.Runner.BmcNumber, 1, sensors.Runner.Store.FourthAt70);
-            (where.Text, where.Foreground) = _edit.Children.Count == 0 ? ("Tick at least one curve.", Palette.Footnote) : CurveUi.Where(plan, choices);
-        }
-        var list = new StackPanel { Spacing = 2 };
-        foreach (var c in sensors.Runner.Store.Curves.Where(c => c.Kind != FanCurveKind.Mix && c.Id != _edit.Id))
-        {
-            var box = new CheckBox { Content = new TextBlock { Text = $"{c.Name}  ({Describe(c, choices)})" }, IsChecked = _edit.Children.Contains(c.Id) };
-            box.IsCheckedChanged += (_, _) => Update();
-            _boxes.Add((c.Id, box));
-            list.Children.Add(box);
-        }
-        function.SelectionChanged += (_, _) => Update();
-        var body = new StackPanel { Spacing = 8, Margin = new Thickness(14, 10) };
-        body.Children.Add(AlertUi.Row(CurveUi.Label("Name", 70), name, CurveUi.Label("Function"), function));
-        body.Children.Add(new TextBlock { Text = "Curves in this mix:", FontWeight = FontWeight.SemiBold });
-        body.Children.Add(list.Children.Count == 0 ? new TextBlock { Text = "No graph or flat curves yet.", Foreground = Palette.Footnote } : list);
-        body.Children.Add(where);
-        var buttons = AlertUi.Row(AlertUi.Button("Cancel", Close), AlertUi.Button("Ok", () =>
-        {
-            if (!string.IsNullOrWhiteSpace(name.Text)) _edit.Name = name.Text.Trim();
-            Update();
-            onOk(_edit);
-            Close();
-        }));
-        buttons.HorizontalAlignment = HorizontalAlignment.Right;
-        body.Children.Add(buttons);
-        Content = body;
-        Update();
-    }
-
-    public FanCurve Working => _edit;
-
-    public static string Describe(FanCurve c, IReadOnlyList<FanSensorChoice> choices) => c.Kind switch
-    {
-        FanCurveKind.Flat => $"flat {c.Percent:0} %",
-        FanCurveKind.Graph => "graph on " + (choices.FirstOrDefault(x => x.Id == c.SensorId)?.Label ?? c.SensorId ?? "no sensor"),
-        _ => $"{c.Function.ToString().ToLowerInvariant()} of {c.Children.Count}",
-    };
-}

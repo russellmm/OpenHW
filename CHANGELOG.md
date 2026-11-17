@@ -3,6 +3,22 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.26.0 — 2026-11-17
+
+- **One Fan Control screen, like OpenFan's Home** (owner's request). Power → Fan Control… now holds both: **Controls** — a
+  card per fan with a **Curve** box and the curve it runs (picking a curve arms the fan; Monitor = none) — and
+  **Curves** — flat cards with − / + , graph cards with their temperature source, the live output, a small preview of
+  the curve with the sensor's current reading as a dot on it, and Edit (the full graph editor), mix cards with their
+  function and curves (add / ×). + Flat / + Graph / + Mix make new ones. Each card says whether it runs on the BMC (no
+  flash writes) or costs flash writes on a BMC fan. Power → Fan Curves… is gone (merged in).
+- **NVIDIA fans are controls too**: every fan of every NVIDIA card gets a card and can run any curve, through the
+  NVIDIA driver (NVML) in openhw-helper — **helper protocol 15**: `gpufans`, `gpufanset`, `gpufanrelease`, leases
+  renewed by `fanbeat`. 0 % = the card's own automatic control; other duties are clamped to the card's minimum.
+  Nothing is stored on the card, so there's no write budget; a fan goes back to the card's own control when you
+  untick it, OpenHW exits, its lease runs out (15 s), the helper stops, or the card is lent to a VM. Refused while
+  OpenFan's helper runs (it writes the same fans).
+- A BMC fan's own curve (the old Edit…) and Restore original moved to the card's ⋮ menu.
+
 ## 0.25.0 — 2026-11-17
 
 - **Fan curves like OpenFan's** (fan control stage 2, part 2). **Power → Fan Curves…**: make **graph** curves (any

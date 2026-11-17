@@ -39,12 +39,14 @@ public static class HelperSocket
 /// Fans (protocol 13, <see cref="FanDriver"/>): <c>fans [token]</c> (status), <c>fanset &lt;token&gt; &lt;zone&gt; &lt;1–100&gt;</c>,
 /// <c>fanrelease &lt;token&gt; &lt;zone|all&gt;</c>, <c>fanbeat &lt;token&gt;</c>; configured curves <c>fancurve &lt;zone&gt; &lt;t:d,…&gt;</c>,
 /// <c>fanoriginal &lt;zone&gt;</c>. Protocol 14: <c>fansources</c>, <c>fansource &lt;zone&gt; &lt;mask&gt;</c> (Redfish),
-/// <c>bmclogin [base64 user, base64 password]</c>, <c>bmclogout</c>.
+/// <c>bmclogin [base64 user, base64 password]</c>, <c>bmclogout</c>. Protocol 15, NVIDIA fans (<see cref="GpuFanDriver"/>):
+/// <c>gpufans [token]</c>, <c>gpufanset &lt;token&gt; &lt;nvml:uuid:fan:n&gt; &lt;0–100&gt;</c> (0 = the card's automatic control),
+/// <c>gpufanrelease &lt;token&gt; &lt;id|all&gt;</c>; <c>fanbeat</c> renews both kinds of lease.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null)
 {
-    public const string Version = "14";
+    public const string Version = "15";
 
     public string HandleLine(string line)
     {
@@ -214,12 +216,30 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                         ("fanset", 4) when int.TryParse(parts[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pct)
                             => "ok " + fans.Set(parts[1], parts[2], pct),
                         ("fanrelease", 3) => "ok " + fans.Release(parts[1], parts[2]),
-                        ("fanbeat", 2) => "ok " + fans.Beat(parts[1]).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ("fanbeat", 2) => "ok " + (fans.Beat(parts[1]) + (gpuFans?.Beat(parts[1]) ?? 0)).ToString(System.Globalization.CultureInfo.InvariantCulture),
                         _ => "err unknown command",
                     };
                 }
                 catch (ArgumentException ex) { return "err " + ex.Message; }
                 catch (Exception ex) when (ex is IOException or InvalidDataException) { return "err " + ex.Message; }
+
+            // NVIDIA fans (protocol 15): same client model as the BMC fans; NVML keeps nothing, so no write budget.
+            case "gpufans" when parts.Length is 1 or 2:
+                if (gpuFans is null) return "err GPU fan control unavailable";
+                try { return "ok " + GpuWire.Encode(gpuFans.Status(parts.Length == 2 ? parts[1] : null)); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+
+            case "gpufanset" when parts.Length == 4:
+            case "gpufanrelease" when parts.Length == 3:
+                if (gpuFans is null) return "err GPU fan control unavailable";
+                try
+                {
+                    if (parts[0] == "gpufanrelease") return "ok " + gpuFans.Release(parts[1], parts[2]);
+                    return int.TryParse(parts[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var duty)
+                        ? "ok " + gpuFans.Set(parts[1], parts[2], duty) : "err expected a duty 0–100";
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
 
             case "gpus" when parts.Length == 1:
                 return gpus is null ? "err GPUs unavailable" : "ok " + GpuWire.Encode(gpus.Discover());
@@ -346,7 +366,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, GpuFanDriver? gpuFans = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -397,7 +417,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans, redfish);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans, redfish, gpuFans: gpuFans);
         try
         {
             using (client)

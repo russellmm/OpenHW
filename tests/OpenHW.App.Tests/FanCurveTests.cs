@@ -44,6 +44,8 @@ public sealed class FanCurveTests : IDisposable
         return p[0] switch
         {
             "fanset" => $"{p[2]} {p[3]}",
+            "gpufanset" => $"{p[2]} {p[3]}",
+            "gpufanrelease" => p[2],
             "fanbeat" => "1",
             "fanrelease" => p[2],
             "fancurve" when _refuseFourth && !p[2].Split(',')[3].StartsWith("70:", StringComparison.Ordinal) =>
@@ -159,25 +161,38 @@ public sealed class FanCurveTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void TheCurveWindowsShowWhereEachCurveRuns()
+    public void CurvesAndFansOnOneScreen()
     {
         using var hub = new SensorHub();
         var store = Store();
         store.Curves.Add(new FanCurve { Id = "f35", Name = "35%", Kind = FanCurveKind.Flat, Percent = 35 });
         store.Curves.Add(new FanCurve { Id = "mix", Name = "mix", Kind = FanCurveKind.Mix, Children = ["slot5", "f35"] });
         store.Assignments["bmc:2"] = "mix";
-        var sensors = new FanCurveSensors(hub, Runner(store));
-        var list = new FanCurvesWindow(sensors);
-        list.Show();
-        var texts = list.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-        Assert.Contains("On the BMC (no flash writes)", texts);
-        Assert.Contains("⚠ OpenHW-driven (flash writes)", texts);
-        Assert.Contains("CHA_FAN2", texts);
+        store.Assignments["bmc:3"] = "nvml";
+        store.Assignments["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"] = "slot5";
+        var runner = Runner(store);
+        var window = new FanControlWindow(hub, runner: runner);
+        window.Show();
+        var texts = window.Texts();
+        Assert.Contains("Not on the BMC yet:", texts);
+        Assert.Contains("⚠ OpenHW-driven · 0 flash writes today", texts);
+        Assert.Contains("OpenHW via NVIDIA driver (no flash)", texts);
+        Assert.Contains("FLAT", texts);
+        Assert.Contains("GRAPH", texts);
+        Assert.Contains("MIX", texts);
+        Assert.Contains("35 %", texts); // the flat card's output
+        Assert.Contains(texts, t => t.StartsWith("BMC sensors — runs on the BMC (no flash writes)\nFans: CHA_FAN2", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.StartsWith("⚠ Not a BMC sensor", StringComparison.Ordinal));
+        Assert.Contains(window.GetLogicalDescendants().OfType<Button>(), b => b.Content as string == "Apply");
         var captures = Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath();
-        list.CaptureRenderedFrame()?.Save(Path.Combine(captures, "openhw-fan-curves.png"));
+        window.CaptureRenderedFrame()?.Save(Path.Combine(captures, "openhw-fan-control-curves.png"));
+
+        // The GPU fan runs its curve through NVML at once: no budget, no 5 % steps.
+        runner.Tick(id => id == "bmc:PCIE01 Temp" ? 53.5 : 60);
+        Assert.Contains(_sent, l => l.StartsWith("gpufanset ", StringComparison.Ordinal) && l.EndsWith(":fan:0 45", StringComparison.Ordinal));
 
         FanCurve? saved = null;
-        var editor = new GraphEditorWindow(sensors, store.Find("slot5")!, c => saved = c);
+        var editor = new GraphEditorWindow(new FanCurveSensors(hub, runner), store.Find("slot5")!, c => saved = c);
         editor.Show();
         Assert.True(editor.Plan!.OnBmc);
         Assert.Contains(editor.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text!.StartsWith("Runs on the BMC", StringComparison.Ordinal));
@@ -185,28 +200,5 @@ public sealed class FanCurveTests : IDisposable
         editor.GetLogicalDescendants().OfType<Button>().Single(b => b.Content as string == "Ok")
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(6, saved!.Points.Count);
-
-        var mix = new MixCurveDialog(sensors, store.Find("mix")!, _ => { });
-        mix.Show();
-        Assert.Equal(["slot5", "f35"], mix.Working.Children);
-        mix.GetLogicalDescendants().OfType<CheckBox>().Single(b => ((TextBlock)b.Content!).Text!.StartsWith("5060 core", StringComparison.Ordinal)).IsChecked = true;
-        Assert.Contains(mix.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text!.StartsWith("⚠ Reads", StringComparison.Ordinal));
-        mix.CaptureRenderedFrame()?.Save(Path.Combine(captures, "openhw-mix-editor.png"));
-    }
-
-    [AvaloniaFact]
-    public void FanControlShowsEachFansCurveAndHowItRuns()
-    {
-        using var hub = new SensorHub();
-        var store = Store();
-        store.Assignments["bmc:2"] = "slot5";
-        store.Assignments["bmc:3"] = "nvml";
-        var window = new FanControlWindow(hub, runner: Runner(store));
-        window.Show();
-        var texts = window.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-        Assert.Contains("On the BMC — not applied yet", texts);
-        Assert.Contains(texts, t => t!.StartsWith("OpenHW-driven: starting · 0 writes today", StringComparison.Ordinal));
-        Assert.Contains(window.GetLogicalDescendants().OfType<Button>(), b => b.Content as string == "Apply");
-        window.CaptureRenderedFrame()?.Save(Path.Combine(Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath(), "openhw-fan-control-curves.png"));
     }
 }

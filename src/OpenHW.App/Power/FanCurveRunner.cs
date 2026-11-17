@@ -62,11 +62,15 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
 
     public static int ZoneIndex(string zoneId) => zoneId[^1] - '0';
 
+    /// <summary>An NVIDIA fan ("nvml:&lt;uuid&gt;:fan:&lt;n&gt;"): always driven by OpenHW, through NVML — nothing is stored, no flash.</summary>
+    public static bool IsGpu(string zoneId) => zoneId.StartsWith("nvml:", StringComparison.Ordinal);
+
     private readonly Dictionary<string, BmcCurvePlan> _plans = new(StringComparer.Ordinal);
 
     /// <summary>The BMC version of a curve for a zone (fitting takes a moment: cached per curve content).</summary>
     public BmcCurvePlan Plan(string zoneId, FanCurve curve)
     {
+        if (IsGpu(zoneId)) return new BmcCurvePlan(false, null, [], 0, 0, []);
         var library = store.Library;
         var floor = FanDriver.MinDuty(ZoneIndex(zoneId));
         var key = $"{floor}|{store.FourthAt70}|" + string.Join("|", Tree(curve, library).Select(c => System.Text.Json.JsonSerializer.Serialize(c)));
@@ -84,7 +88,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
             : [curve];
 
     /// <summary>True when the zone's assigned curve is OpenHW-driven (reads a sensor the BMC can't see).</summary>
-    public bool IsDriven(string zoneId) => store.AssignedTo(zoneId) is { } c && !BmcCurveFit.RunsOnBmc(c, store.Library, BmcNumber);
+    public bool IsDriven(string zoneId) => store.AssignedTo(zoneId) is { } c && (IsGpu(zoneId) || !BmcCurveFit.RunsOnBmc(c, store.Library, BmcNumber));
 
     /// <summary>Gives a fan a curve (saved; a BMC-run one still needs <see cref="ApplyBmc"/>).</summary>
     public void Assign(string zoneId, string curveId)
@@ -145,6 +149,27 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
         }
     }
 
+    /// <summary>What every assigned curve gives right now (for the curve cards), null where a sensor has no reading.</summary>
+    public double? Output(FanCurve curve, Func<string, double?> reading)
+    {
+        try { return FanCurveMath.Evaluate(curve, store.Library, reading); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>
+    /// The duty the BMC is running a zone at now: its active curve at the hottest of the sensors it follows (read by
+    /// OpenHW from the BMC engine), or null when unknown.
+    /// </summary>
+    public double? BmcDuty(FanZoneStatus zone, long? mask, Func<string, double?> reading)
+    {
+        if (zone.Active is not { Count: 5 } active || mask is not { } m || m <= 0 || m >= 1L << BmcRedfish.SourceBits) return null;
+        lock (_gate)
+        {
+            var temps = BmcSensors().Where(x => (m & 1L << (x.Number - 1)) != 0).Select(x => reading(BmcEngine.IdPrefix + x.Name)).OfType<double>().ToList();
+            return temps.Count == 0 ? null : BmcCurveFit.Duty(active, temps.Max());
+        }
+    }
+
     /// <summary>
     /// One poll (timer thread): evaluates every OpenHW-driven fan and asks the driver for its duty under the write
     /// rules; renews the lease. <paramref name="reading"/> gives the current sensor values.
@@ -162,7 +187,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                 wanted = store.Assignments.Where(a => library.ContainsKey(a.Value)).ToList();
             }
             catch (InvalidOperationException) { return; } // the curves are being edited right now: next poll
-            bool Driven(KeyValuePair<string, string> a) => !BmcCurveFit.RunsOnBmc(library[a.Value], library, BmcNumber);
+            bool Driven(KeyValuePair<string, string> a) => IsGpu(a.Key) || !BmcCurveFit.RunsOnBmc(library[a.Value], library, BmcNumber);
             foreach (var zone in _driven.Keys.Where(z => !wanted.Any(w => w.Key == z && Driven(w))).ToList())
                 ReleaseDriven(zone);
             foreach (var (zoneId, curveId) in wanted)
@@ -183,10 +208,24 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                     continue;
                 }
                 d.MissingSince = null;
+                var tempNow = FanCurveMath.Sensors(curve, library).Select(reading).OfType<double>().DefaultIfEmpty(0).Max();
+                if (IsGpu(zoneId))
+                {
+                    // NVML: nothing stored, so the curve's own hysteresis is the only gate (as in OpenFan).
+                    if (d.Gate.Decide(value.Value, (now - DateTime.UnixEpoch).TotalSeconds, tempNow) is not { } duty || duty == d.Duty) continue;
+                    try
+                    {
+                        var reply = client.GpuSet(zoneId, duty).Split(' ');
+                        d.Duty = reply.Length > 1 && int.TryParse(reply[1], NumberStyles.None, CultureInfo.InvariantCulture, out var t) ? t : duty;
+                        d.LastChange = now;
+                        d.Problem = null;
+                    }
+                    catch (Exception ex) when (Soft(ex)) { d.Problem = ex.Message.Replace("openhw-helper: err ", ""); }
+                    continue;
+                }
                 var floor = FanDriver.MinDuty(ZoneIndex(zoneId));
                 var target = Math.Clamp((int)Math.Ceiling(value.Value / DrivenStep - 1e-9) * DrivenStep, Math.Max(floor, 1), 100);
-                var temps = FanCurveMath.Sensors(curve, library).Select(reading).OfType<double>().DefaultIfEmpty(0).Max();
-                if (d.Gate.Decide(target, (now - DateTime.UnixEpoch).TotalSeconds, temps) is not { } gated) continue;
+                if (d.Gate.Decide(target, (now - DateTime.UnixEpoch).TotalSeconds, tempNow) is not { } gated) continue;
                 if (d.Duty is { } current)
                 {
                     if (gated == current) continue;
@@ -230,7 +269,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
     private void Release(string zoneId, Driven d, string? why)
     {
         if (d.Duty is null) return;
-        try { client.Release(zoneId); } catch (Exception ex) when (Soft(ex)) { }
+        try { if (IsGpu(zoneId)) client.GpuRelease(zoneId); else client.Release(zoneId); } catch (Exception ex) when (Soft(ex)) { }
         d.Duty = null;
         d.Problem = why;
     }

@@ -14,6 +14,9 @@ public sealed class FanCurveStore
     /// <summary>Fan zone ("bmc:3") → curve id. A zone without an entry keeps the BMC curve it has.</summary>
     public Dictionary<string, string> Assignments { get; set; } = [];
 
+    /// <summary>A fan's chosen curve while its Curve box is unticked (kept so ticking it again restores the choice).</summary>
+    public Dictionary<string, string> Chosen { get; set; } = [];
+
     /// <summary>Set if the BMC ever refuses a curve whose point 4 isn't 70 °C: fits keep point 4 at 70 from then on.</summary>
     public bool FourthAt70 { get; set; }
 
@@ -40,6 +43,7 @@ public sealed class FanCurveStore
             c.Children = c.Children.Where(id => store.Curves.Any(x => x.Id == id && x.Kind != FanCurveKind.Mix)).Distinct().ToList();
         }
         store.Assignments = store.Assignments.Where(a => store.Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
+        store.Chosen = store.Chosen.Where(a => store.Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
         return store;
     }
 
@@ -73,6 +77,7 @@ public sealed class FanCurveStore
         Curves.RemoveAll(c => c.Id == id);
         foreach (var c in Curves) c.Children.Remove(id);
         foreach (var zone in Assignments.Where(a => a.Value == id).Select(a => a.Key).ToList()) Assignments.Remove(zone);
+        foreach (var zone in Chosen.Where(a => a.Value == id).Select(a => a.Key).ToList()) Chosen.Remove(zone);
     }
 
     /// <summary>Counts one OpenHW-driven write for a zone (the count starts again every day).</summary>

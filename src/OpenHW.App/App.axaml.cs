@@ -65,7 +65,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowFanCurves = ShowFanCurves, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -780,19 +780,7 @@ public sealed class App : Application
     }
 
     private FanControlWindow? _fanControl;
-    private FanCurvesWindow? _fanCurves;
     private readonly FanCurveRunner _fans = new(new FanClient(), FanCurveStore.Load());
-
-    private void ShowFanCurves()
-    {
-        if (_fanCurves is null)
-        {
-            WindowPlaces.Track(_fanCurves = new FanCurvesWindow(new FanCurveSensors(_hub, _fans)), "fan-curves");
-            _fanCurves.Closed += (_, _) => _fanCurves = null;
-        }
-        _fanCurves.Show();
-        _fanCurves.Activate();
-    }
 
     /// <summary>Sensors OpenHW-driven fans read: kept live even inside a collapsed group.</summary>
     private IEnumerable<string> FanCurveSensorIds()
@@ -805,7 +793,7 @@ public sealed class App : Application
     {
         if (_fanControl is null)
         {
-            WindowPlaces.Track(_fanControl = new FanControlWindow(_hub, runner: _fans, showCurves: ShowFanCurves), "fan-control");
+            WindowPlaces.Track(_fanControl = new FanControlWindow(_hub, runner: _fans), "fan-control");
             _fanControl.Closed += (_, _) => _fanControl = null;
         }
         _fanControl.Show();

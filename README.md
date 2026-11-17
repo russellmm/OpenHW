@@ -153,7 +153,7 @@ PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only script
 The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
 Hardware Check…, Sensor Settings…, Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
 Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
-Power Limits… Ctrl+L, Fan Control…, Fan Curves…, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
+Power Limits… Ctrl+L, Fan Control…, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
 all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
 close on the right — power controls are in the Power menu and the tray menu only.
 
@@ -267,10 +267,13 @@ use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves t
 duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
 behave are in [docs/fan-control.md](docs/fan-control.md).
 
-**Fan curves (0.25.0)** — **Power → Fan Curves…** holds your curves, as in OpenFan: **graphs** (any number of points
-over any temperature OpenHW reads — drag points, click to add, hysteresis in °C and seconds, max speed), **flat**
-duties and **mixes** (max / min / average of other curves). **Power → Fan Control…** gives each fan a curve. Where it
-runs depends on what it reads:
+**Fan Control (0.25.0–0.26.0)** — **Power → Fan Control…** is one screen, laid out like OpenFan's Home: **Controls**
+(a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
+and **Curves**, as in OpenFan: **graphs** (any number of points over any temperature OpenHW reads — drag points,
+click to add, hysteresis in °C and seconds, max speed; each card shows the sensor's reading as a dot on the curve),
+**flat** duties (− / +) and **mixes** (max / min / average of other curves). **NVIDIA fans** run their curve through
+the NVIDIA driver (nothing stored; untick and the card controls its fans again). On BMC fans, where a curve runs
+depends on what it reads:
 
 - **Only the BMC's own sensors** (CPU Package, TR1 = the T_Sensor header, LAN, DIMMA1–H1, the PCIe slots PCIE01–07 —
   which read the core temperature of the GPU in each slot) → **it runs on the BMC**. OpenHW turns the curve into the
@@ -282,7 +285,8 @@ runs depends on what it reads:
   behind the curve's hysteresis) and Fan Control counts them per day. If the readings stop for 20 s or OpenHW exits,
   the fan goes back to its BMC curve.
 
-A fan without a curve keeps its BMC curve; **Edit…** changes that curve directly (sensors and five points).
+A BMC fan without a curve keeps its BMC curve; **⋮ → Edit BMC curve…** changes that curve directly (sensors and five
+points).
 **Restore original** puts back the curve the fan had before OpenHW first changed it. CPU_FAN can't go below 20 % and
 W_PUMP+ below 50 %. Choosing sensors uses the BMC's Redfish service and needs a BMC login: **Give OpenHW the BMC
 login…** (type it, or read a file with the user on line 1 and the password on line 2); the helper checks it with the
@@ -304,8 +308,7 @@ match what was validated; other boards get no fan writes.
 - **One program per fan**, and nothing is taken over while OpenFan's own BMC driver holds fans (its restore journal
   exists).
 
-**Power → Fan Control…** shows every zone's RPM, who controls it, its active curve and its write count. To check one
-fan from a terminal (it gives the fan back and compares the curve afterwards):
+To check one BMC fan from a terminal (it gives the fan back and compares the curve afterwards):
 
 ```bash
 openhw --fan-test bmc:1 70 --seconds 10

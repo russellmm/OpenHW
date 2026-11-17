@@ -124,6 +124,13 @@ internal static class NvmlNative
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int nvmlDeviceGetMinMaxFanSpeed(nint device, out uint minSpeed, out uint maxSpeed);
 
+    // Fan writes (root; openhw-helper's GpuFanDriver only).
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int nvmlDeviceSetFanSpeed_v2(nint device, uint fan, uint speed);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int nvmlDeviceSetDefaultFanSpeed_v2(nint device, uint fan);
+
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int nvmlSystemGetDriverVersion([Out] byte[] version, uint length);
 

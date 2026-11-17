@@ -77,8 +77,8 @@ readback, menu entry first.
    **Cold reset too (2026-11-16 18:26, `ipmitool mc reset cold`)**: BMC offline 18:26:29–18:27:21, CHA_FAN1 still flat
    70 % afterwards → **confirmed persistent (flash)**. BMC sensor readings took ~4–5 min to return (to do: re-check all
    sensors promptly after an outage instead of once a minute).
-3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
-   owns every GPU handle; never on a card that is lent to the VM.
+3. [x] **NVIDIA fans** through NVML (0.26.0): `GpuFanDriver` in the helper (protocol 15), leases, automatic again on
+   release / lease loss / helper stop / lend; refused while OpenFan's helper runs. Cards on the one Fan Control screen.
 3a. [x] **Flash-free alternatives studied (owner, 2026-11-16: "can we bypass the flash writes?")**. No: the headers are
    wired to the BMC's PWM outputs; replacing the BMC firmware (OpenBMC) or writing its registers over ASPEED's P2A
    PCIe bridge are ruled out. The BIOS has no "Onboard Fan Control Source" switch on this board (E26328 mentions it for
@@ -127,7 +127,7 @@ readback, menu entry first.
    = GPU cores** (`tools/gpu-slot-test/`, 2026-11-17): PCIE01 = slot 1 PRO 6000 (F1), PCIE04 = 5060 Ti, PCIE05 = slot 5
    PRO 6000 (C1), within ~1 °C. Still to do: the first real Apply with point 4 ≠ 70 (owner); whether slot sensors read a
    lent card; an "Import from OpenFan…" if wanted (owner: not a priority); OpenFan as a client of the driver; NVIDIA's
-   own fans (step 3).
+   own fans (step 3 — done in 0.26.0, with the single OpenFan-style screen).
 5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never
    pushed further; pump/CPU minimums can't be lowered from the UI without an explicit override.
 

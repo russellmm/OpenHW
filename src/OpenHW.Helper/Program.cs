@@ -44,12 +44,16 @@ if (args is ["--once", .. var command] && command.Length > 0)
 
 using var gpuPower = new GpuPowerLimits();
 // Lending the card to a VM: both NVML users let go of every card for the handoff, and open again afterwards.
-using var lending = new CardLending(card, () => { gpus.Suspend(); gpuPower.Suspend(); }, () => { gpus.Resume(); gpuPower.Resume(); });
+// NVIDIA fans (protocol 15): held fans go back to automatic before a lend, and on lease loss or helper stop.
+using var nvmlFans = new LiveNvmlFans();
+using var gpuFans = new GpuFanDriver(nvmlFans, startWatchdog: true);
+using var lending = new CardLending(card, () => { gpuFans.Suspend(); nvmlFans.Suspend(); gpus.Suspend(); gpuPower.Suspend(); },
+    () => { gpus.Resume(); gpuPower.Resume(); nvmlFans.Resume(); gpuFans.Resume(); });
 // Fan control: puts back any curve a crashed run left taken over (journal) before clients can connect.
 using var fans = FanDriver.Live();
 if (fans.Status(null) is { Available: false, Reason: { } why }) Console.WriteLine($"openhw-helper: fan control off: {why}");
 var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc, fans,
-    fans.Status(null).Available ? BmcRedfish.Live() : null);
+    fans.Status(null).Available ? BmcRedfish.Live() : null, gpuFans);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
 // boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
 try { card.Start(TimeSpan.FromSeconds(60)); }

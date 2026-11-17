@@ -22,6 +22,9 @@ public sealed class FanControlTests
         "fans" => GpuWire.Encode(Status()),
         "fansources" => GpuWire.Encode(new Dictionary<int, long> { [0] = 1, [1] = 24, [2] = 1, [3] = 1, [4] = 1, [5] = 1, [6] = 1 }),
         "bmclogin" => "openhw",
+        "gpufans" => GpuWire.Encode(new GpuFanDriverStatus(null, [
+            new("nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", "00000000:C1:00.0", 0, 30, 100, false, false, null),
+            new("nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:1", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", "00000000:C1:00.0", 1, 30, 100, false, false, null)])),
         "bmc" => GpuWire.Encode(new BmcWireReply("AST2600", "2.01", 2623, 0x1193,
             new[] { (1, "CPU Package Temp"), (2, "TR1 Temperature"), (3, "LAN Temp"), (4, "DIMMA1_Temp"), (5, "DIMMB1_Temp"), (12, "PCIE01 Temp") }
                 .Select(x => new BmcWireSensor(x.Item2, (byte)x.Item1, "Board", HardwareKind.Temperature, "°C", null, 40)).ToList())),
@@ -29,19 +32,20 @@ public sealed class FanControlTests
     };
 
     [AvaloniaFact]
-    public void ShowsEveryZoneWhoControlsItAndItsCurve()
+    public void OneScreenShowsEveryBmcAndGpuFan()
     {
         using var hub = new SensorHub();
-        var window = new FanControlWindow(hub, new FanClient(Helper));
+        var window = new FanControlWindow(hub, runner: new FanCurveRunner(new FanClient(Helper), FanCurveStore.Load(Path.Combine(Path.GetTempPath(), $"openhw-none-{Guid.NewGuid():N}.json"))));
         window.Show();
-        var texts = window.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-        Assert.Contains("CPU_FAN + CPU_OPT", texts);
+        var texts = window.Texts();
+        Assert.Contains("CPU_FAN / CPU_OPT", texts);
         Assert.Contains("W_PUMP+", texts);
-        Assert.Contains("OpenHW: 70 % (→ 60 % when allowed)", texts);
-        Assert.Contains("20°→70%  45°→70%  65°→70%  70°→100%  100°→100%", texts);
-        Assert.Contains("max of DIMMA1_Temp, DIMMB1_Temp", texts);
-        Assert.Contains("CPU Package Temp", texts);
-        Assert.Contains("BMC login for temperature sources: openhw", texts);
+        Assert.Contains("RTX PRO 6000 C1:00.0 Fan 1", texts);
+        Assert.Contains("The card's own control", texts);
+        Assert.Contains("70 % (held)", texts);
+        Assert.Contains(texts, t => t.StartsWith("BMC curve, follows max of DIMMA1_Temp, DIMMB1_Temp", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.Contains("BMC login: openhw", StringComparison.Ordinal));
+        Assert.Contains("No curves yet: + Flat, + Graph or + Mix.", texts);
         window.CaptureRenderedFrame()?.Save(Path.Combine(Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath(), "openhw-fan-control.png"));
         window.Close();
     }
@@ -50,11 +54,12 @@ public sealed class FanControlTests
     public void SaysWhenOpenFanHoldsTheFansOrTheHelperIsTooOld()
     {
         using var hub = new SensorHub();
-        var held = new FanControlWindow(hub, new FanClient(l => l.StartsWith("fans", StringComparison.Ordinal) && l.Length == 4
-            ? GpuWire.Encode(Status("OpenFan is controlling BMC fans right now.")) : throw new IOException("openhw-helper: err unknown command")));
-        Assert.Contains(held.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text!.StartsWith("OpenFan is controlling", StringComparison.Ordinal));
-        var old = new FanControlWindow(hub, new FanClient(_ => throw new IOException("openhw-helper: err unknown command")));
-        Assert.Contains(old.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text!.Contains("too old for fan control", StringComparison.Ordinal));
+        var store = FanCurveStore.Load(Path.Combine(Path.GetTempPath(), $"openhw-none-{Guid.NewGuid():N}.json"));
+        var held = new FanControlWindow(hub, runner: new FanCurveRunner(new FanClient(l => l.StartsWith("fans", StringComparison.Ordinal) && l.Length == 4
+            ? GpuWire.Encode(Status("OpenFan is controlling BMC fans right now.")) : throw new IOException("openhw-helper: err unknown command")), store));
+        Assert.Contains(held.Texts(), t => t.Contains("OpenFan is controlling", StringComparison.Ordinal));
+        var old = new FanControlWindow(hub, runner: new FanCurveRunner(new FanClient(_ => throw new IOException("openhw-helper: err unknown command")), store));
+        Assert.Contains(old.Texts(), t => t.Contains("too old for fan control", StringComparison.Ordinal));
     }
 
     [AvaloniaFact]
