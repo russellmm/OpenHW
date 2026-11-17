@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.26.1 — 2026-11-17
+
+- Fixed: a fan card's RPM (and a curve card's temperature) froze when its group was collapsed in the sensor window.
+  While Fan Control is open, every fan's RPM and duty and every curve's sensors stay live. (No RPM calibration, as in
+  OpenFan: the BMC and the NVIDIA driver report every fan's real RPM.)
+
 ## 0.26.0 — 2026-11-17
 
 - **One Fan Control screen, like OpenFan's Home** (owner's request). Power → Fan Control… now holds both: **Controls** — a

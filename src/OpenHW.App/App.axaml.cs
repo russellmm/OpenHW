@@ -450,7 +450,7 @@ public sealed class App : Application
     {
         if (_exiting) return;
         var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds)
-            .Concat(_alerts.WatchedSensors).Concat(FanCurveSensorIds()).ToArray();
+            .Concat(_alerts.WatchedSensors).Concat(FanCurveSensorIds()).Concat(_fanControl?.LiveSensorIds() ?? []).ToArray();
         _hub.SetPinned(ids); // tray, graphed, logged and alerted sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);

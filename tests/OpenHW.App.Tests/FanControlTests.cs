@@ -46,6 +46,10 @@ public sealed class FanControlTests
         Assert.Contains(texts, t => t.StartsWith("BMC curve, follows max of DIMMA1_Temp, DIMMB1_Temp", StringComparison.Ordinal));
         Assert.Contains(texts, t => t.Contains("BMC login: openhw", StringComparison.Ordinal));
         Assert.Contains("No curves yet: + Flat, + Graph or + Mix.", texts);
+        var live = window.LiveSensorIds();
+        Assert.Contains("bmc:CHA_FAN1", live); // a BMC fan's RPM
+        Assert.Contains("nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:tach:1", live); // a GPU fan's RPM
+        Assert.Contains("bmc:PCIE01 Temp", live);
         window.CaptureRenderedFrame()?.Save(Path.Combine(Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath(), "openhw-fan-control.png"));
         window.Close();
     }

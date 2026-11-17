@@ -701,6 +701,18 @@ public sealed class FanControlWindow : Window
         }
     }
 
+    /// <summary>
+    /// Sensors this window shows — every fan's RPM and duty and every curve's temperatures — so they stay live while
+    /// it's open, even when their group is collapsed in the sensor window.
+    /// </summary>
+    public IReadOnlyList<string> LiveSensorIds()
+    {
+        var library = _runner.Store.Library;
+        return Controls().SelectMany(c => c.RpmId is { } r ? new[] { r, c.Id } : [c.Id])
+            .Concat(library.Values.SelectMany(c => FanCurveMath.Sensors(c, library)))
+            .Concat(_runner.BmcSensors().Select(x => BmcEngine.IdPrefix + x.Name)).Distinct().ToList();
+    }
+
     /// <summary>Text of every card (tests).</summary>
     public IReadOnlyList<string> Texts() => this.GetLogicalDescendantsTexts();
 }
