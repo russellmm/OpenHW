@@ -93,16 +93,18 @@ partition), but endurance isn't documented — hence the write discipline below.
 ## Architecture
 
 ```
-OpenHW app ──(Unix socket, protocol 14)──► openhw-helper (root, sandboxed)
-  Power → Fan Control…                         FanDriver ── AsusBmcFans ── IIpmiTransport ── /dev/ipmi0
-  openhw --fan-test                            BmcRedfish ── HTTPS (pinned cert) ── 169.254.0.17
-OpenFan (until retired) ─ (to become a client)
+OpenHW app ──(Unix socket, protocol 15)──► openhw-helper (root, sandboxed)
+  Power → Fan Control… (one screen)            FanDriver ── AsusBmcFans ── IIpmiTransport ── /dev/ipmi0   (BMC fans)
+    FanCurveRunner: BMC-run curves → Apply     BmcRedfish ── HTTPS (pinned cert) ── 169.254.0.17         (sources)
+                    driven curves → Tick        GpuFanDriver ── LiveNvmlFans ── NVML                       (NVIDIA fans)
+  openhw --fan-test
+OpenFan: retired from fan control (its helper stopped 2026-11-17); OpenHW refuses to share fans with it.
 ```
 
 - **`AsusBmcFans`** (`src/OpenHW.Hardware/Fans/`): identity checks, `Read`, `Write` (+ readback). Ported from OpenFan
   0.4.6's `AsusBmcController` onto OpenHW's own IPMI transport (no `ipmitool`).
 - **`FanDriver`**, two kinds of write:
-  1. **Takeover** (stage 1; for tests and, later, OpenHW-driven curves): a client token asks for a fixed duty
+  1. **Takeover** (stage 1; `--fan-test` and OpenHW-driven curves): a client token asks for a fixed duty
      (flat curve). The zone's curve is journaled first (`/var/lib/openhw/fan-restore.json`) and restored when the
      client releases it, stops renewing its lease (15 s), the helper stops, or — after a crash — the helper starts.
      One owner per zone; nothing taken over while OpenFan's own BMC journal exists. **Flash limits**: faster duty at
@@ -139,11 +141,13 @@ AF_INET`, `IPAddressDeny=any`, `IPAddressAllow=169.254.0.0/16` (was `PrivateNetw
 
 ## UI
 
-Power → Fan Control… lists every zone: RPM (BMC sensor), who controls it (BMC curve / a client's fixed duty), which
-BMC sensors it follows, the active curve, writes; a BMC-login line; **Edit…** per fan: sensor checkboxes (the BMC's
-own list, as in its web console), five points (point 5 at 100 °C), Apply (writes only what changed),
-Restore original. Every dialog opens centred on the primary monitor the first time and then where it was last
-moved (owner rule).
+Power → Fan Control… (also in the tray menu) is one screen, laid out like OpenFan's Home — see "Curves" below for the
+details: **fan cards** (BMC zones and NVIDIA fans: Curve box + curve, duty/RPM, where it runs, Apply, friendly name,
+⋮ move / Edit BMC curve… / Restore original), **curve cards** (flat, graph incl. bulk sensors, mix with its BMC preview),
+New/Duplicate, drag-and-drop order, and configurations in the window's ⋮. A BMC fan's own 5-point curve can still be
+edited directly (⋮ → Edit BMC curve…: sensor checkboxes as in the web console, five points with point 5 at 100 °C,
+Apply writes only what changed). Every dialog opens centred on the primary monitor the first time and then where it was
+last moved (owner rule).
 
 ## PCIe slot sensors = GPU core temperatures (measured 2026-11-17)
 
@@ -160,10 +164,10 @@ within one sample** (the BMC almost certainly reads the GPU over the slot's SMBu
 So GPU-following curves run on the BMC; OpenHW-driven duties are only needed for sensors the BMC really can't see.
 Not yet checked: whether a slot still reads while its card is lent to the VM.
 
-## Curves (0.25.0)
+## Curves (0.25.0–0.32.0)
 
-- **Model** (`Fans/FanCurves.cs`, ported from OpenFan.Core): `FanCurve` = Graph (points over one sensor, linear, flat
-  outside, max speed, hysteresis °C/s) | Flat | Mix (max/min/average of non-mix curves). `FanCurveMath.Evaluate`,
+- **Model** (`Fans/FanCurves.cs`, ported from OpenFan.Core): `FanCurve` = Graph (points over one sensor or the hottest of
+  several, linear, flat outside, max speed, hysteresis °C/s) | Flat | Mix (max/min/average of non-mix curves). `FanCurveMath.Evaluate`,
   `FanHysteresisGate` (OpenFan's HysteresisGate). Saved in `~/.config/openhw/fan-curves.json` (`FanCurveStore`: curves,
   zone → curve, `FourthAt70`, writes per day).
 - **BMC fit** (`Fans/BmcCurveFit.cs`): a curve runs on the BMC when every sensor it reads is a BMC temperature sensor
@@ -209,10 +213,10 @@ Not yet checked: whether a slot still reads while its card is lent to the VM.
 2. **Fans that follow sensors the BMC can't see** (GPU core temperatures, NVMe, mixes) get **OpenHW-driven duties**
    through takeover, under a write budget (coarse duty steps, wide hysteresis, slow-downs held, a visible daily
    count). **Done in 0.25.0, app-side** (the app runs from login in the tray; if it stops, the lease gives the fan back);
-   the PCIe slot sensors turned out to read the GPUs, so GPU curves don't need this. Part 2 (0.25.0), with an import of the
-   owner's OpenFan profile (`/home/russellm/Documents/openfan11_14.json`: CPU, GPU Slot 1/5, RTX5060 and Memory
-   graph curves, max/min mixes, flat floors, a pump mix) re-pointed to the BMC zones.
-3. OpenFan becomes a client of the driver, then is retired.
+   the PCIe slot sensors turned out to read the GPUs, so GPU curves don't need this. (The planned import of the
+   owner's OpenFan profile was dropped: owner, 2026-11-17, "build the capability, don't copy my curves".)
+3. ~~OpenFan becomes a client of the driver~~ — not needed: OpenHW took over BMC and NVIDIA fans (0.26.0) and the
+   owner stopped OpenFan's helper; what's left is disabling it for good.
 
 ## Windows 11 (later)
 
@@ -228,7 +232,11 @@ wanted there (no GPU Lending, CPU frequency or power limits).
 - `tests/OpenHW.Tests/BmcRedfishTests.cs`: a fake AMI Redfish service that enforces what the real one does (Mode
   required, complete entries, slot 7 refused, ETag) — request sequence, readback, logins; `BmcRedfishLiveTests` reads
   the real BMC read-only when `OPENHW_LIVE_BMC=1`.
-- `tests/OpenHW.App.Tests/FanControlTests.cs`: the window and the Edit… dialog (sends only what changed).
+- `tests/OpenHW.Tests/FanCurveFitTests.cs`: the BMC fit on the owner's curves (never slower, point 4 free, bulk sensors
+  exact, point-4-at-70 refit); `GpuFanDriverTests.cs`: NVIDIA fan leases, clamping, OpenFan/lend refusals, helper commands.
+- `tests/OpenHW.App.Tests/FanControlTests.cs` / `FanCurveTests.cs`: the screen (BMC + GPU cards, curve cards, mix
+  warnings, names, configurations, Apply all, headless mouse drags), the runner's write rules, the Edit BMC curve dialog.
+- `tools/gpu-slot-test/`: BMC slot sensors vs GPU core temperatures under load.
 - Real-hardware checks run by the owner: `openhw --fan-test bmc:N <duty> --seconds N`,
   `tools/fan-probe/cpu-fan-test.sh` (the Super I/O test), `tools/bmc-probe/` (`dump.sh`, `match.py`,
   `login-test.sh`).

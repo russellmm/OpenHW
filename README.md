@@ -3,8 +3,9 @@
 HWiNFO64-style hardware monitor for Ubuntu (GNOME): a sensor status window plus per-sensor tray icons.
 Design references are in [`reference/`](reference/) (HWiNFO64 v8.54 captures).
 
-Built with Avalonia 11 / .NET 8. Self-contained: the sensor code started as a copy of openfan-linux's read paths
-and now lives here, so changes to openfan-linux cannot break OpenHW.
+Built with Avalonia 11 / .NET 8. Self-contained: the sensor code started as a copy of openfan-linux's read paths and
+its fan control is ported from OpenFan's (owner: "OpenFan is our code"), but it all lives here — OpenHW never depends on
+openfan-linux being installed, and now replaces it.
 
 ## Install
 
@@ -262,24 +263,25 @@ Without the boot service installed, the row says so and stays read-only.
 
 ## Fan control
 
-openhw-helper is meant to be the one program that writes fan settings (OpenFan, while it's still installed, is to
-use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves the BMC runs itself (written once) over
+openhw-helper is the one program that writes fan settings — the BMC's fan zones and the NVIDIA cards' fans. It won't
+share fans with OpenFan (whose job this was): BMC fans are refused while OpenFan holds any, NVIDIA fans while OpenFan's
+helper runs. The BMC keeps fan settings in its flash, so OpenHW prefers curves the BMC runs itself (written once) over
 duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
 behave are in [docs/fan-control.md](docs/fan-control.md).
 
 **Fan Control (0.25.0–0.32.0)** — **Power → Fan Control…** (also in the tray menu) is one screen, laid out like
-OpenFan's Home: **Controls**
-(a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
+OpenFan's Home: **Controls** (a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
 and **Curves**, as in OpenFan: **graphs** (any number of points over any temperature OpenHW reads — or the hottest of
 several, e.g. All DIMMs — drag points, click to add, hysteresis in °C and seconds, max speed; each card shows the
-reading as a dot on the curve),
-**flat** duties (− / +) and **mixes** (max / min / average of other curves; a mix card previews the curve the BMC
+reading as a dot on the curve), **flat** duties (− / +) and **mixes** (max / min / average of other curves; a mix card previews the curve the BMC
 would run and warns when it can't keep the mix). **+ Flat / + Graph / + Mix** make a new
 curve or duplicate one you already have. Click a fan's name to give it a friendly name (the tooltip keeps the
-original). Drag any fan or curve card to reorder it (or use a fan card's **⋮**: left, right, to start, to end). The window's **⋮** saves and loads **configurations** (curves, assignments, names; Ctrl+N / Ctrl+S / Ctrl+Shift+S /
-Ctrl+L) as in OpenFan: the file in use is in the title and every change saves there; loading never writes to the BMC by
-itself — BMC fans wait for Apply (or **Apply all to the BMC**). **NVIDIA fans** run their curve through
-the NVIDIA driver (nothing stored; untick and the card controls its fans again). On BMC fans, where a curve runs
+original). Drag any fan or curve card to reorder it (or use a fan card's **⋮**: left, right, to start, to end). The
+window's **⋮** saves and loads **configurations** (curves, assignments, names, card order; Ctrl+N / Ctrl+S /
+Ctrl+Shift+S / Ctrl+L, in `~/.config/openhw/fan-profiles/`) as in OpenFan: the file in use is in the title and every change saves there; loading never writes to the BMC by
+itself — BMC fans wait for Apply (or **Apply all to the BMC**). Each fan card shows its duty and RPM (from the BMC or
+the NVIDIA driver; no calibration needed). **NVIDIA fans** run their curve through the NVIDIA driver (nothing stored;
+untick and the card controls its fans again; a card being lent to a VM gets its fans back first). On BMC fans, where a curve runs
 depends on what it reads:
 
 - **Only the BMC's own sensors** (CPU Package, TR1 = the T_Sensor header, LAN, DIMMA1–H1, the PCIe slots PCIE01–07 —
@@ -298,8 +300,8 @@ points).
 **Restore original** puts back the curve the fan had before OpenHW first changed it. CPU_FAN can't go below 20 % and
 W_PUMP+ below 50 %. Choosing sensors uses the BMC's Redfish service and needs a BMC login: **Give OpenHW the BMC
 login…** (type it, or read a file with the user on line 1 and the password on line 2); the helper checks it with the
-BMC and keeps it in `/etc/openhw/bmc-login`, readable by root only. Curves are saved in
-`~/.config/openhw/fan-curves.json`.
+BMC and keeps it in `/etc/openhw/bmc-login`, readable by root only. The live setup is saved in
+`~/.config/openhw/fan-curves.json` (and in the configuration file in use).
 
 On the ASUS Pro WS WRX90E-SAGE SE every fan header is driven by the BMC — the NCT6798 Super I/O only measures them
 — so the driver works through the BMC's seven fan zones (CPU_FAN together with CPU_OPT, CHA_FAN1–5, W_PUMP+), using
@@ -315,6 +317,8 @@ match what was validated; other boards get no fan writes.
   more (it waits as "pending"). Writes per fan are counted.
 - **One program per fan**, and nothing is taken over while OpenFan's own BMC driver holds fans (its restore journal
   exists).
+- **NVIDIA fans** (helper protocol 15: `gpufans`, `gpufanset`, `gpufanrelease`): the same leases; a released fan, an
+  expired lease, a helper stop or a lend gives the fan back to the card's automatic control. Nothing is stored.
 
 To check one BMC fan from a terminal (it gives the fan back and compares the curve afterwards):
 
@@ -395,7 +399,7 @@ so a device filter on the desktop session can't hide a card from OpenHW, and the
 `ddr5`, `vr`, `rapl`, `bmc` (the board management controller's sensors over IPMI: Get Device ID, the SDR repository,
 Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the fan driver
 (`fans`, `fanset`, `fanrelease`, `fanbeat`, `fancurve`, `fanoriginal`, `fansources`, `fansource`, `bmclogin`,
-`bmclogout` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+`bmclogout`, and NVIDIA fans `gpufans`, `gpufanset`, `gpufanrelease` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
@@ -449,7 +453,7 @@ with desktop notifications, power-mode switching that keeps boost working, all-c
 CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending to a VM, BMC sensors over IPMI,
 board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
 change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
-card filter, and fan control through the BMC: curves and sensors the BMC runs itself, set from Power → Fan
-Control… (0.24.x). Ships as a .deb (see [Install](#install)). Next: fans that follow GPU temperatures and an import of
-OpenFan profiles — planned in [ROADMAP.md](ROADMAP.md), which tracks all planned work. Every window and dialog opens
+card filter, and **fan control** for every BMC fan and NVIDIA fan from one OpenFan-style screen (curves the BMC runs
+itself, OpenHW-driven curves with flash-write warnings, NVIDIA fans through NVML, configurations; 0.25.0–0.32.0).
+Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md). Every window and dialog opens
 centred on the primary monitor the first time, then where it was last moved.
