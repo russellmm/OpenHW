@@ -47,6 +47,8 @@ sed 's:^ExecStart=.*:ExecStart=/usr/lib/openhw/helper/openhw-helper:' packaging/
 install -m 644 packaging/openhw.svg "$root/usr/share/icons/hicolor/scalable/apps/openhw.svg"
 install -m 644 CHANGELOG.md README.md "$root/usr/share/doc/openhw/"
 cp -r packaging/gnome-extension/. "$root/usr/share/gnome-shell/extensions/"
+# GPU Lending's libvirt handoff hook (qemu.d/50-windows-gpu, written by the helper, runs it with python3 -I).
+install -D -m 644 packaging/lending/hook.py "$root/usr/lib/openhw/lending/hook.py"
 
 cat > "$root/usr/share/applications/openhw.desktop" <<'DESKTOP'
 [Desktop Entry]
@@ -107,6 +109,8 @@ fi
 install -d -m 755 /etc/openhw
 # GPU Lending's boot-order drop-in for the helper (written and removed by the helper; same reason).
 install -d -m 755 /etc/systemd/system/openhw-helper.service.d
+# GPU Lending's WirePlumber rule (keeps desktop audio off the lent card's HDMI audio; same reason).
+install -d -m 755 /etc/wireplumber/wireplumber.conf.d
 
 # The user who ran sudo (or pkexec, for graphical installers) gets the group that may talk to the helper.
 user="${SUDO_USER:-}"
@@ -140,7 +144,12 @@ install -m 755 /dev/stdin "$root/DEBIAN/postrm" <<'POSTRM'
 set -e
 # GPU Lending's files that only the helper manages; a stashed libvirt hook stays in /etc/openhw/lending-off/.
 if [ "$1" = remove ] || [ "$1" = purge ]; then
-    rm -f /etc/systemd/system/openhw-helper.service.d/lending.conf /etc/udev/rules.d/61-openhw-lending.rules
+    rm -f /etc/systemd/system/openhw-helper.service.d/lending.conf /etc/udev/rules.d/61-openhw-lending.rules \
+        /etc/wireplumber/wireplumber.conf.d/51-openhw-lending.conf
+    # OpenHW's hook launcher runs a script this package removes.
+    if grep -qs /usr/lib/openhw/lending/hook.py /etc/libvirt/hooks/qemu.d/50-windows-gpu; then
+        rm -f /etc/libvirt/hooks/qemu.d/50-windows-gpu
+    fi
     rmdir /etc/systemd/system/openhw-helper.service.d 2>/dev/null || true
 fi
 [ -d /run/systemd/system ] && systemctl daemon-reload || true

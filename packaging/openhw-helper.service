@@ -44,10 +44,12 @@ ReadWritePaths=-/etc/openhw
 ReadWritePaths=/sys/fs/bpf
 # GPU Lending's install/uninstall (page → Install / Uninstall): only fixed file names in these folders — its boot-order
 # drop-in for this unit, its udev rule (61-openhw-lending.rules, replacing RTXinVM's 61-windows-gpu.rules) and the
-# libvirt handoff hook (qemu.d/50-windows-gpu, moved to /etc/openhw/lending-off/ and back).
+# libvirt handoff hook launcher (qemu.d/50-windows-gpu; RTXinVM's is moved to /etc/openhw/lending-off/), and the
+# WirePlumber rule that leaves the card's HDMI audio unclaimed (51-openhw-lending.conf).
 ReadWritePaths=-/etc/systemd/system/openhw-helper.service.d
 ReadWritePaths=-/etc/udev/rules.d
 ReadWritePaths=-/etc/libvirt/hooks/qemu.d
+ReadWritePaths=-/etc/wireplumber/wireplumber.conf.d
 ProtectHome=true
 PrivateTmp=true
 # Network: only the BMC's Redfish service over the BIOS's Redfish host interface (a USB link inside the machine,

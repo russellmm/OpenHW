@@ -104,15 +104,20 @@ public static class Coverage
         // ── Boot GPU power limits: lines naming a PCI slot don't follow a card that moves ──
         var boot = new BootPowerLimits(probe.Etc);
         var slotNotes = new List<string>();
+        var cardLines = boot.CardLines();
+        var failAlone = boot.LinesFailAlone();
         foreach (var (bus, watts, openhw) in boot.SlotLines())
         {
             var whose = openhw ? "OpenHW (from before 0.21.0)" : BootPowerLimits.GpuUnit;
             var here = now.Gpus.FirstOrDefault(g => BootPowerLimits.SameBus(g.Pci, bus));
             var was = before?.Gpus.FirstOrDefault(g => BootPowerLimits.SameBus(g.Pci, bus));
+            // With OpenHW's drop-in in place the unit's slot lines can't do harm: an empty slot's line fails on its own,
+            // and a card with its own "at boot" value gets OpenHW's line after the slot's.
+            if (!openhw && failAlone && (here is null || cardLines.ContainsKey(here.Uuid))) continue;
             if (here is null) slotNotes.Add($"{whose} sets {watts} W for slot {ShortBus(bus)}, which has no GPU now");
             else if (was is not null && was.Uuid != here.Uuid) slotNotes.Add($"{whose} sets {watts} W for slot {ShortBus(bus)}, which now holds {here.Name} instead of {was.Name}");
         }
-        foreach (var (uuid, watts) in boot.CardLines().Where(c => now.Gpus.All(g => !string.Equals(g.Uuid, c.Key, StringComparison.OrdinalIgnoreCase))))
+        foreach (var (uuid, watts) in cardLines.Where(c => now.Gpus.All(g => !string.Equals(g.Uuid, c.Key, StringComparison.OrdinalIgnoreCase))))
             slotNotes.Add($"OpenHW keeps {watts} W at boot for card {uuid}, which isn't in this machine");
         if (slotNotes.Count > 0)
             notes.Add(new("Power limits", "Boot GPU power limits: " + string.Join("; ", slotNotes) + ". " +

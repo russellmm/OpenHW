@@ -141,6 +141,14 @@ public sealed class HardwareCheckTests
             Assert.Contains("nvidia-power-limit.service sets 150 W for slot 01:00.0, which has no GPU now", boot.Text);
             Assert.Contains("OpenHW (from before 0.21.0) sets 300 W for slot C1:00.0, which now holds RTX PRO 6000 Blackwell Workstation Edition instead of RTX PRO 6000 (old)", boot.Text);
 
+            // OpenHW's drop-in since 0.21.0: every line may fail alone and the card in C1 has its own (UUID) value, so the
+            // unit's empty-slot line and its line for C1 are harmless — no warning (it reopened the check at every start).
+            File.WriteAllText(Path.Combine(units, "nvidia-power-limit.service.d", "openhw.conf"),
+                "[Service]\nExecStart=\nExecStart=-/usr/bin/nvidia-smi -i 00000000:01:00.0 -pl 150\nExecStart=-/usr/bin/nvidia-smi -i 00000000:C1:00.0 -pl 250\n" +
+                $"ExecStart=-/usr/bin/nvidia-smi -i {now.Gpus.Single(g => g.Pci == "C1:00.0").Uuid} -pl 300\n");
+            var tidy = Coverage.Check(now, Wrx90, true, new Coverage.Probe(devices.Contains, p => File.Exists(p) ? File.ReadAllText(p) : "", () => "12", etc), before);
+            Assert.DoesNotContain(tidy, n => n.Area == "Power limits");
+
             // Chosen by UUID (0.21.0): a moved card is followed, a missing one is called out.
             File.WriteAllText(Path.Combine(etc, "openhw", "card-filter.json"), """{"Card":"0000:e1:00.0","CardUuid":"GPU-bbbb"}""");
             var moved = Coverage.Check(now, Wrx90, true, new Coverage.Probe(devices.Contains, p => File.Exists(p) ? File.ReadAllText(p) : "", () => "12", etc));

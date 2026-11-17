@@ -15,6 +15,8 @@ public sealed class LendingSetupTests : IDisposable
     private string Rule => Path.Combine(Etc, "udev", "rules.d", LendingSetup.RuleName);
     private string Legacy => Path.Combine(Etc, "udev", "rules.d", LendingSetup.LegacyRuleName);
     private string DropIn => Path.Combine(Etc, "systemd", "system", "openhw-helper.service.d", "lending.conf");
+    private string Audio => Path.Combine(Etc, "wireplumber", "wireplumber.conf.d", LendingSetup.AudioRuleName);
+    private static readonly LendingFiles All = new(true, true, true, true), None = new(false, false, false, false);
 
     public LendingSetupTests()
     {
@@ -42,17 +44,22 @@ public sealed class LendingSetupTests : IDisposable
     }
 
     [Fact]
-    public void InstallingPutsEverythingInPlaceAndReplacesRtxinvmsRule()
+    public void InstallingPutsEverythingInPlaceAndReplacesRtxinvmsRuleAndHook()
     {
         var changes = Setup().Apply(installed: true, Card);
         Assert.Equal(LendingSetup.RuleText(Card), File.ReadAllText(Rule));
         Assert.Contains("Before=display-manager.service systemd-user-sessions.service", File.ReadAllText(DropIn));
         Assert.False(File.Exists(Legacy));
         Assert.True(File.Exists(Stashed(LendingSetup.LegacyRuleName)));
-        Assert.True(File.Exists(Hook));                         // left where it was
-        Assert.Equal(new LendingFiles(true, true, true), Setup().Check(Card));
+        // RTXinVM's launcher named one fixed slot (its hook.py hard-codes the card): kept aside, OpenHW's in its place.
+        Assert.Contains("/usr/local/libexec/windows-gpu-handoff/hook.py", File.ReadAllText(Stashed(LendingSetup.HookName + ".rtxinvm")));
+        Assert.Equal(LendingSetup.HookText, File.ReadAllText(Hook));
+        Assert.Equal((UnixFileMode)0b111_101_101, File.GetUnixFileMode(Hook) & (UnixFileMode)0b111_111_111);
+        Assert.Contains("device.name = \"alsa_card.pci-0000_e1_00.1\"", File.ReadAllText(Audio));
+        Assert.Contains("device.disabled = true", File.ReadAllText(Audio));
+        Assert.Equal(All, Setup().Check(Card));
         Assert.Equal(["systemctl daemon-reload"], _ran);
-        Assert.Equal(3, changes.Count);
+        Assert.Equal(6, changes.Count);
 
         _ran.Clear();
         Assert.Empty(Setup().Apply(installed: true, Card));      // already in place: nothing, not even a reload
@@ -67,14 +74,14 @@ public sealed class LendingSetupTests : IDisposable
         Assert.False(File.Exists(Rule));
         Assert.False(File.Exists(DropIn));
         Assert.False(File.Exists(Hook));
-        Assert.True(File.Exists(Stashed(LendingSetup.HookName)));
-        Assert.Equal(new LendingFiles(false, false, false), Setup().Check(Card));
+        Assert.False(File.Exists(Audio));
+        Assert.True(File.Exists(Stashed(LendingSetup.HookName + ".rtxinvm"))); // RTXinVM's stays put away
+        Assert.Equal(None, Setup().Check(Card));
 
         Setup().Apply(installed: true, Card);
-        Assert.True(File.Exists(Hook));
         Assert.Equal((UnixFileMode)0b111_101_101, File.GetUnixFileMode(Hook) & (UnixFileMode)0b111_111_111);
-        Assert.Contains("windows-gpu-handoff/hook.py", File.ReadAllText(Hook));
-        Assert.Equal(new LendingFiles(true, true, true), Setup().Check(Card));
+        Assert.Contains(LendingSetup.HookScript, File.ReadAllText(Hook));
+        Assert.Equal(All, Setup().Check(Card));
     }
 
     [Fact]
@@ -83,8 +90,10 @@ public sealed class LendingSetupTests : IDisposable
         Setup().Apply(true, Card);
         Setup().Apply(true, "0000:11:00.0");
         Assert.Contains("KERNELS==\"0000:11:00.0\"", File.ReadAllText(Rule));
+        Assert.Contains("alsa_card.pci-0000_11_00.1", File.ReadAllText(Audio));
         Setup().Apply(true, null);
         Assert.False(File.Exists(Rule));
+        Assert.False(File.Exists(Audio));
         Assert.False(File.Exists(DropIn));
         Assert.True(File.Exists(Hook));
     }
@@ -106,7 +115,7 @@ public sealed class LendingSetupTests : IDisposable
             Assert.True(s.RebootNeeded);
             Assert.Equal(Card, s.Card);
             Assert.Equal(3, s.Entries.Count);
-            Assert.Equal(new LendingFiles(false, false, false), s.Files);
+            Assert.Equal(None, s.Files);
             Assert.Throws<ArgumentException>(() => filter.SetEnabled(true));
         }
         using (var filter = Filter())                            // a helper restart keeps "uninstalled" and this boot's start
@@ -118,8 +127,15 @@ public sealed class LendingSetupTests : IDisposable
             var s = filter.Status();
             Assert.True(s.Installed);
             Assert.False(s.RebootNeeded);                         // back to how this boot started
-            Assert.Equal(new LendingFiles(true, true, true), s.Files);
+            Assert.Equal(All, s.Files);
         }
+    }
+
+    [Fact]
+    public void WirePlumberNamesTheCardsAudioFunction()
+    {
+        Assert.Equal("alsa_card.pci-0000_c1_00.1", LendingSetup.AudioDeviceName("0000:C1:00.0"));
+        Assert.Equal("alsa_card.pci-0000_11_00.1", LendingSetup.AudioDeviceName("0000:11:00.0"));
     }
 
     private sealed class FakeSmart : INvmeSmartReader

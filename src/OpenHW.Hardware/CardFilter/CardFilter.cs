@@ -244,6 +244,9 @@ public sealed class CardFilter : IDisposable
 
     // ── commands ───────────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Which of GPU Lending's system files are in place for the chosen card (null without a setup, in tests).</summary>
+    public LendingFiles? Files() { lock (_gate) return _setup?.Check(_settings.Card); }
+
     public CardFilterStatus Status()
     {
         lock (_gate)

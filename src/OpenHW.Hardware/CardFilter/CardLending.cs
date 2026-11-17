@@ -286,6 +286,8 @@ public sealed partial class CardLending : IDisposable
         var apps = new List<CardHolder>();
         if (!_filter.Installed) { problems.Add("GPU Lending is uninstalled."); return (problems, system, user, apps); }
         if (card is null) { problems.Add("Choose the card to lend."); return (problems, system, user, apps); }
+        if (_filter.Files() is { Hook: false })
+            problems.Add($"OpenHW's libvirt handoff hook isn't in place (/etc/libvirt/hooks/qemu.d/{LendingSetup.HookName}): restart openhw-helper, which puts it back.");
         if (vm is null) problems.Add("Choose the VM to lend it to.");
         else if (state == "running") problems.Add($"{vm} is running.");
         else if (state != "shut off") problems.Add($"{vm} isn't fully off ({state}).");
@@ -317,6 +319,9 @@ public sealed partial class CardLending : IDisposable
             else if (h.Cgroup.Contains("/user@", StringComparison.Ordinal) && h.Cgroup.Contains("/app.slice/", StringComparison.Ordinal)
                      && unit.EndsWith(".scope", StringComparison.Ordinal))
                 apps.Add(h); // the user's app: the page closes it if ticked, else asks the owner to
+            else if (h.Cgroup.Contains("/session.slice/", StringComparison.Ordinal) && unit == "wireplumber.service")
+                problems.Add($"WirePlumber (desktop audio, {h.Pid}) has the card's HDMI audio open: run systemctl --user restart wireplumber " +
+                             "(a second of silence). OpenHW's rule keeps it off the card from then on.");
             else if (h.Cgroup.Contains("/session.slice/", StringComparison.Ordinal))
                 problems.Add($"{h.Program} ({h.Pid}), part of the desktop, has the card open: log out once to free it.");
             else problems.Add($"{h.Program} ({h.Pid}) has the card open: close it{(h.Pattern is null ? "" : ", or hide it and restart it")}.");

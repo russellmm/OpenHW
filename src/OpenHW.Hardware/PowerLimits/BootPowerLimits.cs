@@ -70,6 +70,19 @@ public sealed partial class BootPowerLimits(string etc = "/etc")
                 .. PowerLines(DropIn).Where(l => !IsUuid(l.Target) && !unit.Contains(l)).Select(l => (l.Target, l.Watts, true))];
     }
 
+    /// <summary>
+    /// True when OpenHW's drop-in (0.21.0 and later) runs every power line with <c>ExecStart=-</c>: then a slot line
+    /// for an empty slot, or a value a card refuses, fails on its own without stopping the lines after it.
+    /// </summary>
+    public bool LinesFailAlone()
+    {
+        string text;
+        try { text = File.ReadAllText(DropIn); }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return false; }
+        var lines = text.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("ExecStart=", StringComparison.Ordinal) && l.Contains("nvidia-smi", StringComparison.Ordinal)).ToList();
+        return lines.Count > 0 && lines.All(l => l.StartsWith("ExecStart=-", StringComparison.Ordinal));
+    }
+
     /// <summary>OpenHW's own boot limits, by card UUID.</summary>
     public IReadOnlyDictionary<string, long> CardLines() =>
         PowerLines(DropIn).Where(l => IsUuid(l.Target)).GroupBy(l => l.Target, StringComparer.OrdinalIgnoreCase)

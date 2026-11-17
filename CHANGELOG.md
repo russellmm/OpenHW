@@ -3,6 +3,21 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.33.0 — 2026-11-17
+
+- **GPU Lending follows the card for its whole handoff.** The libvirt hook that does the hardware handoff was
+  RTXinVM's, with the card hard-coded: after the board swap it still named slot E1 — and the UUID of the *other* PRO
+  6000. OpenHW now ships its own hook (`/usr/lib/openhw/lending/hook.py`; `qemu.d/50-windows-gpu` runs it) that reads
+  the card (GPU UUID + the slot the helper found it in) and the VM from `card-filter.json`, and checks that the VM
+  passes that card through. RTXinVM's launcher is kept in `/etc/openhw/lending-off/50-windows-gpu.rtxinvm`. Lend
+  refuses while OpenHW's hook isn't in place.
+- **Desktop audio leaves the lent card's HDMI audio alone**: the helper writes a WirePlumber rule for the chosen card
+  (`/etc/wireplumber/wireplumber.conf.d/51-openhw-lending.conf`; RTXinVM's per-user rule named the old slot). The
+  page lists it with the other lending files, and when WirePlumber already holds the audio it says to restart it.
+- **Hardware Check stops flagging harmless boot-limit lines**: once OpenHW's drop-in runs every line with `-` (each
+  may fail alone), nvidia-power-limit.service's lines for empty slots, or for cards that have their own "at boot"
+  value, are no longer a warning — that warning reopened the check at every start.
+
 ## 0.32.0 — 2026-11-17
 
 - **Bulk sensors**: a graph curve can follow **several temperatures — the hottest counts**, exactly what the BMC does

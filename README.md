@@ -374,15 +374,19 @@ without logging out, and gets it back — the job RTXinVM did before, folded int
   started again; apps ticked **Close and reopen when lending** (e.g. OpenFan's window) are closed gracefully and
   reopened after the handoff and after the return; the helper releases its own GPU handles and turns persistence
   off so nvidia-persistenced lets go. The libvirt hook does the hardware handoff (VFIO, saving and restoring the
-  card's power limit and persistence). Return asks the VM for a normal shutdown — never forced — and however the VM
+  card's power limit and persistence). It's OpenHW's own (`/usr/lib/openhw/lending/hook.py`, run from
+  `qemu.d/50-windows-gpu`) and takes the card — by GPU UUID and its current slot — and the VM from OpenHW's settings,
+  so it follows the card to any slot; the VM's own PCI device still names a slot (check it in virt-manager after a
+  move). A WirePlumber rule (`/etc/wireplumber/wireplumber.conf.d/51-openhw-lending.conf`) keeps desktop audio off the
+  card's HDMI audio, which the handoff also needs free. Return asks the VM for a normal shutdown — never forced — and however the VM
   is shut down, OpenHW notices the card is back and brings everything back.
 - Leave the card's monitor unplugged until the VM is running, and unplug it before shutting the VM down: Linux
   makes a framebuffer on a card with a monitor at boot, and the handoff then refuses.
 - **Install / Uninstall** (top of the page) takes GPU Lending out of the system and puts it back. Uninstalled: the
   card filter is out of the kernel, the helper no longer starts before the login screen (its drop-in
   `openhw-helper.service.d/lending.conf` is removed), the udev rule that keeps GNOME off the card
-  (`61-openhw-lending.rules`) is removed, and the libvirt handoff hook (`qemu.d/50-windows-gpu`) is moved to
-  `/etc/openhw/lending-off/`; the page shows only Install. Your card, VM, list and filter setting are kept, so Install
+  (`61-openhw-lending.rules`), the WirePlumber rule and the libvirt hook launcher (`qemu.d/50-windows-gpu`) are
+  removed (RTXinVM's older launcher, if any, stays in `/etc/openhw/lending-off/`); the page shows only Install. Your card, VM, list and filter setting are kept, so Install
   brings it all back as it was. Either way, reboot once to finish. Uninstall waits until the card is returned.
 
 ## Root helper
@@ -407,7 +411,7 @@ at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
 `/etc/openhw` and `/sys/fs/bpf` (the card filter, the BMC login and certificate pin), `/var/lib/openhw` (the fan
 restore journal and saved original curves), and for GPU Lending's install/uninstall its own drop-in folder,
-`/etc/udev/rules.d` and `/etc/libvirt/hooks/qemu.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
+`/etc/udev/rules.d`, `/etc/libvirt/hooks/qemu.d` and `/etc/wireplumber/wireplumber.conf.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
 `/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 

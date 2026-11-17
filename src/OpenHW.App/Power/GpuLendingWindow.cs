@@ -262,9 +262,10 @@ public sealed class GpuLendingWindow : Window
             var missing = new List<string>();
             if (!f.BootOrder) missing.Add("the helper's start before the login screen");
             if (!f.GnomeIgnore) missing.Add("the udev rule that keeps GNOME off the card");
-            if (!f.Hook) missing.Add($"the libvirt handoff hook (/etc/libvirt/hooks/qemu.d/{LendingSetup.HookName})");
+            if (!f.AudioIgnore) missing.Add("the WirePlumber rule that keeps desktop audio off the card's HDMI audio");
+            if (!f.Hook) missing.Add($"OpenHW's libvirt handoff hook (/etc/libvirt/hooks/qemu.d/{LendingSetup.HookName})");
             _setupNotes.Children.Add(missing.Count == 0
-                ? Footnote("In place: the helper starts before the login screen, GNOME leaves the card alone, and libvirt's handoff hook is there.")
+                ? Footnote("In place: the helper starts before the login screen, GNOME and desktop audio leave the card alone, and libvirt's handoff hook (OpenHW's, following the card) is there.")
                 : Footnote("Missing: " + string.Join("; ", missing) + ". Lending needs " + (missing.Count == 1 ? "it" : "them") + ".", Bad));
         }
         if (s.RebootNeeded)
