@@ -68,7 +68,10 @@ Identity checked before any write: board vendor/name, ASUS 2623 / product 0x1193
   **https://169.254.0.17**. The Linux interface name changes every boot (`enx` + random MAC) — never pin it. Under
   Windows the same service answers on the BMC's LAN address (10.0.0.200 on the owner's network).
 - **Reads need no login over the host interface** (even bogus credentials pass); over the LAN they do. So only a
-  session login (POST `SessionService/Sessions`: 201 / 401) proves a password.
+  session login (POST `SessionService/Sessions`: 201 / 401) proves a password. Why (found 2026-11-17): the host
+  interface is in **`AuthNone`** mode with credential bootstrapping as `HostInterfaceAdministrator` — the owner keeps
+  it that way (Hardware Check notes it). Since 0.36.0 `BmcRedfish.Get` retries a read in a session with the stored
+  login on 401/403, so locking it down later breaks nothing. More in [bmc.md](bmc.md).
 - `Chassis/Self/Thermal` → `Oem.Mode` ("Manual") and `Oem.PWM[8]` with `Index`, `Source`, `Temperature1–5`,
   `FanDuty1–5`. `Allow: GET, PATCH`; carries an ETag.
 - **`Source` is a bitmask over the BMC's temperature sensors: bit = SDR sensor number − 1** — CPU Package Temp (1) →
@@ -80,8 +83,9 @@ Identity checked before any write: board vendor/name, ASUS 2623 / product 0x1193
   entry as read, Source changed>]}}` with `If-Match: <ETag>`. Without `Mode`: 400 "Oem/Mode is a required property".
   An entry without all fields: 400 "Oem/PWM/n/Temperature1 is a required property". The whole list: refused over
   slot 7's values (while the valid entries are still applied).
-- `Systems/Self/Bios` exposes ~1,300 AMD CBS/PBS attributes without a login once BIOS "Publish HII Resources" is on;
-  ASUS Q-Fan items aren't among them.
+- `Systems/Self/Bios` exposes ~1,300 Setup attributes once BIOS "Publish HII Resources" is on (File → BIOS Settings
+  from the BMC…, 0.36.0); ASUS Q-Fan items aren't among them. The full BIOS screen (File → BIOS Setup…, 0.37.0) reads
+  the machine's UEFI variables instead — [bios-setup.md](bios-setup.md).
 
 ### Flash
 
@@ -93,7 +97,7 @@ partition), but endurance isn't documented — hence the write discipline below.
 ## Architecture
 
 ```
-OpenHW app ──(Unix socket, protocol 15)──► openhw-helper (root, sandboxed)
+OpenHW app ──(Unix socket, protocol 18)──► openhw-helper (root, sandboxed)
   Power → Fan Control… (one screen)            FanDriver ── AsusBmcFans ── IIpmiTransport ── /dev/ipmi0   (BMC fans)
     FanCurveRunner: BMC-run curves → Apply     BmcRedfish ── HTTPS (pinned cert) ── 169.254.0.17         (sources)
                     driven curves → Tick        GpuFanDriver ── LiveNvmlFans ── NVML                       (NVIDIA fans)
@@ -132,6 +136,10 @@ OpenFan: retired from fan control (its helper stopped 2026-11-17); OpenHW refuse
 | 14 | `fancurve <zone> <t:d,t:d,t:d,t:d,100:d>` / `fanoriginal <zone>` | configured curve / restore original |
 | 14 | `fansources` / `fansource <zone> <mask>` | read / set sources (Redfish) |
 | 14 | `bmclogin [b64 user b64 password]` / `bmclogout` | which user is stored / store (after a real login) / forget |
+| 15 | `gpufans [token]` / `gpufanset <token> <nvml:uuid:fan:n> <0–100>` / `gpufanrelease <token> <id\|all>` | NVIDIA fans (NVML) |
+| 17 | `bmcthresh` / `bmcthresh <sensor> <lnr> <lcr> <lnc>` / `bmcthreshoriginal <sensor>` | fan alarm thresholds (RPM) |
+
+(Protocol 16 `bmcstates`/`bmcsel` and 18 `biossettings`/`bmcaccess` are read-only BMC commands — [bmc.md](bmc.md).)
 
 ### Sandbox
 
@@ -148,6 +156,34 @@ New/Duplicate, drag-and-drop order, and configurations in the window's ⋮. A BM
 edited directly (⋮ → Edit BMC curve…: sensor checkboxes as in the web console, five points with point 5 at 100 °C,
 Apply writes only what changed). Every dialog opens centred on the primary monitor the first time and then where it was
 last moved (owner rule).
+
+## Alarm thresholds (0.35.0)
+
+The BMC logs a fan as slow / failing / stopped (SEL "lower non-critical / critical / non-recoverable going low") when
+its RPM drops below the SDR thresholds — **360 / 360 / 0 RPM** on every header by default, which a quiet fan at a
+20 % floor trips after each boot (CHA_FAN2 at 360–374 RPM, CHA_FAN3). The SDR marks the three lower thresholds
+**settable** on CPU_FAN, CPU_OPT, CHA_FAN1–5 and W_PUMP+ (not USB4/VRM HS/M.2/PSU fans), stored in **120 RPM steps**
+(M = 120).
+
+- **Write**: IPMI Set Sensor Thresholds (04h/26h), mask = settable lower bits, then Get Sensor Thresholds to read back
+  (`IpmiCommands.SetLowerThresholds`, `BmcReader.SetFanThresholds`). Only values the conversion maps exactly to a raw
+  byte are accepted; order non-recoverable ≤ critical ≤ non-critical; same values → no write. Every write is logged in
+  the helper's journal ("CHA_FAN2 lower thresholds 0/360/360 → 0/120/240 RPM").
+- **Originals**: saved once per fan before the first change (`/var/lib/openhw/bmc-thresholds-original.json`, keyed by
+  the DMI product UUID) for Restore original.
+- **UI**: fan card ⋮ → Alarm thresholds… (`FanThresholdDialog`): dropdowns of storable values up to 3,000 RPM.
+- **Live (2026-11-17)**: CHA_FAN2 and CHA_FAN3 set to 0 / 120 / 240; the BMC deasserted "lower critical" right away.
+  **Not yet known**: whether they survive a BMC reset or AC loss — check after the next cold boot.
+- Effects: on this board a crossing was only seen to add SEL entries (the fans kept their curves).
+
+## App-side behaviour added in 0.34.0
+
+- **Own-core stand-in**: while a GPU fan's curve misses only BMC slot sensors (`bmc:PCIE…`, e.g. ~20 s after a start
+  while the BMC's SDR read runs, or after a BMC reset), those read the fan's own card's NVML core temperature
+  (`FanCurveRunner.OwnTempReading`). Assumes the curve follows its own card's slot (true for "GPU Slot 1/5"); logged
+  both ways ("no BMC slot reading yet…", "BMC slot reading back…").
+- **SIGTERM/SIGINT** run the normal exit (`PosixSignalRegistration`), so every driven fan is released at once
+  ("released N fan(s) (exiting)"); a 5 s fallback releases and exits if the UI thread is stuck.
 
 ## PCIe slot sensors = GPU core temperatures (measured 2026-11-17)
 
@@ -234,7 +270,9 @@ wanted there (no GPU Lending, CPU frequency or power limits).
   the real BMC read-only when `OPENHW_LIVE_BMC=1`.
 - `tests/OpenHW.Tests/FanCurveFitTests.cs`: the BMC fit on the owner's curves (never slower, point 4 free, bulk sensors
   exact, point-4-at-70 refit); `GpuFanDriverTests.cs`: NVIDIA fan leases, clamping, OpenFan/lend refusals, helper commands.
-- `tests/OpenHW.App.Tests/FanControlTests.cs` / `FanCurveTests.cs`: the screen (BMC + GPU cards, curve cards, mix
+- `tests/OpenHW.Tests/BmcTests.cs`: thresholds on a fake BMC (steps, order, not-settable, read-back, originals per
+  machine, helper validation); `tests/OpenHW.App.Tests/FanThresholdDialogTests.cs`: the dialog.
+- `tests/OpenHW.App.Tests/FanControlTests.cs` / `FanCurveTests.cs` (incl. the own-core stand-in): the screen (BMC + GPU cards, curve cards, mix
   warnings, names, configurations, Apply all, headless mouse drags), the runner's write rules, the Edit BMC curve dialog.
 - `tools/gpu-slot-test/`: BMC slot sensors vs GPU core temperatures under load.
 - Real-hardware checks run by the owner: `openhw --fan-test bmc:N <duty> --seconds N`,

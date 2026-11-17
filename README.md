@@ -152,7 +152,8 @@ PAGE is never changed. `tools/smbus-probe/` holds the one-time, read-only script
 ## Menu and shortcuts
 
 The main window has a menu bar — **File** (Hide Window Ctrl+W, Start/Stop Logging…, Alerts…, Tray Icons…,
-Hardware Check…, Sensor Settings…, Settings…, Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
+Hardware Check…, BMC Status & Event Log…, BIOS Setup…, BIOS Settings from the BMC…, Sensor Settings…, Settings…,
+Exit Ctrl+Q), **View** (Expand All Ctrl+E, Collapse All Ctrl+Shift+E, Show Hidden Sensors, Unhide All
 Sensors, Layout Settings…, Reset Min/Max/Average Ctrl+R), **Power** (the power profiles, CPU Frequency… Ctrl+F,
 Power Limits… Ctrl+L, Fan Control…, GPU Lending…) and **Help** (About). New features get a menu entry first. The footer is HWiNFO's bar: expand
 all and collapse all on the left; the time since the last reset, reset Min/Max/Average (clock), settings (gear) and
@@ -225,12 +226,22 @@ shows:
   "Water Pump+" → the BMC's W_PUMP+, or a drive's temperature by drive identity), **Move** or **Remove**.
 - **What OpenHW can't fully read here**, with the fix where there is one: a BMC whose kernel driver isn't loaded, an
   openhw-helper too old to read it, DIMMs only the BMC can see, a board without a Super I/O profile (raw `in0…` pin
-  voltages), no known board VR, a GPU Lending card that isn't in the machine any more.
+  voltages), no known board VR, a GPU Lending card that isn't in the machine any more — and, as a plain note, a BMC
+  whose Redfish service answers this PC without a password.
+- **BIOS settings changed** since the snapshot ("Enable Hibernation: Disabled → Enabled"; the first 12, then a
+  count), from what the BIOS publishes to the BMC (Setup → Publish HII Resources). Design and findings: [docs/bios-setup.md](docs/bios-setup.md).
 
 About 30 s after it starts (time for the BMC's first answer), OpenHW runs the check and opens the window when
 something **new** needs a look — closing the window marks what it showed as seen (0.24.2), so a warning you already
 know about doesn't reopen it at every start; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
 `openhw --hardware-check` prints the same report without a display and changes nothing.
+
+## BMC status and event log
+
+**File → BMC Status & Event Log…** (boards with a BMC) shows the BMC's **status sensors** — CPU_ECC, memory training
+errors, PSU presence / AC / over-temperature, watchdog, BIOS/CPU/memory/PCIe hardware change — with their states in
+words (red when something failed), and its **System Event Log**, newest first: time, sensor, event, whether it was
+asserted or cleared. Read-only: OpenHW never clears the log. Details in [docs/bmc.md](docs/bmc.md).
 
 ## BIOS Setup
 
@@ -314,7 +325,11 @@ depends on what it reads:
   the fan goes back to its BMC curve.
 
 A BMC fan without a curve keeps its BMC curve; **⋮ → Edit BMC curve…** changes that curve directly (sensors and five
-points).
+points). **⋮ → Alarm thresholds…** sets the RPM below which the BMC logs the fan as slow, failing and stopped (the BMC
+defaults to 360 / 360 / 0 RPM, which a quiet fan trips; it stores them in 120 RPM steps), with Restore original.
+
+GPU fans whose curve follows a BMC slot sensor follow their own card's core temperature until the BMC first answers
+(~20 s after OpenHW starts). Stopping OpenHW (Exit, `pkill`, logout) gives every fan it drives back at once.
 **Restore original** puts back the curve the fan had before OpenHW first changed it. CPU_FAN can't go below 20 % and
 W_PUMP+ below 50 %. Choosing sensors uses the BMC's Redfish service and needs a BMC login: **Give OpenHW the BMC
 login…** (type it, or read a file with the user on line 1 and the password on line 2); the helper checks it with the
@@ -335,7 +350,7 @@ match what was validated; other boards get no fan writes.
   more (it waits as "pending"). Writes per fan are counted.
 - **One program per fan**, and nothing is taken over while OpenFan's own BMC driver holds fans (its restore journal
   exists).
-- **NVIDIA fans** (helper protocol 15: `gpufans`, `gpufanset`, `gpufanrelease`): the same leases; a released fan, an
+- **NVIDIA fans** (helper protocol 15+: `gpufans`, `gpufanset`, `gpufanrelease`): the same leases; a released fan, an
   expired lease, a helper stop or a lend gives the fan back to the card's automatic control. Nothing is stored.
 
 To check one BMC fan from a terminal (it gives the fan back and compares the curve afterwards):
@@ -418,17 +433,19 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 `gpupower <uuid> <mW|default>` (an enumerated card, within NVML's constraints), `cpuppt <mW|boot>`, the read-only
 `gpus`, `gpuread` and `gpulimits` (every NVIDIA reading the window shows — the desktop app never opens a GPU itself,
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
-`ddr5`, `vr`, `rapl`, `bmc` (the board management controller's sensors over IPMI: Get Device ID, the SDR repository,
-Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the fan driver
+`ddr5`, `vr`, `rapl`, `bmc`, `bmcstates` and `bmcsel` (the board management controller's sensors, status sensors and
+event log over IPMI: Get Device ID, the SDR repository, Get Sensor Reading / Thresholds, Get SEL Info / Entry —
+nothing that clears or controls anything), `biossettings` and `bmcaccess` (Redfish reads), the fan driver
 (`fans`, `fanset`, `fanrelease`, `fanbeat`, `fancurve`, `fanoriginal`, `fansources`, `fansource`, `bmclogin`,
-`bmclogout`, and NVIDIA fans `gpufans`, `gpufanset`, `gpufanrelease` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+`bmclogout`, NVIDIA fans `gpufans`, `gpufanset`, `gpufanrelease`, and fan alarm thresholds `bmcthresh`,
+`bmcthreshoriginal` — see [Fan control](#fan-control)); protocol 18, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
 `CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
 `/etc/openhw` and `/sys/fs/bpf` (the card filter, the BMC login and certificate pin), `/var/lib/openhw` (the fan
-restore journal and saved original curves), and for GPU Lending's install/uninstall its own drop-in folder,
+restore journal, saved original curves and alarm thresholds), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d`, `/etc/libvirt/hooks/qemu.d` and `/etc/wireplumber/wireplumber.conf.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
 `/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
@@ -453,7 +470,8 @@ Headless: the helper protocol, its validation and the client/server socket round
 `tests/OpenHW.App.Tests` renders the real window with Avalonia's headless Skia backend (no display) to check what
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
-HWiNFO captures in `reference/settings_menu/`.
+HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
+against a fake machine's UEFI variables. 368 tests (180 library + 188 headless UI) as of 0.37.0.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
@@ -476,6 +494,8 @@ CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending
 board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
 change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
 card filter, and **fan control** for every BMC fan and NVIDIA fan from one OpenFan-style screen (curves the BMC runs
-itself, OpenHW-driven curves with flash-write warnings, NVIDIA fans through NVML, configurations; 0.25.0–0.32.0).
+itself, OpenHW-driven curves with flash-write warnings, NVIDIA fans through NVML, configurations, fan alarm
+thresholds; 0.25.0–0.35.0), the BMC's status sensors and event log (0.34.0), and **BIOS Setup** — this board's BIOS
+screen with this machine's settings, planning changes without writing the firmware (0.37.0).
 Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md). Every window and dialog opens
 centred on the primary monitor the first time, then where it was last moved.
