@@ -375,7 +375,7 @@ without logging out, and gets it back — the job RTXinVM did before, folded int
   reopened after the handoff and after the return; the helper releases its own GPU handles and turns persistence
   off so nvidia-persistenced lets go. The libvirt hook does the hardware handoff (VFIO, saving and restoring the
   card's power limit and persistence). It's OpenHW's own (`/usr/lib/openhw/lending/hook.py`, run from
-  `qemu.d/50-windows-gpu`) and takes the card — by GPU UUID and its current slot — and the VM from OpenHW's settings,
+  `qemu.d/50-openhw-lending`) and takes the card — by GPU UUID and its current slot — and the VM from OpenHW's settings,
   so it follows the card to any slot; the VM's own PCI device still names a slot (check it in virt-manager after a
   move). A WirePlumber rule (`/etc/wireplumber/wireplumber.conf.d/51-openhw-lending.conf`) keeps desktop audio off the
   card's HDMI audio, which the handoff also needs free. Return asks the VM for a normal shutdown — never forced — and however the VM
@@ -385,7 +385,7 @@ without logging out, and gets it back — the job RTXinVM did before, folded int
 - **Install / Uninstall** (top of the page) takes GPU Lending out of the system and puts it back. Uninstalled: the
   card filter is out of the kernel, the helper no longer starts before the login screen (its drop-in
   `openhw-helper.service.d/lending.conf` is removed), the udev rule that keeps GNOME off the card
-  (`61-openhw-lending.rules`), the WirePlumber rule and the libvirt hook launcher (`qemu.d/50-windows-gpu`) are
+  (`61-openhw-lending.rules`), the WirePlumber rule and the libvirt hook launcher (`qemu.d/50-openhw-lending`) are
   removed (RTXinVM's older launcher, if any, stays in `/etc/openhw/lending-off/`); the page shows only Install. Your card, VM, list and filter setting are kept, so Install
   brings it all back as it was. Either way, reboot once to finish. Uninstall waits until the card is returned.
 

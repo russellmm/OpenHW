@@ -11,6 +11,7 @@ public sealed class LendingSetupTests : IDisposable
     private readonly List<string> _ran = [];
     private string Etc => Path.Combine(_root, "etc");
     private string Hook => Path.Combine(Etc, "libvirt", "hooks", "qemu.d", LendingSetup.HookName);
+    private string OldHook => Path.Combine(Etc, "libvirt", "hooks", "qemu.d", LendingSetup.LegacyHookName);
     private string Stashed(string name) => Path.Combine(Etc, "openhw", "lending-off", name);
     private string Rule => Path.Combine(Etc, "udev", "rules.d", LendingSetup.RuleName);
     private string Legacy => Path.Combine(Etc, "udev", "rules.d", LendingSetup.LegacyRuleName);
@@ -21,9 +22,9 @@ public sealed class LendingSetupTests : IDisposable
     public LendingSetupTests()
     {
         // This machine after RTXinVM's uninstall: its udev rule and the libvirt hook are still there.
-        Directory.CreateDirectory(Path.GetDirectoryName(Hook)!);
-        File.WriteAllText(Hook, "#!/bin/sh\nexec /usr/bin/python3 -I /usr/local/libexec/windows-gpu-handoff/hook.py \"$@\"\n");
-        File.SetUnixFileMode(Hook, (UnixFileMode)0b111_101_101);
+        Directory.CreateDirectory(Path.GetDirectoryName(OldHook)!);
+        File.WriteAllText(OldHook, "#!/bin/sh\nexec /usr/bin/python3 -I /usr/local/libexec/windows-gpu-handoff/hook.py \"$@\"\n");
+        File.SetUnixFileMode(OldHook, (UnixFileMode)0b111_101_101);
         Directory.CreateDirectory(Path.GetDirectoryName(Legacy)!);
         File.WriteAllText(Legacy, $"SUBSYSTEM==\"drm\", KERNELS==\"{Card}\", TAG+=\"mutter-device-ignore\"\n");
         var proc = Directory.CreateDirectory(Path.Combine(_root, "proc", "driver", "nvidia", "gpus", Card)).FullName;
@@ -52,7 +53,8 @@ public sealed class LendingSetupTests : IDisposable
         Assert.False(File.Exists(Legacy));
         Assert.True(File.Exists(Stashed(LendingSetup.LegacyRuleName)));
         // RTXinVM's launcher named one fixed slot (its hook.py hard-codes the card): kept aside, OpenHW's in its place.
-        Assert.Contains("/usr/local/libexec/windows-gpu-handoff/hook.py", File.ReadAllText(Stashed(LendingSetup.HookName + ".rtxinvm")));
+        Assert.Contains("/usr/local/libexec/windows-gpu-handoff/hook.py", File.ReadAllText(Stashed(LendingSetup.LegacyHookName + ".rtxinvm")));
+        Assert.False(File.Exists(OldHook));
         Assert.Equal(LendingSetup.HookText, File.ReadAllText(Hook));
         Assert.Equal((UnixFileMode)0b111_101_101, File.GetUnixFileMode(Hook) & (UnixFileMode)0b111_111_111);
         Assert.Contains("device.name = \"alsa_card.pci-0000_e1_00.1\"", File.ReadAllText(Audio));
@@ -75,7 +77,7 @@ public sealed class LendingSetupTests : IDisposable
         Assert.False(File.Exists(DropIn));
         Assert.False(File.Exists(Hook));
         Assert.False(File.Exists(Audio));
-        Assert.True(File.Exists(Stashed(LendingSetup.HookName + ".rtxinvm"))); // RTXinVM's stays put away
+        Assert.True(File.Exists(Stashed(LendingSetup.LegacyHookName + ".rtxinvm"))); // RTXinVM's stays put away
         Assert.Equal(None, Setup().Check(Card));
 
         Setup().Apply(installed: true, Card);
@@ -129,6 +131,18 @@ public sealed class LendingSetupTests : IDisposable
             Assert.False(s.RebootNeeded);                         // back to how this boot started
             Assert.Equal(All, s.Files);
         }
+    }
+
+    [Fact]
+    public void OpenHwsLauncherUnderItsOldNameIsReplacedNotKept()
+    {
+        // 0.33.0–0.33.1 wrote OpenHW's launcher as 50-windows-gpu: two launchers would run the handoff twice.
+        File.WriteAllText(OldHook, $"#!/bin/sh\nexec /usr/bin/python3 -I {LendingSetup.HookScript} \"$@\"\n");
+        var changes = Setup().Apply(installed: true, Card);
+        Assert.False(File.Exists(OldHook));
+        Assert.False(File.Exists(Stashed(LendingSetup.LegacyHookName + ".rtxinvm")));
+        Assert.Equal(LendingSetup.HookText, File.ReadAllText(Hook));
+        Assert.Contains(changes, c => c.Contains("old name", StringComparison.Ordinal));
     }
 
     [Fact]

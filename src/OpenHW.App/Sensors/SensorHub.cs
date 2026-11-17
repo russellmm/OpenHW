@@ -66,6 +66,9 @@ public sealed class SensorHub : IDisposable
     public bool IsPaused(string id) => _pauses.IsPaused(id);
 
     /// <summary>One poll: rediscover when due, read the sensors that are not paused, then fold the sample into the statistics.</summary>
+    /// <summary>A reader slower than this is reported (stderr → the user journal).</summary>
+    public static readonly TimeSpan SlowEngine = TimeSpan.FromSeconds(2);
+
     public void Sample()
     {
         var changed = RefreshInventory();
@@ -75,7 +78,14 @@ public sealed class SensorHub : IDisposable
         var readings = requested.ToDictionary(id => id, _ => (double?)null, StringComparer.Ordinal);
         // With S.M.A.R.T. off, the NVMe engine gets the requested set, so it skips the health reads (they aren't asked).
         var only = frozen.Count == 0 && _readSmart ? null : requested;
-        foreach (var engine in _engines.Where(IsOn)) engine.ReadInto(readings, only);
+        foreach (var engine in _engines.Where(IsOn))
+        {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            engine.ReadInto(readings, only);
+            // A slow reader holds up every sensor (and the fan curves that read them): say which one, and for how long.
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) is var took && took >= SlowEngine)
+                Console.Error.WriteLine($"openhw: sensors: {engine.GetType().Name} took {took.TotalSeconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} s");
+        }
         if (!_readSmart) foreach (var id in readings.Keys.Where(IsSmart).ToList()) readings.Remove(id);
         var hold = _pauses.EndPoll(readings, frozen);
         lock (_gate) Statistics.Record(readings, hold);

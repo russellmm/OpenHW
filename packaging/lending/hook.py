@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""OpenHW GPU Lending: libvirt handoff hook (qemu.d/50-windows-gpu runs it). No libvirt calls here: hooks run inside
+"""OpenHW GPU Lending: libvirt handoff hook (qemu.d/50-openhw-lending runs it). No libvirt calls here: hooks run inside
 its locks. Based on RTXinVM's hook, but the card and the VM come from OpenHW's settings (/etc/openhw/card-filter.json,
 written by openhw-helper): the card by its GPU UUID and its current PCI address (the helper follows the UUID to
 whatever slot the card sits in at each start), so nothing here names a slot."""
@@ -16,7 +16,7 @@ import time
 import xml.etree.ElementTree as ET
 
 BASE = Path('/sys/bus/pci/devices')
-RUNDIR = Path('/run/windows-gpu-handoff')
+RUNDIR = Path('/run/openhw-lending')
 STATE = RUNDIR / 'state.json'
 SETTINGS = Path('/etc/openhw/card-filter.json')
 if os.geteuid() != 0 and os.environ.get('OPENHW_HOOK_SETTINGS'):
@@ -46,7 +46,7 @@ def address(pci):
 
 
 def log(message):
-    syslog.openlog('windows-gpu-handoff')
+    syslog.openlog('openhw-lending')
     syslog.syslog(syslog.LOG_NOTICE, message)
     print(message, file=sys.stderr, flush=True)
 

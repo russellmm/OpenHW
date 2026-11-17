@@ -78,7 +78,7 @@ public sealed partial class CardLending : IDisposable
     private sealed record Saved(string Stage, List<string> Paused);
 
     public CardLending(CardFilter filter, Action suspendGpus, Action resumeGpus, ICommandRunner? runner = null, string sysRoot = "/sys",
-        string handoffRecord = "/run/windows-gpu-handoff/state.json", TimeSpan? freeTimeout = null, TimeSpan? shutdownTimeout = null,
+        string handoffRecord = "/run/openhw-lending/state.json", TimeSpan? freeTimeout = null, TimeSpan? shutdownTimeout = null,
         string virsh = "/usr/bin/virsh", string smi = "/usr/bin/nvidia-smi", string systemctl = "/usr/bin/systemctl",
         string statePath = "/run/openhw/lend.json")
     {

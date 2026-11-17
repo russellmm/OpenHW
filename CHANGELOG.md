@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.33.2 — 2026-11-17
+
+- **Fan diagnostics in the journal** (`journalctl --user -t openhw`, lines "openhw: fans: …"): a fan taken (with its
+  curve and temperature), a GPU fan the helper no longer holds, a refused duty (once per reason), a curve without
+  readings (once, and how long until they're back), a release. Sensor readers slower than 2 s are named
+  ("openhw: sensors: … took N s"); the helper logs when a lend suspends the GPU fans and when they're available again.
+  For finding why the second lend's GPU fans came back after ~57 s instead of ~10 s.
+- **GPU Lending's names are OpenHW's**: the hook's record is `/run/openhw-lending/state.json`, its journal tag
+  `openhw-lending`, and its libvirt launcher `qemu.d/50-openhw-lending` (OpenHW's launcher under the old name
+  `50-windows-gpu` is removed, so the handoff never runs twice).
+
 ## 0.33.1 — 2026-11-17
 
 - **GPU fans come back to their curves after a lend.** A lend hands every GPU fan back to its card's own control (not

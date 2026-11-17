@@ -127,14 +127,21 @@ public sealed partial class GpuFanDriver : IDisposable
     {
         lock (_gate)
         {
+            var count = _held.Count;
             foreach (var id in _held.Keys.ToList()) Restore(id);
             _suspended = true;
+            Console.Error.WriteLine($"openhw-helper: gpu fans: suspended for a lend; {count} fan(s) back to their cards' own control");
         }
     }
 
     public void Resume()
     {
-        lock (_gate) _suspended = false;
+        lock (_gate)
+        {
+            if (!_suspended) return;
+            _suspended = false;
+            Console.Error.WriteLine("openhw-helper: gpu fans: available again");
+        }
     }
 
     public void Tick()

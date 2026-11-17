@@ -11,16 +11,18 @@ public sealed record LendingFiles(bool BootOrder, bool GnomeIgnore, bool Hook, b
 /// <item>a udev rule that keeps GNOME's compositor (mutter) off the lent card;</item>
 /// <item>a WirePlumber rule that leaves the card's display-audio function unclaimed (the hook refuses while anything
 ///   holds it, and the desktop's sound server would otherwise open it at every login);</item>
-/// <item>the libvirt handoff hook (<c>qemu.d/50-windows-gpu</c>): a two-line launcher for OpenHW's packaged
+/// <item>the libvirt handoff hook (<c>qemu.d/50-openhw-lending</c>): a two-line launcher for OpenHW's packaged
 ///   <c>/usr/lib/openhw/lending/hook.py</c>, which reads the card (UUID + current slot) and the VM from
 ///   <c>card-filter.json</c> — so it follows the card like everything else. Removed on uninstall.</item>
 /// </list>
-/// RTXinVM's own udev rule (<c>61-windows-gpu.rules</c>) and hook launcher, which named one fixed slot, are replaced
-/// by OpenHW's and kept in <c>/etc/openhw/lending-off/</c> (the launcher as <c>50-windows-gpu.rtxinvm</c>). All of it takes full effect at the next boot (udev, systemd ordering and libvirt read these at start).
+/// RTXinVM's own udev rule (<c>61-windows-gpu.rules</c>) and hook launcher (<c>qemu.d/50-windows-gpu</c>, also
+/// OpenHW's own launcher's name in 0.33.0–0.33.1), which named one fixed slot, are replaced by OpenHW's: an OpenHW
+/// launcher under the old name is deleted, anything else is kept in <c>/etc/openhw/lending-off/</c>
+/// (the launcher as <c>50-windows-gpu.rtxinvm</c>). All of it takes full effect at the next boot (udev, systemd ordering and libvirt read these at start).
 /// </summary>
 public sealed class LendingSetup(string etcRoot = "/etc", ICommandRunner? runner = null, string systemctl = "/usr/bin/systemctl")
 {
-    public const string HookName = "50-windows-gpu", LegacyRuleName = "61-windows-gpu.rules", RuleName = "61-openhw-lending.rules";
+    public const string HookName = "50-openhw-lending", LegacyHookName = "50-windows-gpu", LegacyRuleName = "61-windows-gpu.rules", RuleName = "61-openhw-lending.rules";
 
     private readonly ICommandRunner _run = runner ?? new ProcessRunner();
     private string DropIn => Path.Combine(etcRoot, "systemd", "system", "openhw-helper.service.d", "lending.conf");
@@ -89,12 +91,25 @@ public sealed class LendingSetup(string etcRoot = "/etc", ICommandRunner? runner
         if (full && audio != AudioRuleText(card!)) { Write(AudioRule, AudioRuleText(card!)); changes.Add("wrote the WirePlumber rule " + AudioRuleName); }
         if (!full && audio is not null) { File.Delete(AudioRule); changes.Add("removed the WirePlumber rule " + AudioRuleName); }
 
+        var legacy = Path.Combine(Hooks, LegacyHookName);
+        if (Read(legacy) is { } old) // 0.33.0–0.33.1's launcher name, or RTXinVM's launcher (it names one fixed slot)
+        {
+            if (old.Contains(HookScript, StringComparison.Ordinal))
+            {
+                File.Delete(legacy);
+                changes.Add($"removed the libvirt hook under its old name {LegacyHookName}");
+            }
+            else
+            {
+                Move(legacy, Path.Combine(Stash, LegacyHookName + ".rtxinvm"));
+                changes.Add($"moved the old libvirt hook {LegacyHookName} to {Stash} as {LegacyHookName}.rtxinvm");
+            }
+        }
         var hook = Path.Combine(Hooks, HookName);
         var current = Read(hook);
-        if (current is not null && current != HookText) // someone else's launcher (RTXinVM's names one fixed slot): keep it aside
+        if (current is not null && current != HookText) // an older OpenHW launcher text: rewritten below
         {
-            Move(hook, Path.Combine(Stash, HookName + ".rtxinvm"));
-            changes.Add($"moved the old libvirt hook {HookName} to {Stash} as {HookName}.rtxinvm");
+            File.Delete(hook);
             current = null;
         }
         if (installed && current is null && Directory.Exists(Hooks))

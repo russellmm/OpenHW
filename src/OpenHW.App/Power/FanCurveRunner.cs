@@ -39,6 +39,12 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
     public FanCurveStore Store => store;
     public FanClient Client => client;
 
+    /// <summary>
+    /// Where the runner reports what it does to fans and why it couldn't (a fan lost or taken, a refused duty, a curve
+    /// without readings): the user journal through stderr. Only changes are reported, never every poll.
+    /// </summary>
+    public Action<string> Log { get; set; } = line => Console.Error.WriteLine("openhw: fans: " + line);
+
     /// <summary>The BMC temperature sensors a fan can follow (number 1–18 → name), cached for a minute.</summary>
     public IReadOnlyList<(int Number, string Name)> BmcSensors()
     {
@@ -205,11 +211,14 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                 var value = FanCurveMath.Evaluate(curve, library, reading);
                 if (value is null)
                 {
+                    if (d.MissingSince is null)
+                        Log($"{zoneId}: curve \"{curve.Name}\" has no reading from {string.Join(", ", FanCurveMath.Sensors(curve, library))}");
                     d.MissingSince ??= now;
                     d.Problem = "no reading from its sensors";
                     if (now - d.MissingSince >= MissingReadingRelease && d.Duty is not null) Release(zoneId, d, "no reading: back on its BMC curve");
                     continue;
                 }
+                if (d.MissingSince is { } since) Log($"{zoneId}: readings back after {(now - since).TotalSeconds:0} s");
                 d.MissingSince = null;
                 var tempNow = FanCurveMath.Sensors(curve, library).Select(reading).OfType<double>().DefaultIfEmpty(0).Max();
                 if (IsGpu(zoneId))
@@ -219,14 +228,16 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                     // waiting for the temperature to move past the deadband would leave it on automatic meanwhile.
                     var decided = d.Gate.Decide(value.Value, (now - DateTime.UnixEpoch).TotalSeconds, tempNow) ?? (d.Duty is null ? d.Gate.Last : null);
                     if (decided is not { } duty || duty == d.Duty) continue;
+                    var taking = d.Duty is null;
                     try
                     {
                         var reply = client.GpuSet(zoneId, duty).Split(' ');
                         d.Duty = reply.Length > 1 && int.TryParse(reply[1], NumberStyles.None, CultureInfo.InvariantCulture, out var t) ? t : duty;
                         d.LastChange = now;
                         d.Problem = null;
+                        if (taking) Log($"{zoneId}: set to {d.Duty} % (\"{curve.Name}\" at {tempNow.ToString("0.#", CultureInfo.InvariantCulture)} °C)");
                     }
-                    catch (Exception ex) when (Soft(ex)) { d.Problem = ex.Message.Replace("openhw-helper: err ", ""); }
+                    catch (Exception ex) when (Soft(ex)) { Problem(zoneId, d, duty, ex); }
                     continue;
                 }
                 var floor = FanDriver.MinDuty(ZoneIndex(zoneId));
@@ -243,11 +254,12 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                     var parts = reply.Split(' ');
                     var set = parts.Length > 1 && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var t) ? t : gated;
                     if (set != d.Duty) { store.CountWrite(zoneId, now); store.Save(); }
+                    if (d.Duty is null) Log($"{zoneId}: set to {set} % (\"{curve.Name}\")");
                     d.Duty = set;
                     d.LastChange = now;
                     d.Problem = null;
                 }
-                catch (Exception ex) when (Soft(ex)) { d.Problem = ex.Message.Replace("openhw-helper: err ", ""); }
+                catch (Exception ex) when (Soft(ex)) { Problem(zoneId, d, gated, ex); }
             }
             if (_driven.Values.Any(x => x.Duty is not null))
                 try { client.Beat(); } catch (Exception ex) when (Soft(ex)) { }
@@ -273,7 +285,19 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
             held = status.Fans.Where(f => f.OwnedByYou).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         }
         catch (Exception ex) when (Soft(ex)) { return; }
-        foreach (var (_, d) in mine.Where(x => !held.Contains(x.Key))) d.Duty = null;
+        foreach (var (id, d) in mine.Where(x => !held.Contains(x.Key)))
+        {
+            Log($"{id}: the helper no longer holds it for OpenHW (a lend, or a lapsed lease); setting it again");
+            d.Duty = null;
+        }
+    }
+
+    /// <summary>Records why a duty was refused; reported once per different reason.</summary>
+    private void Problem(string zoneId, Driven d, int duty, Exception ex)
+    {
+        var why = ex.Message.Replace("openhw-helper: err ", "");
+        if (why != d.Problem) Log($"{zoneId}: can't set {duty} %: {why}");
+        d.Problem = why;
     }
 
     /// <summary>Gives every OpenHW-driven fan back to its BMC curve (OpenHW is exiting).</summary>
@@ -300,6 +324,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
         try { if (IsGpu(zoneId)) client.GpuRelease(zoneId); else client.Release(zoneId); } catch (Exception ex) when (Soft(ex)) { }
         d.Duty = null;
         d.Problem = why;
+        if (why is not null) Log($"{zoneId}: released — {why}");
     }
 
     private static bool Soft(Exception ex) =>

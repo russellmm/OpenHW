@@ -71,6 +71,8 @@ public sealed class FanCurveTests : IDisposable
         var runner = new FanCurveRunner(new FanClient(line => line.StartsWith("gpufans ", StringComparison.Ordinal)
             ? GpuWire.Encode(new GpuFanDriverStatus(null, [new(Fan, "RTX", "00000000:C1:00.0", 0, 30, 100, held, held, held ? 65 : null)]))
             : Helper(line)), store, () => _now);
+        var log = new List<string>();
+        runner.Log = log.Add;
         int Sets() => _sent.Count(l => l.StartsWith($"gpufanset ", StringComparison.Ordinal) && l.Contains(Fan, StringComparison.Ordinal));
 
         runner.Tick(_ => 60);
@@ -82,6 +84,28 @@ public sealed class FanCurveTests : IDisposable
         for (var i = 0; i < FanCurveRunner.GpuHoldCheckEvery; i++) { _now += TimeSpan.FromSeconds(2); runner.Tick(_ => 60.5); }
         Assert.Equal(2, Sets());                                 // same duty, set again within one check
         Assert.EndsWith($"{Fan} 65", _sent.Last(l => l.StartsWith("gpufanset ", StringComparison.Ordinal)), StringComparison.Ordinal);
+
+        // The journal says what happened, once each: taken at start, lost, taken again.
+        Assert.Equal([$"{Fan}: set to 65 % (\"5060 core\" at 60 °C)",
+                      $"{Fan}: the helper no longer holds it for OpenHW (a lend, or a lapsed lease); setting it again",
+                      $"{Fan}: set to 65 % (\"5060 core\" at 60.5 °C)"], log);
+
+        // A refused duty is reported once per reason, and a curve without readings once until they're back.
+        var refuse = true;
+        var lent = new FanCurveRunner(new FanClient(line => line.StartsWith("gpufanset ", StringComparison.Ordinal) && refuse
+            ? throw new IOException("openhw-helper: err a card is being lent to a VM") : Helper(line)), store, () => _now);
+        var lines = new List<string>();
+        lent.Log = lines.Add;
+        for (var i = 0; i < 3; i++) { _now += TimeSpan.FromSeconds(2); lent.Tick(_ => 60); }
+        Assert.Equal([$"{Fan}: can't set 65 %: a card is being lent to a VM"], lines);
+        refuse = false;
+        for (var i = 0; i < 3; i++) { _now += TimeSpan.FromSeconds(2); lent.Tick(_ => null); }
+        _now += TimeSpan.FromSeconds(2);
+        lent.Tick(_ => 60);
+        Assert.Equal([$"{Fan}: can't set 65 %: a card is being lent to a VM",
+                      $"{Fan}: curve \"5060 core\" has no reading from nvml:GPU-x:temp:core",
+                      $"{Fan}: readings back after 6 s",
+                      $"{Fan}: set to 65 % (\"5060 core\" at 60 °C)"], lines);
     }
 
     [Fact]
