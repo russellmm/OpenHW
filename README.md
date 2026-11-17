@@ -482,7 +482,7 @@ Headless: the helper protocol, its validation and the client/server socket round
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
 HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
-against a fake machine's UEFI variables. 374 tests (184 library + 190 headless UI) as of 0.38.0.
+against a fake machine's UEFI variables. 374 tests (184 library + 190 headless UI) as of 0.38.2.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
@@ -507,6 +507,7 @@ change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpuf
 card filter, and **fan control** for every BMC fan and NVIDIA fan from one OpenFan-style screen (curves the BMC runs
 itself, OpenHW-driven curves with flash-write warnings, NVIDIA fans through NVML, configurations, fan alarm
 thresholds; 0.25.0–0.35.0), the BMC's status sensors and event log (0.34.0), and **BIOS Setup** — this board's BIOS
-screen with this machine's settings, planning changes without writing the firmware (0.37.0).
+screen with this machine's settings, planning changes without writing the firmware (0.37.0), and the **WireView
+Pro II** power meter and **UPS** (through NUT) as their own sensor groups (0.38.0).
 Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md). Every window and dialog opens
 centred on the primary monitor the first time, then where it was last moved.

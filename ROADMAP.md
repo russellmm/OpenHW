@@ -274,6 +274,13 @@ the WRX90E-SAGE SE in November 2026); its profile stays for anyone with that boa
       (owner, 2026-10-25).
 - [x] **GPU extras** where NVML has them: 1 s average power, PCIe error counters (0.5.0). Hotspot / memory-junction
       temperatures aren't in NVML's public interface (memory temperature reports "not supported" on these cards).
+- [x] **Thermal Grizzly WireView Pro II** (0.38.0): its own group (per-wire V/A/W, totals, current imbalance,
+      connector temperatures, PSU sense-pin limit, faults), keyed by the device's USB serial — not tied to a GPU
+      (owner). Read-only through the helper (protocol 19); see docs/power-devices.md.
+- [x] **UPS through NUT** (0.38.0; whole numbers 0.38.2): input/output voltage, load, power, battery charge/voltage/
+      runtime, on-battery / low / replace / overloaded flags — upsd on localhost, read-only, no root.
+- [ ] Power devices: alert presets for WireView wire current, connector temperature and faults, and for "UPS on
+      battery" (the alert system can already do these by hand).
 
 ## Resource use
 
