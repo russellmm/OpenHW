@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.28.1 — 2026-11-17
+
+- Fixed: + Flat / + Graph / + Mix did nothing since 0.27.0 — their menu (New / Duplicate) was filled only as it opened,
+  and an empty menu never opens. It's now built on each click, then shown.
+- Verified on the real BMC: CHA_FAN1 runs the owner's "MemoryA1" curve (DIMMA1, 50:30 55:52 60:74 **80**:100 100:100):
+  **point 4 at 80 °C is accepted** — the 70 °C rule is gone for good.
+
 ## 0.28.0 — 2026-11-17
 
 - **Friendly fan names**: click a fan card's name to rename it (e.g. CHA_FAN1 → "Memory"); the tooltip always shows

@@ -57,8 +57,8 @@ ASUS OEM commands (ASUS E26328 IPMI manual V3, July 2025, §3.7.17 and appendix 
 Firmware rules: temperatures rise, the **last point is at 100 °C**, duties 0–100 but **any 0 % point is refused
 (0xD9)**. Point 4 is free: the BMC web console edits points A–D (D's temperature too) and shows E at 100 °C (owner's
 screenshot, 2026-11-17). Up to 0.24.x OpenHW, like OpenFan, also required point 4 = 70 °C only because every curve
-it had read looked like that — never tested. If the firmware refuses a free point 4 through IPMI, the app refits with
-70 °C and remembers (`FourthAt70` in fan-curves.json).
+it had read looked like that — never tested. **Confirmed 2026-11-17**: CHA_FAN1 written with 50:30 55:52 60:74 80:100
+100:100 through IPMI, read back identical. (The app's refit-at-70 fallback, `FourthAt70`, stays as a safety net.)
 Identity checked before any write: board vendor/name, ASUS 2623 / product 0x1193, firmware
 2.01, aux bytes `22 00 00 00`, zone count/order, each table's name and curve temperatures.
 

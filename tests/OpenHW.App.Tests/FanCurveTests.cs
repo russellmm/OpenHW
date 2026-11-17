@@ -191,6 +191,15 @@ public sealed class FanCurveTests : IDisposable
         var captures = Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath();
         window.CaptureRenderedFrame()?.Save(Path.Combine(captures, "openhw-fan-control-curves.png"));
 
+        var flatMenu = window.NewMenu(FanCurveKind.Flat);
+        Assert.Equal("New flat", ((MenuItem)flatMenu.Items[0]!).Header);
+        Assert.Equal("Duplicate \"35%\"", ((TextBlock)((MenuItem)flatMenu.Items[2]!).Header!).Text);
+        var plus = window.GetLogicalDescendants().OfType<Button>().Single(b => b.Content as string == "+ Mix");
+        plus.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); // opens its menu (and doesn't throw)
+        var mixMenu = window.NewMenu(FanCurveKind.Mix);
+        mixMenu.ShowAt(plus);
+        Assert.True(mixMenu.IsOpen); // a menu built first does open
+        mixMenu.Hide();
         var copy = window.Duplicate(store.Find("f35")!);
         Assert.Equal("35% copy", copy.Name);
         Assert.Equal(35, copy.Percent);

@@ -137,26 +137,29 @@ public sealed class FanControlWindow : Window
     /// <summary>+ Flat / + Graph / + Mix: a menu — a new curve, or a copy of one of that kind already made.</summary>
     private Button NewButton(string text, FanCurveKind kind)
     {
-        var button = Fab(text, () => { });
-        var menu = new MenuFlyout();
-        button.Flyout = menu;
-        menu.Opening += (_, _) =>
-        {
-            menu.Items.Clear();
-            var fresh = new MenuItem { Header = "New " + kind.ToString().ToLowerInvariant() };
-            fresh.Click += (_, _) => NewCurve(kind);
-            menu.Items.Add(fresh);
-            var existing = _runner.Store.Curves.Where(c => c.Kind == kind).OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
-            if (existing.Count > 0) menu.Items.Add(new Separator());
-            foreach (var c in existing)
-            {
-                var copy = new MenuItem { Header = new TextBlock { Text = $"Duplicate \"{c.Name}\"" } };
-                var source = c;
-                copy.Click += (_, _) => Duplicate(source);
-                menu.Items.Add(copy);
-            }
-        };
+        Button? button = null;
+        // Built on each click, then shown: an empty MenuFlyout filled in its own Opening event never opens.
+        button = Fab(text, () => NewMenu(kind).ShowAt(button!));
         return button;
+    }
+
+    /// <summary>The + Flat / + Graph / + Mix menu (tests open it too).</summary>
+    public MenuFlyout NewMenu(FanCurveKind kind)
+    {
+        var menu = new MenuFlyout();
+        var fresh = new MenuItem { Header = "New " + kind.ToString().ToLowerInvariant() };
+        fresh.Click += (_, _) => NewCurve(kind);
+        menu.Items.Add(fresh);
+        var existing = _runner.Store.Curves.Where(c => c.Kind == kind).OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        if (existing.Count > 0) menu.Items.Add(new Separator());
+        foreach (var c in existing)
+        {
+            var copy = new MenuItem { Header = new TextBlock { Text = $"Duplicate \"{c.Name}\"" } };
+            var source = c;
+            copy.Click += (_, _) => Duplicate(source);
+            menu.Items.Add(copy);
+        }
+        return menu;
     }
 
     /// <summary>A copy of a curve under a new name (" copy", " copy 2", …); a graph opens in the editor right away.</summary>
