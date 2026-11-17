@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.38.2 — 2026-11-17
+
+- UPS rows show whole numbers ("248 W", "26 V", "32 min" instead of "248.000 W"). A sensor can now carry its own
+  default decimal places (`HardwareItem.Decimals`); Customize values still overrides it per row.
+
 ## 0.38.1 — 2026-11-17
 
 - The WireView group's title no longer doubles the brand ("Thermal Grizzly Thermal Grizzly WireView Pro II"): the

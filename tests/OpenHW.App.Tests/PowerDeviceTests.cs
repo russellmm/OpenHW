@@ -35,6 +35,10 @@ public sealed class PowerDeviceTests
         var group = Assert.Single(SensorPresentation.Build(items, new Dictionary<string, IReadOnlyList<string>>(),
             new SensorPresentation.MachineInfo("ASUSTeK", "Board", "CPU", [])));
         Assert.Equal("UPS: CyberPower CP2000PFCRM2U (NUT)", group.Title);
+        // Whole numbers (owner, 2026-11-17): 234 W, 26 V, 32 min, 100 %.
+        string Shown(string key, double v) => SensorPresentation.Format(items.Single(i => i.Id == "nut:ups:" + key), v);
+        Assert.Equal(("234 W", "26 V", "32 min", "100 %", "1,200 W"),
+            (Shown("ups.realpower", 234), Shown("battery.voltage", 26.3), Shown("battery.runtime", 1900 / 60.0), Shown("battery.charge", 100), Shown("ups.realpower.nominal", 1200)));
         AssertExplained(items);
         Assert.Throws<ArgumentException>(() => NutEngine.Query("INSTCMD ups test.battery.start")); // read-only
     }

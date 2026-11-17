@@ -304,7 +304,7 @@ public static partial class SensorPresentation
     /// <summary>A displayed (already <see cref="Scale">scaled</see>) value in the sensor's unit and decimal places.</summary>
     /// <remarks>"Automatic" decimals follow OpenHW's unit even under a unit of the user's (°C → °F keeps one decimal).</remarks>
     public static string Format(HardwareItem item, double? value) =>
-        Format(value, DisplayUnit(item), CanCustomize(item) ? SensorCustomizations.Current.ValuesOf(item.Id)?.Decimals : null, BuiltInUnit(item));
+        Format(value, DisplayUnit(item), (CanCustomize(item) ? SensorCustomizations.Current.ValuesOf(item.Id)?.Decimals : null) ?? item.Decimals, BuiltInUnit(item));
 
     public static string FormatAverage(HardwareItem item, double? value) =>
         BuiltInUnit(item) == "flag" ? Format(value * 100, "%") : Format(item, value);

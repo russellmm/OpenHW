@@ -37,6 +37,9 @@ public sealed class HardwareItem
     /// <summary>Factor applied to raw readings (board divider); 1 when readings are used as reported.</summary>
     public double Scale { get; init; } = 1;
 
+    /// <summary>Decimal places to show when the user hasn't chosen any (null = the unit's default, e.g. 3 for W and V).</summary>
+    public int? Decimals { get; init; }
+
     /// <summary>False when the name/scale mapping is inferred but not yet proven on real hardware.</summary>
     public bool MappingConfirmed { get; init; } = true;
 }

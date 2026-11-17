@@ -76,6 +76,7 @@ public sealed class NutEngine(Func<string, IReadOnlyList<string>>? query = null)
                 {
                     Id = $"{IdPrefix}{ups.Name}:{r.Key}", Name = r.Label, Kind = r.Kind, Unit = r.Unit, Group = GroupPrefix + ups.Name,
                     Backend = "openhw", CanSet = false, Source = model, Details = details,
+                    Decimals = 0, // whole numbers (owner, 2026-11-17); Customize values can still change a row
                 });
         }
         return items;
