@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.29.0 — 2026-11-17
+
+- **Fan configurations, as in OpenFan**: Fan Control's **⋮** menu — Create new configuration… (Ctrl+N), Save
+  configuration (Ctrl+S), Save configuration as… (Ctrl+Shift+S), Load configuration… (Ctrl+L). A configuration holds the
+  curves, which fan runs which, and the fans' names (`~/.config/openhw/fan-profiles/` by default). The file in use is
+  in the window's title and, as in OpenFan, every change also saves there.
+- Loading (or starting new) says first what happens: NVIDIA and OpenHW-driven fans follow at once; **BMC fans keep the
+  curve the BMC has until Apply** (one write each) — and **Apply all to the BMC (n)** writes them together after a
+  confirm. Nothing is written to the BMC by loading alone.
+- Verified: both RTX PRO 6000s' fans follow their curves through NVML (slot 5 at 31 °C → 35 %, slot 1 at 33 °C → 36 %).
+
 ## 0.28.1 — 2026-11-17
 
 - Fixed: + Flat / + Graph / + Mix did nothing since 0.27.0 — their menu (New / Duplicate) was filled only as it opened,

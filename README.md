@@ -267,14 +267,16 @@ use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves t
 duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
 behave are in [docs/fan-control.md](docs/fan-control.md).
 
-**Fan Control (0.25.0–0.28.1)** — **Power → Fan Control…** (also in the tray menu) is one screen, laid out like
+**Fan Control (0.25.0–0.29.0)** — **Power → Fan Control…** (also in the tray menu) is one screen, laid out like
 OpenFan's Home: **Controls**
 (a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
 and **Curves**, as in OpenFan: **graphs** (any number of points over any temperature OpenHW reads — drag points,
 click to add, hysteresis in °C and seconds, max speed; each card shows the sensor's reading as a dot on the curve),
 **flat** duties (− / +) and **mixes** (max / min / average of other curves). **+ Flat / + Graph / + Mix** make a new
 curve or duplicate one you already have. Click a fan's name to give it a friendly name (the tooltip keeps the
-original). **NVIDIA fans** run their curve through
+original). **⋮** saves and loads **configurations** (curves, assignments, names; Ctrl+N / Ctrl+S / Ctrl+Shift+S /
+Ctrl+L) as in OpenFan: the file in use is in the title and every change saves there; loading never writes to the BMC by
+itself — BMC fans wait for Apply (or **Apply all to the BMC**). **NVIDIA fans** run their curve through
 the NVIDIA driver (nothing stored; untick and the card controls its fans again). On BMC fans, where a curve runs
 depends on what it reads:
 

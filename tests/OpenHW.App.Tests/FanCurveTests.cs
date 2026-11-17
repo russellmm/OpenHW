@@ -160,6 +160,53 @@ public sealed class FanCurveTests : IDisposable
         Assert.Equal(["nvml"], loaded.Find("mix")!.Children);
     }
 
+    [Fact]
+    public void ConfigurationsSaveAndLoadAndChangesFollowTheFileInUse()
+    {
+        var store = Store();
+        store.Assignments["bmc:1"] = "slot5";
+        store.Names["bmc:1"] = "Memory";
+        var file = Path.Combine(_dir, "profiles", "mine.json");
+        store.Export(file);
+        store.ConfigFile = file;
+        store.Curves.Single(c => c.Id == "slot5").Name = "Renamed";
+        store.Save(); // the file in use follows
+        Assert.False(store.DiffersFromFile());
+
+        var other = FanCurveStore.Load(Path.Combine(_dir, "other.json"));
+        other.Import(file);
+        Assert.Equal(file, other.ConfigFile);
+        Assert.Equal("Renamed", other.Find("slot5")!.Name);
+        Assert.Equal("slot5", other.AssignedTo("bmc:1")!.Id);
+        Assert.Equal("Memory", other.Names["bmc:1"]);
+
+        other.StartNew(Path.Combine(_dir, "profiles", "empty.json"));
+        Assert.Empty(other.Curves);
+        Assert.Empty(other.Assignments);
+        Assert.Equal("Memory", other.Names["bmc:1"]); // names belong to the fans: kept
+
+        File.WriteAllText(Path.Combine(_dir, "junk.json"), "{ not json");
+        Assert.Throws<InvalidDataException>(() => other.Import(Path.Combine(_dir, "junk.json")));
+    }
+
+    [AvaloniaFact]
+    public void LoadingAConfigurationReplacesTheSetupAndOffersApplyAll()
+    {
+        using var hub = new SensorHub();
+        var source = Store();
+        source.Assignments["bmc:2"] = "slot5";
+        source.Assignments["bmc:3"] = "slot5";
+        var file = Path.Combine(_dir, "two.json");
+        source.Export(file);
+        var window = new FanControlWindow(hub, runner: Runner(FanCurveStore.Load(Path.Combine(_dir, "live.json"))));
+        window.Show();
+        window.LoadConfig(file);
+        Assert.Equal("Fan Control — two.json", window.Title);
+        Assert.Contains(window.Texts(), t => t == "GPU Slot 5");
+        Assert.Contains(window.GetLogicalDescendants().OfType<Button>(), b => b.Content as string == "Apply all to the BMC (2)" && b.IsVisible);
+        Assert.DoesNotContain(_sent, l => l.StartsWith("fancurve", StringComparison.Ordinal)); // nothing written until Apply
+    }
+
     [AvaloniaFact]
     public void CurvesAndFansOnOneScreen()
     {

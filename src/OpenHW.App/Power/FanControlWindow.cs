@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OpenHW.App.Alerts;
 using OpenHW.App.SensorWindow;
@@ -41,6 +42,7 @@ public sealed class FanControlWindow : Window
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Foreground = Secondary, FontSize = 13 };
     private readonly TextBlock _result = new() { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
     private readonly Button _login;
+    private readonly Button _applyAll;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly List<Action> _updaters = [];
     private FanDriverStatus? _bmc;
@@ -72,12 +74,48 @@ public sealed class FanControlWindow : Window
             dialog.Closed += (_, _) => RefreshStatus(rebuild: true);
             dialog.ShowDialog(this);
         });
+        _applyAll = Fab("Apply all to the BMC", () => _ = ApplyAllAsync());
+        _applyAll.IsVisible = false;
+        var more = new Button { Content = "⋮", Padding = new Thickness(12, 3), Background = FooterIcons.ButtonFace, BorderBrush = FooterIcons.ButtonEdge, BorderThickness = new Thickness(1), Foreground = Palette.Text };
+        MenuItem Item(string header, string gesture, Action action)
+        {
+            var item = new MenuItem { Header = header, InputGesture = KeyGesture.Parse(gesture) };
+            item.Click += (_, _) => action();
+            return item;
+        }
+        more.Flyout = new MenuFlyout
+        {
+            Items =
+            {
+                Item("Create new configuration…", "Ctrl+N", () => _ = NewConfigAsync()),
+                Item("Save configuration", "Ctrl+S", SaveConfig),
+                Item("Save configuration as…", "Ctrl+Shift+S", () => _ = SaveConfigAsAsync()),
+                Item("Load configuration…", "Ctrl+L", () => _ = LoadConfigAsync()),
+            },
+        };
+        ToolTip.SetTip(more, "Configurations: the curves, which fan runs which, and the fans' names");
+        KeyDown += (_, e) =>
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+            var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            switch (e.Key)
+            {
+                case Key.N when !shift: _ = NewConfigAsync(); break;
+                case Key.S when shift: _ = SaveConfigAsAsync(); break;
+                case Key.S: SaveConfig(); break;
+                case Key.L when !shift: _ = LoadConfigAsync(); break;
+                default: return;
+            }
+            e.Handled = true;
+        };
         var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
         title.Children.Add(new TextBlock { Text = "Fan Control", FontSize = 26, FontWeight = FontWeight.Bold });
         title.Children.Add(new TextBlock { Text = "BMC + NVML", Foreground = Secondary, FontSize = 14, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) });
         var top = new DockPanel();
-        DockPanel.SetDock(_login, Dock.Right);
-        top.Children.Add(_login);
+        var right = AlertUi.Row(_applyAll, _login, more);
+        right.VerticalAlignment = VerticalAlignment.Top;
+        DockPanel.SetDock(right, Dock.Right);
+        top.Children.Add(right);
         top.Children.Add(title);
 
         var newButtons = AlertUi.Row(NewButton("+ Flat", FanCurveKind.Flat), NewButton("+ Graph", FanCurveKind.Graph), NewButton("+ Mix", FanCurveKind.Mix));
@@ -186,6 +224,7 @@ public sealed class FanControlWindow : Window
 
     private void OnStoreChanged() => Dispatcher.UIThread.Post(() =>
     {
+        UpdateTitle();
         if (_ownSave) return;
         BuildControls();
         BuildCurves();
@@ -236,6 +275,147 @@ public sealed class FanControlWindow : Window
 
         var shape = string.Join("|", Controls().Select(c => c.Id + (c.Zone?.Owned ?? false))) + "#" + _bmc?.Available + _bmc?.OtherController;
         if (rebuild || shape != _controlsShape) BuildControls();
+        UpdateTitle();
+    }
+
+    /// <summary>The configuration file in the title (as OpenFan) and the count of BMC fans whose curve isn't on the BMC yet.</summary>
+    private void UpdateTitle()
+    {
+        var file = _runner.Store.ConfigFile;
+        Title = file is null ? "Fan Control" : $"Fan Control — {System.IO.Path.GetFileName(file)}";
+        var pending = Pending().Count;
+        _applyAll.IsVisible = pending > 1;
+        _applyAll.Content = $"Apply all to the BMC ({pending})";
+    }
+
+    /// <summary>BMC fans with a BMC-run curve that isn't on the BMC yet (e.g. after loading a configuration).</summary>
+    private List<Control0> Pending()
+    {
+        var store = _runner.Store;
+        return Controls().Where(c => c.Zone is { } z && store.AssignedTo(z.Id) is { } curve && _runner.Plan(z.Id, curve) is { OnBmc: true } plan &&
+            !(z.Active is { } a && plan.Points.SequenceEqual(a) &&
+              (plan.SourceMask is null || (_sources.TryGetValue(FanCurveRunner.ZoneIndex(z.Id), out var m) && plan.SourceMask == m)))).ToList();
+    }
+
+    private async Task ApplyAllAsync()
+    {
+        var pending = Pending();
+        if (pending.Count == 0) return;
+        var text = $"Write these fans' curves to the BMC: {string.Join(", ", pending.Select(c => c.Title))}?\n\nOne write to the BMC's flash per " +
+                   "fan (two where its sensors change); after that the BMC runs them with no further writes.";
+        if (!await new ConfirmDialog("Fan Control", text, $"Write {pending.Count} fans", false).ShowDialog<bool>(this)) return;
+        var results = new List<string>();
+        foreach (var c in pending)
+        {
+            long? mask = _sources.TryGetValue(FanCurveRunner.ZoneIndex(c.Id), out var m) ? m : null;
+            try { results.Add($"{c.Title}: {_runner.ApplyBmc(c.Zone!, mask)}"); }
+            catch (IOException ex) { results.Add($"{c.Title}: {ex.Message.Replace("openhw-helper: err ", "")}"); }
+        }
+        Show(string.Join("  ·  ", results), results.Any(r => r.Contains("refused", StringComparison.Ordinal)));
+        RefreshStatus(rebuild: true);
+    }
+
+    // ── configurations (⋮ menu, OpenFan's Save / Load setup) ──────────────────────────────────────────────────────
+
+    private static FilePickerFileType ConfigType => new("OpenHW fan configuration") { Patterns = ["*.json"] };
+
+    private async Task<IStorageFolder?> ProfilesFolder()
+    {
+        try { Directory.CreateDirectory(FanCurveStore.ProfilesDir); } catch (IOException) { }
+        return await StorageProvider.TryGetFolderFromPathAsync(FanCurveStore.ProfilesDir);
+    }
+
+    private void SaveConfig()
+    {
+        if (_runner.Store.ConfigFile is null) { _ = SaveConfigAsAsync(); return; }
+        try
+        {
+            _runner.Store.Export(_runner.Store.ConfigFile);
+            Show($"Configuration saved — {System.IO.Path.GetFileName(_runner.Store.ConfigFile)}", false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Show("Save failed: " + ex.Message, true); }
+    }
+
+    private async Task SaveConfigAsAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save configuration as", SuggestedStartLocation = await ProfilesFolder(), DefaultExtension = "json",
+            SuggestedFileName = _runner.Store.ConfigFile is { } f ? System.IO.Path.GetFileName(f) : "fans.json", FileTypeChoices = [ConfigType],
+        });
+        if (file?.TryGetLocalPath() is not { } path) return;
+        try
+        {
+            _runner.Store.Export(path);
+            _runner.Store.ConfigFile = path;
+            Save();
+            Show($"Configuration saved — {System.IO.Path.GetFileName(path)} (changes save here)", false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Show("Save failed: " + ex.Message, true); }
+        UpdateTitle();
+    }
+
+    private async Task NewConfigAsync()
+    {
+        if (!await ConfirmReplaceAsync("Create a new, empty configuration")) return;
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Create new configuration", SuggestedStartLocation = await ProfilesFolder(), DefaultExtension = "json",
+            SuggestedFileName = "new-config.json", FileTypeChoices = [ConfigType],
+        });
+        if (file?.TryGetLocalPath() is not { } path) return;
+        try
+        {
+            _runner.Store.StartNew(path);
+            Save();
+            Show($"New configuration — {System.IO.Path.GetFileName(path)} (changes save here)", false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Show("Create failed: " + ex.Message, true); }
+        AfterSwitch();
+    }
+
+    private async Task LoadConfigAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Load configuration", SuggestedStartLocation = await ProfilesFolder(), FileTypeFilter = [ConfigType],
+        });
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
+        if (!await ConfirmReplaceAsync($"Load {System.IO.Path.GetFileName(path)}")) return;
+        try
+        {
+            LoadConfig(path);
+            Show($"Loaded {System.IO.Path.GetFileName(path)} (changes save here)." +
+                 (Pending().Count > 0 ? " BMC fans it puts on BMC curves wait for Apply (one write each)." : ""), false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { Show("Load failed: " + ex.Message, true); }
+    }
+
+    /// <summary>Loads a configuration file into the live setup (tests call it directly).</summary>
+    public void LoadConfig(string path)
+    {
+        _runner.Store.Import(path);
+        Save();
+        AfterSwitch();
+    }
+
+    private void AfterSwitch()
+    {
+        BuildCurves();
+        RefreshStatus(rebuild: true);
+    }
+
+    /// <summary>
+    /// What replacing the setup does, before it happens: NVIDIA and OpenHW-driven fans follow at once; BMC fans keep the
+    /// curve the BMC has until Apply (one write each). Says so when the current setup isn't in any file yet.
+    /// </summary>
+    private async Task<bool> ConfirmReplaceAsync(string what)
+    {
+        var store = _runner.Store;
+        var text = $"{what}?\n\nIt replaces the curves, which fan runs which, and the fans' names. NVIDIA fans and OpenHW-driven " +
+                   "fans follow it at once. BMC fans keep the curve the BMC has until you Apply (one write each)." +
+                   (store.ConfigFile is null && store.Curves.Count > 0 ? "\n\nThe current setup isn't saved in a configuration file: use Save configuration as… first to keep it." : "");
+        return await new ConfirmDialog("Fan Control", text, "Continue", store.ConfigFile is null && store.Curves.Count > 0).ShowDialog<bool>(this);
     }
 
     private List<Control0> Controls()

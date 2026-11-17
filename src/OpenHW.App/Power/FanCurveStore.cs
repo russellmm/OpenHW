@@ -29,6 +29,67 @@ public sealed class FanCurveStore
 
     public static string DefaultPath => Path.Combine(Settings.AppSettings.ConfigDir, "fan-curves.json");
 
+    /// <summary>Where saved configurations go by default (as OpenFan's profiles folder).</summary>
+    public static string ProfilesDir => Path.Combine(Settings.AppSettings.ConfigDir, "fan-profiles");
+
+    /// <summary>
+    /// The configuration file in use (Save as… / Load… / New…), or null. While set, every change is also saved there,
+    /// as in OpenFan ("changes save here").
+    /// </summary>
+    public string? ConfigFile { get; set; }
+
+    /// <summary>A configuration file: the curves, which fan runs which, the fans' names.</summary>
+    public sealed record FanConfig(int Version, List<FanCurve> Curves, Dictionary<string, string> Assignments,
+        Dictionary<string, string> Names, Dictionary<string, string> Chosen);
+
+    public FanConfig Config() => new(1, Curves, Assignments, Names, Chosen);
+
+    /// <summary>Writes the configuration to <paramref name="path"/> (Save / Save as).</summary>
+    public void Export(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(Config(), new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(temp, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// Replaces the curves, assignments and names with a configuration file's (checked like the live file), and makes it
+    /// the file in use. Throws <see cref="InvalidDataException"/> for something that isn't a configuration.
+    /// </summary>
+    public void Import(string path)
+    {
+        FanConfig? config;
+        try { config = JsonSerializer.Deserialize<FanConfig>(File.ReadAllText(path)); }
+        catch (JsonException ex) { throw new InvalidDataException("Not an OpenHW fan configuration: " + ex.Message, ex); }
+        if (config is null || config.Curves is null) throw new InvalidDataException("Not an OpenHW fan configuration.");
+        Curves = config.Curves;
+        Assignments = config.Assignments ?? [];
+        Names = config.Names ?? [];
+        Chosen = config.Chosen ?? [];
+        Normalise();
+        ConfigFile = path;
+    }
+
+    /// <summary>An empty configuration (no curves, no assignments; names kept), saved in <paramref name="path"/>.</summary>
+    public void StartNew(string path)
+    {
+        Curves = [];
+        Assignments = [];
+        Chosen = [];
+        ConfigFile = path;
+        Export(path);
+    }
+
+    /// <summary>True when the configuration in use differs from its file (unsaved — can't happen while auto-saving, but a
+    /// file edited or removed outside OpenHW shows here).</summary>
+    public bool DiffersFromFile()
+    {
+        if (ConfigFile is null) return false;
+        try { return File.ReadAllText(ConfigFile) != JsonSerializer.Serialize(Config(), new JsonSerializerOptions { WriteIndented = true }); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
+    }
+
     [System.Text.Json.Serialization.JsonIgnore] public string FilePath { get; private set; } = DefaultPath;
 
     public static FanCurveStore Load(string? path = null)
@@ -38,16 +99,26 @@ public sealed class FanCurveStore
         try { store = JsonSerializer.Deserialize<FanCurveStore>(File.ReadAllText(path)) ?? new(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { store = new(); }
         store.FilePath = path;
-        store.Curves = store.Curves.Where(c => !string.IsNullOrWhiteSpace(c.Id)).DistinctBy(c => c.Id).ToList();
-        foreach (var c in store.Curves)
+        store.Normalise();
+        return store;
+    }
+
+    // A hand-edited or older file can hold anything: keep what the UI could have produced.
+    private void Normalise()
+    {
+        Curves = Curves.Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Id)).DistinctBy(c => c.Id).ToList();
+        foreach (var c in Curves)
         {
+            c.Name ??= "";
+            c.Points ??= [];
+            c.Children ??= [];
             c.Percent = Math.Clamp(c.Percent, 0, 100);
             c.MaxSpeedPercent = Math.Clamp(c.MaxSpeedPercent, 1, 100);
-            c.Children = c.Children.Where(id => store.Curves.Any(x => x.Id == id && x.Kind != FanCurveKind.Mix)).Distinct().ToList();
+            c.Children = c.Children.Where(id => Curves.Any(x => x.Id == id && x.Kind != FanCurveKind.Mix)).Distinct().ToList();
         }
-        store.Assignments = store.Assignments.Where(a => store.Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
-        store.Chosen = store.Chosen.Where(a => store.Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
-        return store;
+        Assignments = Assignments.Where(a => Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
+        Chosen = Chosen.Where(a => Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
+        Names = Names.Where(n => !string.IsNullOrWhiteSpace(n.Value)).ToDictionary(n => n.Key, n => n.Value);
     }
 
     public void Save()
@@ -60,6 +131,9 @@ public sealed class FanCurveStore
             File.Move(temp, FilePath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("openhw: saving fan curves: " + ex.Message); }
+        if (ConfigFile is { } file)
+            try { Export(file); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"openhw: saving {file}: " + ex.Message); }
         Changed?.Invoke();
     }
 
