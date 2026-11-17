@@ -33,17 +33,15 @@ public static class Coverage
         var notes = new List<CoverageNote>();
 
         // ── The BMC's Redfish service open to every program on this PC ──
+        // Information, not a warning: the owner keeps it this way (2026-11-17), so it neither shows red nor opens the check.
         if (access is { OpenWithoutLogin: true })
-            notes.Add(new("BMC security",
+            notes.Add(new("BMC access",
                 "The BMC's Redfish service answers this PC without a password (host interface: " +
                 $"{(access.AuthModes.Count > 0 ? string.Join(", ", access.AuthModes) : "no authentication")}" +
                 (access.CredentialBootstrapping == true ? $"; credential bootstrapping on, as {access.BootstrapRole ?? "an administrator"}" : "") +
-                "). Any program run by any user here can read the BMC — and most likely change BIOS settings, fan curves and " +
-                "firmware, or reset the machine.",
-                Warning: true,
-                Fix: "In the BMC web console's Redfish host-interface settings (or BIOS → Redfish Host Interface Settings), require " +
-                     "authentication and turn credential bootstrapping off. OpenHW keeps working: its helper reads with the stored " +
-                     "BMC login (Fan Control → Give OpenHW the BMC login…) when the BMC asks for one."));
+                "), so any program here can use it.",
+                Fix: "To lock it down: the BMC web console's Redfish host-interface settings (require authentication). OpenHW " +
+                     "keeps working either way — its helper reads with the stored BMC login when the BMC asks for one."));
 
         // ── The board management controller (IPMI) ──
         var ipmiInAcpi = probe.Exists("/sys/bus/acpi/devices/IPI0001:00");

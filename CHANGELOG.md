@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.36.1 — 2026-11-17
+
+- Hardware Check: the open BMC Redfish access is a plain note ("BMC access"), not a red warning — the owner keeps it
+  open on purpose — so it no longer opens the check by itself. How to lock it down stays in the note.
+
 ## 0.36.0 — 2026-11-17
 
 - **File → BIOS Settings…** (read-only): every BIOS Setup option the BIOS publishes to the BMC when Setup → "Publish

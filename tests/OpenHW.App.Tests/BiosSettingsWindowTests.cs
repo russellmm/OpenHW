@@ -55,7 +55,7 @@ public sealed class BiosSettingsWindowTests
     }
 
     [Fact]
-    public void HardwareCheckListsChangedBiosSettingsAndWarnsAboutOpenRedfish()
+    public void HardwareCheckListsChangedBiosSettingsAndNotesOpenRedfish()
     {
         BiosSettingsReply With(string hibernation) => Reply with
         {
@@ -79,10 +79,10 @@ public sealed class BiosSettingsWindowTests
 
         var probe = new Coverage.Probe(_ => false, _ => "", () => "18", Directory.CreateTempSubdirectory("openhw-etc").FullName);
         var open = Coverage.Check(now, [], true, probe, access: new BmcAccessReply(true, ["AuthNone"], true, "HostInterfaceAdministrator"));
-        var note = Assert.Single(open, n => n.Area == "BMC security");
-        Assert.True(note.Warning);
+        var note = Assert.Single(open, n => n.Area == "BMC access");
+        Assert.False(note.Warning); // the owner keeps it open: information, not a warning
         Assert.Contains("AuthNone", note.Text, StringComparison.Ordinal);
         Assert.Contains("HostInterfaceAdministrator", note.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain(Coverage.Check(now, [], true, probe, access: new BmcAccessReply(false, ["BasicAuth"], false, null)), n => n.Area == "BMC security");
+        Assert.DoesNotContain(Coverage.Check(now, [], true, probe, access: new BmcAccessReply(false, ["BasicAuth"], false, null)), n => n.Area == "BMC access");
     }
 }
