@@ -74,7 +74,7 @@ internal static class CurveUi
     public static (string Text, IBrush Brush) Where(BmcCurvePlan plan, IReadOnlyList<FanSensorChoice> choices)
     {
         if (plan.OnBmc)
-            return ($"Runs on the BMC — no flash writes after Apply. BMC curve: {Points(plan.Points)}" +
+            return ($"Runs on the BMC: one write to put it there, then no flash writes. BMC curve: {Points(plan.Points)}" +
                     (plan.MaxExtraPercent >= 0.5 ? $" (at most {plan.MaxExtraPercent:0} % faster than drawn, at {plan.MaxExtraAtC:0.#} °C)." : "."), BmcLine);
         var names = plan.OtherSensors.Select(id => choices.FirstOrDefault(c => c.Id == id)?.Label ?? id);
         return ($"⚠ Reads {string.Join(", ", names)}, which the BMC can't see: OpenHW drives a fan on this curve, and every " +

@@ -168,6 +168,7 @@ public sealed class FanCurveTests : IDisposable
         store.Curves.Add(new FanCurve { Id = "f35", Name = "35%", Kind = FanCurveKind.Flat, Percent = 35 });
         store.Curves.Add(new FanCurve { Id = "mix", Name = "mix", Kind = FanCurveKind.Mix, Children = ["slot5", "f35"] });
         store.Assignments["bmc:2"] = "mix";
+        store.Names["bmc:2"] = "AIO Top";
         store.Assignments["bmc:3"] = "nvml";
         store.Assignments["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"] = "slot5";
         var runner = Runner(store);
@@ -175,13 +176,16 @@ public sealed class FanCurveTests : IDisposable
         window.Show();
         var texts = window.Texts();
         Assert.Contains("Not on the BMC yet:", texts);
+        var aio = window.GetLogicalDescendants().OfType<TextBox>().Single(t => t.Text == "AIO Top");
+        Assert.StartsWith("CHA_FAN2\nbmc:2", ToolTip.GetTip(aio) as string, StringComparison.Ordinal);
+        Assert.Contains(window.GetLogicalDescendants().OfType<TextBox>(), t => t.Text == "CHA_FAN3"); // unnamed: the original
         Assert.Contains("⚠ OpenHW-driven · 0 flash writes today", texts);
         Assert.Contains("OpenHW via NVIDIA driver (no flash)", texts);
         Assert.Contains("FLAT", texts);
         Assert.Contains("GRAPH", texts);
         Assert.Contains("MIX", texts);
         Assert.Contains("35 %", texts); // the flat card's output
-        Assert.Contains(texts, t => t.StartsWith("BMC sensors — runs on the BMC (no flash writes)\nFans: CHA_FAN2", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.StartsWith("BMC sensors — runs on the BMC: one write to put it there, then none\nFans: AIO Top", StringComparison.Ordinal));
         Assert.Contains(texts, t => t.StartsWith("⚠ Not a BMC sensor", StringComparison.Ordinal));
         Assert.Contains(window.GetLogicalDescendants().OfType<Button>(), b => b.Content as string == "Apply");
         var captures = Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath();

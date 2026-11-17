@@ -29,7 +29,8 @@ public sealed class FanControlWindow : Window
     private static readonly IBrush Secondary = new SolidColorBrush(Color.Parse("#8A969E"));
     private static readonly IBrush ValueText = new SolidColorBrush(Color.Parse("#F2F2F2"));
 
-    private sealed record Control0(string Id, string Title, string Group, string? RpmId, FanZoneStatus? Zone, GpuFanStatus? Gpu);
+    /// <param name="Title">The user's name for the fan, else <paramref name="Original"/>.</param>
+    private sealed record Control0(string Id, string Title, string Original, string Group, string? RpmId, FanZoneStatus? Zone, GpuFanStatus? Gpu);
 
     private readonly Sensors.SensorHub _hub;
     private readonly FanClient _client;
@@ -237,10 +238,18 @@ public sealed class FanControlWindow : Window
     private List<Control0> Controls()
     {
         var list = new List<Control0>();
+        var names = _runner.Store.Names;
+        string Name(string id, string original) => names.TryGetValue(id, out var n) && n.Length > 0 ? n : original;
         foreach (var z in _bmc?.Zones ?? [])
-            list.Add(new(z.Id, z.Name == "CPU_FAN" ? "CPU_FAN / CPU_OPT" : z.Name, "ASUS BMC · " + z.Label, z.RpmSensorId, z, null));
+        {
+            var original = z.Name == "CPU_FAN" ? "CPU_FAN / CPU_OPT" : z.Name;
+            list.Add(new(z.Id, Name(z.Id, original), original, "ASUS BMC · " + z.Label, z.RpmSensorId, z, null));
+        }
         foreach (var g in _gpu?.Fans ?? [])
-            list.Add(new(g.Id, $"{ShortGpu(g.Card)} {ShortPci(g.Pci)} Fan {g.Fan}", $"{g.Card} {ShortPci(g.Pci)}", g.Id.Replace(":fan:", ":tach:"), null, g));
+        {
+            var original = $"{ShortGpu(g.Card)} {ShortPci(g.Pci)} Fan {g.Fan}";
+            list.Add(new(g.Id, Name(g.Id, original), original, $"{g.Card} {ShortPci(g.Pci)}", g.Id.Replace(":fan:", ":tach:"), null, g));
+        }
         return list;
     }
 
@@ -329,7 +338,16 @@ public sealed class FanControlWindow : Window
                 DockPanel.SetDock(menu, Dock.Right);
                 head.Children.Add(menu);
             }
-            head.Children.Add(new TextBlock { Text = c.Title, FontWeight = FontWeight.SemiBold, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            // Click to rename (as in OpenFan); empty = the original name, which the tooltip always shows.
+            var title = new TextBox
+            {
+                Text = c.Title, FontWeight = FontWeight.SemiBold, FontSize = 14, BorderThickness = new Thickness(0), Background = Brushes.Transparent,
+                Padding = new Thickness(0), MinHeight = 0, VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTip.SetTip(title, $"{c.Original}\n{c.Id}\nClick to rename.");
+            title.LostFocus += (_, _) => w.Rename(c, title);
+            title.KeyDown += (_, e) => { if (e.Key == Key.Enter) TopLevel.GetTopLevel(title)?.FocusManager?.ClearFocus(); };
+            head.Children.Add(title);
 
             var body = new StackPanel { Spacing = 5 };
             body.Children.Add(head);
@@ -367,7 +385,7 @@ public sealed class FanControlWindow : Window
                     if (plan.OnBmc)
                     {
                         var applied = z.Active is { } a && plan.Points.SequenceEqual(a) && (plan.SourceMask is null || plan.SourceMask == mask);
-                        if (applied) Note("On the BMC ✓ — no flash writes", CurveUi.BmcLine);
+                        if (applied) Note("On the BMC ✓ — written once, no further flash writes", CurveUi.BmcLine);
                         else { Note("Not on the BMC yet:", CurveUi.Warn); _apply.IsVisible = true; }
                     }
                     else Note($"⚠ OpenHW-driven · {state.WritesToday} flash writes today", CurveUi.Warn);
@@ -392,6 +410,18 @@ public sealed class FanControlWindow : Window
     }
 
     private IReadOnlyList<(int Number, string Name)> _sensorsNames => _runner.BmcSensors();
+
+    /// <summary>A fan's friendly name: saved per fan id; an empty (or original) name goes back to the original.</summary>
+    private void Rename(Control0 c, TextBox box)
+    {
+        var text = (box.Text ?? "").Trim();
+        var names = _runner.Store.Names;
+        if (text.Length == 0 || text == c.Original) { names.Remove(c.Id); box.Text = c.Original; }
+        else names[c.Id] = text;
+        if ((names.TryGetValue(c.Id, out var n) ? n : c.Original) == c.Title) return;
+        Save();
+        Dispatcher.UIThread.Post(() => { BuildControls(); BuildCurves(); }); // the curve cards' "Fans:" lines use the name
+    }
 
     private void Unassign(Control0 c, bool forget = false)
     {
@@ -422,7 +452,8 @@ public sealed class FanControlWindow : Window
                       (plan.SourceMask is { } sm && sm != mask ? $"its sensors ({FanClient.DescribeSource(sm, _sensorsNames)}) and " : "") +
                       $"the curve {CurveUi.Points(plan.Points)}" +
                       (plan.MaxExtraPercent >= 0.5 ? $" — at most {plan.MaxExtraPercent:0} % faster than drawn, at {plan.MaxExtraAtC:0.#} °C" : "") +
-                      ".\nAfter that the BMC runs it with no further writes, with or without OpenHW."
+                      ".\nThis is one write to the BMC's flash (two if its sensors change), like Save in the BMC web console. After that " +
+                      "the BMC runs it by itself with no further writes, with or without OpenHW; only changing the curve again writes again."
                     : $"⚠ \"{curve.Name}\" reads {string.Join(", ", plan.OtherSensors.Select(id => _choices.FirstOrDefault(x => x.Id == id)?.Label ?? id))}, " +
                       $"which the BMC can't see.\n\nOpenHW will drive {c.Title} itself: every duty change is a write to the BMC's flash. " +
                       $"Duties move in {FanCurveRunner.DrivenStep} % steps, faster at once, slower only after a minute; the writes are counted " +
@@ -656,7 +687,7 @@ public sealed class FanControlWindow : Window
             var sensors = FanCurveMath.Sensors(_curve, library);
             var onBmc = sensors.All(s => _w._runner.BmcNumber(s) is not null);
             var fans = _w._runner.Store.Assignments.Where(a => a.Value == _curve.Id).Select(a => _w.Controls().FirstOrDefault(c => c.Id == a.Key)?.Title ?? a.Key).ToList();
-            _where.Text = (onBmc ? "BMC sensors — runs on the BMC (no flash writes)" : "⚠ Not a BMC sensor — on a BMC fan, every change is a flash write") +
+            _where.Text = (onBmc ? "BMC sensors — runs on the BMC: one write to put it there, then none" : "⚠ Not a BMC sensor — on a BMC fan, every change is a flash write") +
                           (fans.Count > 0 ? "\nFans: " + string.Join(", ", fans) : "");
             _where.Foreground = onBmc ? CurveUi.BmcLine : CurveUi.Warn;
         }
@@ -766,5 +797,6 @@ public sealed class FanControlWindow : Window
 internal static class LogicalTexts
 {
     public static IReadOnlyList<string> GetLogicalDescendantsTexts(this Avalonia.Controls.Control root) =>
-        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(root).OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(root)
+            .Select(c => c switch { TextBlock t => t.Text, TextBox b => b.Text, _ => null }).OfType<string>().ToList();
 }

@@ -14,6 +14,9 @@ public sealed class FanCurveStore
     /// <summary>Fan zone ("bmc:3") → curve id. A zone without an entry keeps the BMC curve it has.</summary>
     public Dictionary<string, string> Assignments { get; set; } = [];
 
+    /// <summary>Friendly fan names (fan id → name), shown on the cards; the original name stays in the tooltip.</summary>
+    public Dictionary<string, string> Names { get; set; } = [];
+
     /// <summary>A fan's chosen curve while its Curve box is unticked (kept so ticking it again restores the choice).</summary>
     public Dictionary<string, string> Chosen { get; set; } = [];
 

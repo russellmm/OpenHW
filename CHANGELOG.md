@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.28.0 — 2026-11-17
+
+- **Friendly fan names**: click a fan card's name to rename it (e.g. CHA_FAN1 → "Memory"); the tooltip always shows
+  the original name and id; an empty name goes back to the original. The names are used across Fan Control (curve
+  cards' "Fans:", dialogs, messages) and saved in fan-curves.json.
+- Clearer wording on what a BMC-run curve costs: **one write to put it on the BMC** (two if its sensors change), like
+  Save in the BMC web console, **then none** while it runs; only changing it again writes again. ("No flash writes"
+  read as if applying wrote nothing.)
+
 ## 0.27.0 — 2026-11-17
 
 - **Fan Control… in the tray menu** (after Power Limits…).
