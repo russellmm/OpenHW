@@ -267,18 +267,22 @@ use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves t
 duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
 behave are in [docs/fan-control.md](docs/fan-control.md).
 
-**Fan Control (0.25.0–0.26.0)** — **Power → Fan Control…** is one screen, laid out like OpenFan's Home: **Controls**
+**Fan Control (0.25.0–0.28.1)** — **Power → Fan Control…** (also in the tray menu) is one screen, laid out like
+OpenFan's Home: **Controls**
 (a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
 and **Curves**, as in OpenFan: **graphs** (any number of points over any temperature OpenHW reads — drag points,
 click to add, hysteresis in °C and seconds, max speed; each card shows the sensor's reading as a dot on the curve),
-**flat** duties (− / +) and **mixes** (max / min / average of other curves). **NVIDIA fans** run their curve through
+**flat** duties (− / +) and **mixes** (max / min / average of other curves). **+ Flat / + Graph / + Mix** make a new
+curve or duplicate one you already have. Click a fan's name to give it a friendly name (the tooltip keeps the
+original). **NVIDIA fans** run their curve through
 the NVIDIA driver (nothing stored; untick and the card controls its fans again). On BMC fans, where a curve runs
 depends on what it reads:
 
 - **Only the BMC's own sensors** (CPU Package, TR1 = the T_Sensor header, LAN, DIMMA1–H1, the PCIe slots PCIE01–07 —
   which read the core temperature of the GPU in each slot) → **it runs on the BMC**. OpenHW turns the curve into the
-  BMC's form — the sensors to follow (the hottest counts) and five points, the fifth at 100 °C — never slower than
-  drawn (the graph editor shows the BMC version as a green dashed line), and writes it once. No writes after that, with
+  BMC's form — the sensors to follow (the hottest counts) and five points, four free and the fifth at 100 °C — never
+  slower than drawn (the graph editor shows the BMC version as a green dashed line), and writes it once: **one write**
+  to the BMC's flash (two if its sensors change), like Save in the BMC web console, **then none** while it runs, with
   or without OpenHW.
 - **Any other sensor** (an NVIDIA GPU through NVML, a drive, …) → **OpenHW drives the fan**, after a warning: every duty
   change is a write to the BMC's flash, so duties move in 5 % steps (faster at once, slower only after a minute,

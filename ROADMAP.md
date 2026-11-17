@@ -120,12 +120,12 @@ readback, menu entry first.
 5. [x] **Stage 2 — curves (0.25.0, 2026-11-17)**. Owner, 2026-11-17: "build the capability to create curves like we can in
    OpenFan and assign them to a given fan … BMC sensors cause no flash writes … other sensors, but get warned of flash
    writes", and "the last 2 points MUST be 70 and 100 °C — I want options". Done: OpenFan's curve engine ported
-   (graph / flat / mix, hysteresis, max speed; graph editor), Power → Fan Curves…, a curve per fan in Fan Control;
+   (graph / flat / mix, hysteresis, max speed; graph editor), one OpenFan-style Fan Control screen (0.26.0), a curve per fan;
    BMC-sensor curves are fitted to the BMC's form (never slower) and written once; others are OpenHW-driven with a
    warning, 5 % steps, a minute's hold on slow-downs, per-day write counts. **Point 4 is free** (web console edits A–D;
    the 70 °C rule was an untested assumption); if IPMI refuses it, the app refits with 70 and remembers. **Slot sensors
    = GPU cores** (`tools/gpu-slot-test/`, 2026-11-17): PCIE01 = slot 1 PRO 6000 (F1), PCIE04 = 5060 Ti, PCIE05 = slot 5
-   PRO 6000 (C1), within ~1 °C. Still to do: the first real Apply with point 4 ≠ 70 (owner); whether slot sensors read a
+   PRO 6000 (C1), within ~1 °C. First real Apply done 2026-11-17 (CHA_FAN1, point 4 = 80 °C accepted). Still to do: whether slot sensors read a
    lent card; an "Import from OpenFan…" if wanted (owner: not a priority); OpenFan as a client of the driver; NVIDIA's
    own fans (step 3 — done in 0.26.0, with the single OpenFan-style screen).
 5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never

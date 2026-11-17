@@ -1,7 +1,7 @@
 # Fan control — design
 
 How OpenHW controls fans on the owner's ASUS Pro WS WRX90E-SAGE SE, what the hardware actually does, and why the
-design looks the way it does. Status as of 0.26.0 (2026-11-17). Plan and history: [ROADMAP.md](../ROADMAP.md)
+design looks the way it does. Status as of 0.28.1 (2026-11-17). Plan and history: [ROADMAP.md](../ROADMAP.md)
 "Fan control"; release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Goals (owner)
@@ -182,7 +182,8 @@ Not yet checked: whether a slot still reads while its card is lent to the VM.
   (BMC zones + NVIDIA fans; Curve box + curve dropdown, duty/RPM, where it runs, Apply when a BMC-run curve isn't on the
   BMC yet, ⋮ Edit BMC curve… / Restore original) and curve cards (flat −/+, graph with source, output, mini preview with
   the live reading as a dot, Edit → graph editor with the green dashed BMC version; mix with function, add, ×). A BMC
-  assignment asks first (what's written, or the flash-write warning).
+  assignment asks first (what's written, or the flash-write warning). 0.27–0.28: Fan Control… in the tray menu;
+  + Flat/Graph/Mix menus (New / Duplicate); friendly fan names (store `Names`, tooltip = original + id).
 - **NVIDIA fans (0.26.0)**: `GpuFanDriver` in the helper (protocol 15: `gpufans`, `gpufanset <token> nvml:<uuid>:fan:<n>
   <0–100>`, `gpufanrelease`; `fanbeat` renews both drivers' leases). NVML `nvmlDeviceSetFanSpeed_v2` / `…SetDefaultFanSpeed_v2`
   (0 % = automatic, others ≥ the card's minimum, from `nvmlDeviceGetMinMaxFanSpeed`). Released fans, expired leases
