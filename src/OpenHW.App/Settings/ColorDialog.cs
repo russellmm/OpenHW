@@ -23,7 +23,8 @@ public sealed class ColorDialog : Window
         Title = "Custom Color";
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        WindowPlaces.Track(this, "color");
         Background = Palette.Window;
         Foreground = Palette.Text;
 

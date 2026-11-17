@@ -139,7 +139,12 @@ public sealed class FanControlWindow : Window
             Text = login is null ? "BMC login for changing temperature sources: none stored." : $"BMC login for temperature sources: {login}",
             Foreground = login is null ? Palette.Footnote : Palette.Text,
         });
-        loginRow.Children.Add(AlertUi.Button(login is null ? "Give OpenHW the BMC login…" : "Change…", () => new BmcLoginDialog(_client).ShowDialog(this)));
+        loginRow.Children.Add(AlertUi.Button(login is null ? "Give OpenHW the BMC login…" : "Change…", () =>
+        {
+            var dialog = new BmcLoginDialog(_client);
+            Settings.WindowPlaces.Track(dialog, "bmc-login");
+            dialog.ShowDialog(this);
+        }));
         _body.Children.Add(loginRow);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,60,150,240,*,50,70"), Margin = new Thickness(0, 6, 0, 0) };
@@ -171,6 +176,7 @@ public sealed class FanControlWindow : Window
             {
                 _timer.Stop();
                 var dialog = new FanCurveDialog(_client, zone, sources.TryGetValue(index, out var m) ? m : 0, _sensors, login is not null);
+                Settings.WindowPlaces.Track(dialog, "fan-curve");
                 dialog.Closed += (_, _) => { Refresh(); _timer.Start(); };
                 dialog.ShowDialog(this);
             });

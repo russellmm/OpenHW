@@ -15,7 +15,8 @@ public sealed class RenameDialog : Window
         Title = "Rename Sensor";
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        Settings.WindowPlaces.Track(this, "rename");
         Background = Palette.Window;
         Foreground = Palette.Text;
 

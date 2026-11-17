@@ -25,7 +25,8 @@ public sealed class MainSettingsWindow : ClassicDialog
         : base("OpenHW - Settings", new Size(813, 453), new Rect(4, 29.6, 800.8, 383.2), new Point(522.4, 423.2))
     {
         (_settings, _applied) = (settings, applied);
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        WindowPlaces.Track(this, "main-settings");
         AddTab("General / User Interface", General());
         AddTab("Safety", Safety());
         AddTab("SMBus / I2C", SmbusI2c());

@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.24.3 — 2026-11-16
+
+- Fixed: Fan Control's Edit… and BMC login dialogs opened at the far left of the secondary monitor. Every OpenHW
+  dialog — those two, Rename, Customize values, the color picker, Main Settings, About and message boxes — now opens
+  centred on the primary monitor the first time and then where you last put it, like the main windows.
+- Verified on the real BMC with 0.24.2: a fan's sensor change applies with no error (CHA_FAN1 follows DIMMA1_Temp).
+
 ## 0.24.2 — 2026-11-16
 
 - Fixed: changing which sensors a fan follows reported "Redfish 400: … Oem/PWM/1/Temperature1 is a required property"

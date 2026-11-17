@@ -38,7 +38,8 @@ public sealed class CustomizeDialog : Window
         Title = "Customize Values";
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        Settings.WindowPlaces.Track(this, "customize-values");
         Background = Palette.Window;
         Foreground = Palette.Text;
         FontSize = 12.5;

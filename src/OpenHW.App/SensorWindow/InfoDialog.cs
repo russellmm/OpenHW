@@ -13,7 +13,8 @@ public sealed class InfoDialog : Window
         Title = title;
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        Settings.WindowPlaces.Track(this, "info");
         Background = Palette.Window;
         Foreground = Palette.Text;
         var ok = new Button { Content = "OK", Padding = new Thickness(18, 4), IsDefault = true, IsCancel = true, HorizontalAlignment = HorizontalAlignment.Right };

@@ -15,7 +15,8 @@ public sealed class AboutWindow : Window
         Title = "About OpenHW";
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // Owner rule: centred on the primary monitor the first time, then wherever it was last moved to.
+        Settings.WindowPlaces.Track(this, "about");
         Background = Palette.Window;
         Foreground = Palette.Text;
         var close = new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(14, 4) };
