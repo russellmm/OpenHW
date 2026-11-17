@@ -37,6 +37,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>Power → Fan Control… (the fan driver's zones).</summary>
     public Action? ShowFanControl { get; init; }
 
+    /// <summary>Power → Fan Curves… (graph / flat / mix curves the fans run).</summary>
+    public Action? ShowFanCurves { get; init; }
+
     /// <summary>Power → GPU Lending… (the card filter's setup page).</summary>
     public Action? ShowGpuLending { get; init; }
 
@@ -739,6 +742,7 @@ public sealed class MainWindow : Window
             _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
             _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L"));
             if (commands.ShowFanControl is { } fanControl) _powerMenu.Items.Add(Item("Fan _Control…", fanControl));
+            if (commands.ShowFanCurves is { } fanCurves) _powerMenu.Items.Add(Item("Fan C_urves…", fanCurves));
             if (commands.ShowGpuLending is { } lending) _powerMenu.Items.Add(Item("GPU Le_nding…", lending));
             _powerMenu.Items.Add(_fixCapItem);
             menu.Items.Add(_powerMenu);

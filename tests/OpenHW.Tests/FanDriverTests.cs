@@ -289,7 +289,8 @@ public sealed class FanCurveTests : IDisposable
         Assert.Equal(1, bmc.Writes);
         var zone = fans.Status(null).Zones[1];
         Assert.Equal(FanDriverTests.CurveOf(original), zone.SavedOriginal);
-        fans.SetCurve("bmc:1", Curve(25, 35, 45, 45, 60, 70, 70, 100, 100, 100));
+        fans.SetCurve("bmc:1", Curve(40, 35, 50, 45, 60, 70, 80, 100, 100, 100)); // point 4 anywhere below 100 °C
+        Assert.Equal(new byte[] { 4, 40, 35, 50, 45, 60, 70, 80, 100, 100, 100 }, bmc.States[1]);
         Assert.Equal(FanDriverTests.CurveOf(original), fans.Status(null).Zones[1].SavedOriginal); // still the first one
 
         using var restarted = Driver(bmc); // the saved original outlives the helper
@@ -299,7 +300,7 @@ public sealed class FanCurveTests : IDisposable
     }
 
     [Theory]
-    [InlineData("bmc:1", new[] { 20, 20, 45, 40, 65, 70, 75, 100, 100, 100 }, "fixes the last two")]
+    [InlineData("bmc:1", new[] { 20, 20, 45, 40, 65, 70, 75, 100, 90, 100 }, "the last point is at 100")]
     [InlineData("bmc:1", new[] { 20, 20, 45, 40, 40, 70, 70, 100, 100, 100 }, "must rise")]
     [InlineData("bmc:6", new[] { 20, 40, 45, 80, 60, 80, 70, 100, 100, 100 }, "W_PUMP+ must be 50–100")]
     [InlineData("bmc:0", new[] { 20, 10, 45, 40, 65, 70, 70, 100, 100, 100 }, "CPU_FAN must be 20–100")]

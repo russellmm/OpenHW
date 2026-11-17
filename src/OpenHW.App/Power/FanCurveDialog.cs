@@ -12,7 +12,7 @@ namespace OpenHW.App.Power;
 
 /// <summary>
 /// Fan Control → Edit…: one BMC fan's temperature sources (the BMC's own sensors, several = the hottest counts) and its
-/// 5-point curve. The firmware fixes the last two points at 70 and 100 °C; duties stop at the fan's floor. Apply writes
+/// 5-point curve. The last point is at 100 °C (as in the BMC web console); duties stop at the fan's floor. Apply writes
 /// what changed — the sources (Redfish, needs the BMC login) and the curve (IPMI) — once.
 /// </summary>
 public sealed class FanCurveDialog : Window
@@ -61,15 +61,15 @@ public sealed class FanCurveDialog : Window
         for (var i = 0; i < 5; i++)
         {
             Put(new TextBlock { Text = (i + 1).ToString(CultureInfo.CurrentCulture), VerticalAlignment = VerticalAlignment.Center }, i + 1, 0);
-            _temps[i] = new NumericUpDown { Minimum = 0, Maximum = 69, Increment = 1, FormatString = "0", Value = curve[i].TemperatureC, Width = 135, Margin = new Thickness(0, 2) };
-            if (i >= 3) { _temps[i].Minimum = _temps[i].Maximum = _temps[i].Value!.Value; _temps[i].IsEnabled = false; }
+            _temps[i] = new NumericUpDown { Minimum = 0, Maximum = 99, Increment = 1, FormatString = "0", Value = curve[i].TemperatureC, Width = 135, Margin = new Thickness(0, 2) };
+            if (i == 4) { _temps[i].Minimum = _temps[i].Maximum = _temps[i].Value!.Value; _temps[i].IsEnabled = false; }
             _duties[i] = new NumericUpDown { Minimum = zone.MinDuty, Maximum = 100, Increment = 5, FormatString = "0", Value = Math.Max(zone.MinDuty, curve[i].DutyPercent), Width = 135, Margin = new Thickness(0, 2) };
             Put(_temps[i], i + 1, 1);
             Put(_duties[i], i + 1, 2);
         }
         body.Children.Add(grid);
         body.Children.Add(new TextBlock { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
-            Text = $"The firmware fixes points 4 and 5 at 70 and 100 °C. Lowest duty on this fan: {zone.MinDuty} %." +
+            Text = $"Point 5 stays at 100 °C (as in the BMC web console). Lowest duty on this fan: {zone.MinDuty} %." +
                    (zone.SavedOriginal is { } o ? $" Original curve: {FanClient.Describe(o)}." : "") +
                    " Apply writes only what changed, once; the BMC keeps it." });
 

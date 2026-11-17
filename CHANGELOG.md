@@ -3,6 +3,28 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.25.0 — 2026-11-17
+
+- **Fan curves like OpenFan's** (fan control stage 2, part 2). **Power → Fan Curves…**: make **graph** curves (any
+  number of points over any temperature OpenHW reads; drag, click to add, hysteresis °C/s, max speed, axis range — the
+  OpenFan editor, ported), **flat** curves and **mixes** (max / min / average of other curves). **Power → Fan
+  Control…** → pick a curve per fan.
+- **Where a curve runs is decided by its sensors.** Only the BMC's own sensors (CPU Package, T_Sensor, LAN, the eight
+  DIMMs, the PCIe slots) → it **runs on the BMC**: OpenHW turns it into the BMC's sensor choice and five points, writes
+  them once, and nothing is written afterwards. The editor draws that BMC version (green, dashed) over your curve; it's
+  never slower than drawn (a mix becomes one curve over the hottest of its sensors). Any other sensor (an NVIDIA GPU
+  via NVML, a drive, …) → **OpenHW drives the fan**, with a warning first: every duty change is a write to the BMC's
+  flash, so duties move in 5 % steps, faster at once, slower only after a minute, behind the curve's hysteresis, and
+  Fan Control shows the writes per day. Without readings for 20 s, or when OpenHW exits, the fan goes back to its BMC
+  curve.
+- **The PCIe slot sensors read the GPUs**: measured 2026-11-17 (`tools/gpu-slot-test/`), PCIE01/04/05 follow the core
+  temperature of the GPU in slot 1 (PRO 6000, F1), 4 (5060 Ti) and 5 (PRO 6000, C1) within about 1 °C, live — so
+  GPU-following curves run on the BMC too.
+- **Point 4 of a BMC curve is free** (it was held at 70 °C): the BMC web console edits points A–D; only point E sits at
+  100 °C. If this firmware ever refuses a point 4 other than 70 °C, OpenHW refits with 70 and remembers. Fan Control →
+  Edit… lets you set point 4 too.
+- Curves are saved in `~/.config/openhw/fan-curves.json`.
+
 ## 0.24.3 — 2026-11-16
 
 - Fixed: Fan Control's Edit… and BMC login dialogs opened at the far left of the secondary monitor. Every OpenHW

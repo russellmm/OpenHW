@@ -61,34 +61,46 @@ public sealed class FanClient(Func<string, string>? request = null)
 }
 
 /// <summary>
-/// Power → Fan Control…: the BMC's fan zones — live RPM, who controls each (the BMC's own curve or a client's fixed
-/// duty), which BMC sensors it follows, its active curve and the writes since the helper started — and, per fan,
-/// Edit… (curve + sources, written once, run by the BMC). Zone checks still run from <c>openhw --fan-test</c>.
+/// Power → Fan Control…: the BMC's fan zones — live RPM, the curve each fan runs (Power → Fan Curves…) and how: on the
+/// BMC (its sensors and five points written once, no flash writes afterwards) or driven by OpenHW (a curve on a sensor
+/// the BMC can't see: every duty change is a flash write, counted per day) — which BMC sensors it follows, its active
+/// curve and the writes since the helper started. A fan without a curve keeps its BMC curve, editable with Edit….
+/// Zone checks still run from <c>openhw --fan-test</c>.
 /// </summary>
 public sealed class FanControlWindow : Window
 {
     private readonly Sensors.SensorHub _hub;
     private readonly FanClient _client;
+    private readonly FanCurveRunner _runner;
     private readonly StackPanel _body = new() { Spacing = 6, Margin = new Thickness(14, 10) };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly TextBlock _result = new() { TextWrapping = TextWrapping.Wrap };
     private IReadOnlyList<(int Number, string Name)> _sensors = [];
+    private bool _choosing;
 
-    public FanControlWindow(Sensors.SensorHub hub, FanClient? client = null)
+    public FanControlWindow(Sensors.SensorHub hub, FanClient? client = null, FanCurveRunner? runner = null, Action? showCurves = null)
     {
         _hub = hub;
-        _client = client ?? new FanClient();
+        _client = client ?? runner?.Client ?? new FanClient();
+        _runner = runner ?? new FanCurveRunner(_client, FanCurveStore.Load());
+        ShowCurves = showCurves;
         Title = "Fan Control";
-        Width = 1080;
+        Width = 1280;
         SizeToContent = SizeToContent.Height;
         Background = Palette.Window;
         Foreground = Palette.Text;
         FontSize = 12.5;
         Content = _body;
-        _timer.Tick += (_, _) => Refresh();
+        _timer.Tick += (_, _) => { if (!_choosing) Refresh(); };
         Opened += (_, _) => { Refresh(); _timer.Start(); };
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) => { _timer.Stop(); _runner.Store.Changed -= OnStoreChanged; };
+        _runner.Store.Changed += OnStoreChanged;
         Refresh();
     }
+
+    private Action? ShowCurves { get; }
+
+    private void OnStoreChanged() => Dispatcher.UIThread.Post(() => { if (!_choosing) Refresh(); });
 
     public void Refresh()
     {
@@ -110,10 +122,11 @@ public sealed class FanControlWindow : Window
         _body.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Palette.Footnote,
-            Text = "The BMC runs every fan from a 5-point curve that follows one or more of its temperature sensors. Edit… " +
-                   "changes a fan's curve and sensors once; the BMC keeps them (in its flash) and runs them from then on, with or " +
-                   "without OpenHW. The curve a fan had before OpenHW first changed it is kept for Restore original. Fans that " +
-                   "should follow sensors the BMC can't see (GPU temperatures) come in the next version.",
+            Text = "Pick a curve for each fan (make curves in Power → Fan Curves…). A curve that reads only the BMC's own " +
+                   "sensors runs on the BMC: its sensors and five points are written once and the BMC runs it from then on, " +
+                   "with or without OpenHW. A curve that reads any other sensor (an NVIDIA GPU, a drive…) is driven by OpenHW: " +
+                   "every duty change is a write to the BMC's flash. A fan without a curve keeps its BMC curve (Edit… changes it " +
+                   "directly). The curve a fan had before OpenHW first changed it is kept for Restore original.",
         });
         if (error is not null || status is null)
         {
@@ -145,49 +158,75 @@ public sealed class FanControlWindow : Window
             Settings.WindowPlaces.Track(dialog, "bmc-login");
             dialog.ShowDialog(this);
         }));
+        if (ShowCurves is { } curves) loginRow.Children.Add(AlertUi.Button("Fan Curves…", curves));
         _body.Children.Add(loginRow);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,60,150,240,*,50,70"), Margin = new Thickness(0, 6, 0, 0) };
-        void Cell(int row, int col, string text, IBrush? brush = null, FontWeight weight = FontWeight.Normal)
-        {
-            var cell = new TextBlock { Text = text, Foreground = brush ?? Palette.Text, FontWeight = weight, Margin = new Thickness(0, 2, 10, 2), TextTrimming = TextTrimming.CharacterEllipsis };
-            Grid.SetRow(cell, row);
-            Grid.SetColumn(cell, col);
-            grid.Children.Add(cell);
-        }
+        var store = _runner.Store;
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,60,190,230,200,*,50,90"), Margin = new Thickness(0, 6, 0, 0) };
+        void Put(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); grid.Children.Add(c); }
+        void Cell(int row, int col, string text, IBrush? brush = null, FontWeight weight = FontWeight.Normal) =>
+            Put(new TextBlock { Text = text, Foreground = brush ?? Palette.Text, FontWeight = weight, Margin = new Thickness(0, 2, 10, 2),
+                TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }, row, col);
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        string[] headers = ["Fan", "RPM", "Controlled by", "Follows", "Active curve (°C → duty)", "Writes", ""];
+        string[] headers = ["Fan", "RPM", "Curve", "Runs", "Follows", "Active curve (°C → duty)", "Writes", ""];
         for (var c = 0; c < headers.Length; c++) Cell(0, c, headers[c], Palette.Footnote, FontWeight.SemiBold);
         var row = 1;
+        var choices = new List<(string? Id, string Name)> { (null, "BMC curve (as set)") };
+        choices.AddRange(store.Curves.Select(c => ((string?)c.Id, c.Name)));
         foreach (var z in status.Zones)
         {
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var rpm = _hub.Get(z.RpmSensorId).Current is { } r ? r.ToString("N0", CultureInfo.CurrentCulture) : "–";
-            var name = z.Name == "CPU_FAN" ? "CPU_FAN + CPU_OPT" : z.Name;
-            Cell(row, 0, name);
-            Cell(row, 1, rpm);
-            Cell(row, 2, FanClient.Controller(z), z.Target is null ? Palette.Footnote : Palette.Text);
             var index = z.Id[^1] - '0';
-            Cell(row, 3, sources.TryGetValue(index, out var mask) ? FanClient.DescribeSource(mask, _sensors) : "–");
-            Cell(row, 4, FanClient.Describe(z.Active));
-            Cell(row, 5, z.Writes.ToString(CultureInfo.CurrentCulture));
+            long? mask = sources.TryGetValue(index, out var m) ? m : null;
+            Cell(row, 0, z.Name == "CPU_FAN" ? "CPU_FAN + CPU_OPT" : z.Name);
+            Cell(row, 1, rpm);
+
+            var assigned = store.AssignedTo(z.Id);
+            var pick = new ComboBox { Width = 180, Margin = new Thickness(0, 1, 10, 1), IsEnabled = status.Available && status.OtherController is null };
+            foreach (var (id, name) in choices) pick.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = name }, Tag = id });
+            pick.SelectedIndex = assigned is null ? 0 : Math.Max(0, choices.FindIndex(c => c.Id == assigned.Id));
             var zone = z;
-            var edit = AlertUi.Button("Edit…", () =>
+            pick.SelectionChanged += (_, _) =>
             {
-                _timer.Stop();
-                var dialog = new FanCurveDialog(_client, zone, sources.TryGetValue(index, out var m) ? m : 0, _sensors, login is not null);
-                Settings.WindowPlaces.Track(dialog, "fan-curve");
-                dialog.Closed += (_, _) => { Refresh(); _timer.Start(); };
-                dialog.ShowDialog(this);
-            });
-            edit.IsEnabled = status.Available && !z.Owned && status.OtherController is null;
-            edit.Padding = new Thickness(8, 1);
-            Grid.SetRow(edit, row);
-            Grid.SetColumn(edit, 6);
-            grid.Children.Add(edit);
+                var chosen = (pick.SelectedItem as ComboBoxItem)?.Tag as string;
+                if (chosen != store.AssignedTo(zone.Id)?.Id) _ = ChooseAsync(zone, chosen, mask);
+            };
+            Put(pick, row, 2);
+
+            var state = _runner.State(z.Id);
+            BmcCurvePlan? plan = assigned is null ? null : _runner.Plan(z.Id, assigned);
+            var applied = plan is { OnBmc: true } && z.Active is { } a && plan.Points.SequenceEqual(a) && (plan.SourceMask is null || plan.SourceMask == mask);
+            var (runs, brush) = assigned is null ? (FanClient.Controller(z), z.Target is null ? Palette.Footnote : Palette.Text)
+                : plan!.OnBmc ? (applied ? "On the BMC ✓ (no flash writes)" : "On the BMC — not applied yet", applied ? CurveUi.BmcLine : CurveUi.Warn)
+                : ($"OpenHW-driven: {(state.Duty is { } d ? $"{d} %" : "starting")} · {state.WritesToday} writes today", CurveUi.Warn);
+            if (state.Problem is { } problem) (runs, brush) = (runs + " — " + problem, AlertUi.Alarm);
+            Cell(row, 3, runs, brush);
+            Cell(row, 4, mask is { } mm ? FanClient.DescribeSource(mm, _sensors) : "–");
+            Cell(row, 5, FanClient.Describe(z.Active));
+            Cell(row, 6, z.Writes.ToString(CultureInfo.CurrentCulture));
+            Button button;
+            if (assigned is not null && plan!.OnBmc && !applied)
+                button = AlertUi.Button("Apply", () => Apply(zone, mask));
+            else
+            {
+                button = AlertUi.Button("Edit…", () =>
+                {
+                    _timer.Stop();
+                    var dialog = new FanCurveDialog(_client, zone, mask ?? 0, _sensors, login is not null);
+                    Settings.WindowPlaces.Track(dialog, "fan-curve");
+                    dialog.Closed += (_, _) => { Refresh(); _timer.Start(); };
+                    dialog.ShowDialog(this);
+                });
+                button.IsEnabled = status.Available && !z.Owned && status.OtherController is null && assigned is null;
+                if (assigned is not null) ToolTip.SetTip(button, "This fan runs a curve from Fan Curves: edit that curve, or pick \"BMC curve (as set)\".");
+            }
+            button.Padding = new Thickness(8, 1);
+            Put(button, row, 7);
             row++;
         }
         _body.Children.Add(grid);
+        _body.Children.Add(_result);
         _body.Children.Add(new TextBlock
         {
             Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
@@ -195,6 +234,75 @@ public sealed class FanControlWindow : Window
                    "Check a fan: openhw --fan-test bmc:<n> <1–100> --seconds 10 (it takes the fan, holds the duty, then gives it back " +
                    "and compares the curve).",
         });
+    }
+
+    private void Apply(FanZoneStatus zone, long? mask)
+    {
+        try { Show(_runner.ApplyBmc(zone, mask), false); }
+        catch (IOException ex) { Show(ex.Message.Replace("openhw-helper: err ", ""), true); }
+        Refresh();
+    }
+
+    /// <summary>A fan gets a curve (or goes back to its BMC curve): says what that costs, then does it.</summary>
+    private async Task ChooseAsync(FanZoneStatus zone, string? curveId, long? mask)
+    {
+        _choosing = true;
+        try
+        {
+            var name = zone.Name == "CPU_FAN" ? "CPU_FAN + CPU_OPT" : zone.Name;
+            if (curveId is null)
+            {
+                _runner.Unassign(zone.Id);
+                Show($"{name} keeps the BMC curve it has now.", false);
+                return;
+            }
+            var curve = _runner.Store.Find(curveId)!;
+            var plan = _runner.Plan(zone.Id, curve);
+            var choices = new FanCurveSensors(_hub, _runner).Choices();
+            var text = plan.OnBmc
+                ? $"{name} will run \"{curve.Name}\" on the BMC.\n\nWritten once: " +
+                  (plan.SourceMask is { } sm && sm != mask ? $"its sensors ({FanClient.DescribeSource(sm, _sensors)}) and " : "") +
+                  $"the curve {CurveUi.Points(plan.Points)}" +
+                  (plan.MaxExtraPercent >= 0.5 ? $" — at most {plan.MaxExtraPercent:0} % faster than drawn, at {plan.MaxExtraAtC:0.#} °C" : "") +
+                  ".\nAfter that the BMC runs it with no further writes, with or without OpenHW."
+                : $"⚠ \"{curve.Name}\" reads {string.Join(", ", plan.OtherSensors.Select(id => choices.FirstOrDefault(c => c.Id == id)?.Label ?? id))}, " +
+                  "which the BMC can't see.\n\nOpenHW will drive " + name + " itself: every duty change is a write to the BMC's flash. " +
+                  $"Duties move in {FanCurveRunner.DrivenStep} % steps, faster at once, slower only after a minute; each write is counted " +
+                  "per day on this page. Starting and stopping OpenHW cost a write each (the fan returns to its BMC curve when " +
+                  "OpenHW stops).";
+            var ok = await new ConfirmDialog("Fan Control — " + name, text, plan.OnBmc ? "Write to the BMC" : "Let OpenHW drive it", !plan.OnBmc).ShowDialog<bool>(this);
+            if (!ok) return;
+            _runner.Assign(zone.Id, curveId);
+            if (plan.OnBmc) Apply(zone, mask);
+            else Show($"OpenHW drives {name} from its next reading.", false);
+        }
+        finally
+        {
+            _choosing = false;
+            Refresh();
+        }
+    }
+
+    private void Show(string text, bool bad)
+    {
+        _result.Text = text;
+        _result.Foreground = bad ? AlertUi.Alarm : AlertUi.Ok;
+    }
+}
+
+/// <summary>A yes/no question with the costs spelled out; true when confirmed.</summary>
+public sealed class ConfirmDialog : Window
+{
+    public ConfirmDialog(string title, string text, string yes, bool warn)
+    {
+        CurveUi.Dialog(this, title, 560);
+        var body = new StackPanel { Spacing = 10, Margin = new Thickness(14, 12) };
+        body.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = warn ? CurveUi.Warn : Palette.Text });
+        var buttons = AlertUi.Row(AlertUi.Button("Cancel", () => Close(false)), AlertUi.Button(yes, () => Close(true)));
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        body.Children.Add(buttons);
+        Content = body;
+        Settings.WindowPlaces.Track(this, "fan-confirm");
     }
 }
 

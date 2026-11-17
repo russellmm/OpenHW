@@ -9,7 +9,7 @@ public sealed record FanCurvePoint(int TemperatureC, int DutyPercent);
 /// The ASUS WRX90E-SAGE SE BMC's fan zones, through ASUS's OEM IPMI commands (ASUS E26328 IPMI manual, July 2025,
 /// appendix A-5–A-7). Ported from OpenFan's AsusBmcController (owner, 2026-11-16: OpenFan is ours to reuse), on
 /// OpenHW's own IPMI transport. Firmware state per zone is 11 bytes: mode (04 = manual curve), then five
-/// temperature/duty pairs; the last two temperatures are fixed at 70 and 100 °C on this firmware.
+/// temperature/duty pairs; the last temperature is 100 °C (the BMC web console edits points A–D, point E stays at 100 °C).
 /// <list type="bullet">
 ///   <item><c>30 13 01 00</c> zone count (8), <c>30 13 03 00</c> zone order (ff 00…07),
 ///   <c>30 13 00 N</c> 54-byte table (32-byte name, …, active and default curves) — identity checks only.</item>
@@ -77,11 +77,11 @@ public sealed class AsusBmcFans
         return r.Length >= 1 && r[0] == 0 ? r[1..] : [];
     }
 
-    /// <summary>A manual-mode state whose temperatures rise, duties are 0–100 and the last two points are 70/100 °C.</summary>
+    /// <summary>A manual-mode state whose temperatures rise, duties are 0–100 and the last point is at 100 °C.</summary>
     public static bool ValidState(byte[] state) => state.Length == 11 && state[0] == 4 &&
         Enumerable.Range(0, 5).All(i => state[1 + i * 2] <= 100 && state[2 + i * 2] <= 100) &&
         Enumerable.Range(1, 4).All(i => state[1 + i * 2] > state[1 + (i - 1) * 2]) &&
-        state[7] == 70 && state[9] == 100;
+        state[9] == 100;
 
     public static IReadOnlyList<FanCurvePoint> Curve(byte[] state) =>
         Enumerable.Range(0, 5).Select(i => new FanCurvePoint(state[1 + i * 2], state[2 + i * 2])).ToList();

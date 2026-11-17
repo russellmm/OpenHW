@@ -1,7 +1,7 @@
 # Fan control — design
 
 How OpenHW controls fans on the owner's ASUS Pro WS WRX90E-SAGE SE, what the hardware actually does, and why the
-design looks the way it does. Status as of 0.24.3 (2026-11-16). Plan and history: [ROADMAP.md](../ROADMAP.md)
+design looks the way it does. Status as of 0.25.0 (2026-11-17). Plan and history: [ROADMAP.md](../ROADMAP.md)
 "Fan control"; release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Goals (owner)
@@ -54,8 +54,12 @@ ASUS OEM commands (ASUS E26328 IPMI manual V3, July 2025, §3.7.17 and appendix 
 | `30 0e 04 N` + 10 bytes | write zone curve | read back after every write |
 | `30 93` | temperature source | **read refused (0xC7)** on this firmware; set form not used (it sets all 23 PWMs at once) |
 
-Firmware rules: temperatures rise, the last two points are fixed at **70 and 100 °C**, duties 0–100 but **any 0 %
-point is refused (0xD9)**. Identity checked before any write: board vendor/name, ASUS 2623 / product 0x1193, firmware
+Firmware rules: temperatures rise, the **last point is at 100 °C**, duties 0–100 but **any 0 % point is refused
+(0xD9)**. Point 4 is free: the BMC web console edits points A–D (D's temperature too) and shows E at 100 °C (owner's
+screenshot, 2026-11-17). Up to 0.24.x OpenHW, like OpenFan, also required point 4 = 70 °C only because every curve
+it had read looked like that — never tested. If the firmware refuses a free point 4 through IPMI, the app refits with
+70 °C and remembers (`FourthAt70` in fan-curves.json).
+Identity checked before any write: board vendor/name, ASUS 2623 / product 0x1193, firmware
 2.01, aux bytes `22 00 00 00`, zone count/order, each table's name and curve temperatures.
 
 ### Redfish (BMC web API) — temperature sources
@@ -123,7 +127,7 @@ OpenFan (until retired) ─ (to become a client)
 |---|---|---|
 | 13 | `fans [token]` | zones: owner, target/pending, active and journaled curves, writes, saved original, floor |
 | 13 | `fanset <token> <zone> <1–100>` / `fanrelease <token> <zone\|all>` / `fanbeat <token>` | takeover, lease |
-| 14 | `fancurve <zone> <t:d,t:d,t:d,70:d,100:d>` / `fanoriginal <zone>` | configured curve / restore original |
+| 14 | `fancurve <zone> <t:d,t:d,t:d,t:d,100:d>` / `fanoriginal <zone>` | configured curve / restore original |
 | 14 | `fansources` / `fansource <zone> <mask>` | read / set sources (Redfish) |
 | 14 | `bmclogin [b64 user b64 password]` / `bmclogout` | which user is stored / store (after a real login) / forget |
 
@@ -137,9 +141,46 @@ AF_INET`, `IPAddressDeny=any`, `IPAddressAllow=169.254.0.0/16` (was `PrivateNetw
 
 Power → Fan Control… lists every zone: RPM (BMC sensor), who controls it (BMC curve / a client's fixed duty), which
 BMC sensors it follows, the active curve, writes; a BMC-login line; **Edit…** per fan: sensor checkboxes (the BMC's
-own list, as in its web console), five points (points 4/5 fixed at 70/100 °C), Apply (writes only what changed),
+own list, as in its web console), five points (point 5 at 100 °C), Apply (writes only what changed),
 Restore original. Every dialog opens centred on the primary monitor the first time and then where it was last
 moved (owner rule).
+
+## PCIe slot sensors = GPU core temperatures (measured 2026-11-17)
+
+`tools/gpu-slot-test/` loaded each GPU in turn (FMA loop at its 300 W / 180 W limit) and logged nvidia-smi next to the
+BMC's slot sensors every 5 s. Each slot sensor read **its GPU's core temperature within about 1 °C, rising and falling
+within one sample** (the BMC almost certainly reads the GPU over the slot's SMBus), and the others didn't move:
+
+| Slot (owner) | Card | BMC sensor | Idle → load |
+|---|---|---|---|
+| 1 | RTX PRO 6000 (F1:00.0) | PCIE01 (bit 11) | 41 → 64 °C |
+| 4 | RTX 5060 Ti (11:00.0) | PCIE04 (bit 14) | 44 → 70 °C |
+| 5 | RTX PRO 6000 (C1:00.0) | PCIE05 (bit 15) | 33 → 62 °C |
+
+So GPU-following curves run on the BMC; OpenHW-driven duties are only needed for sensors the BMC really can't see.
+Not yet checked: whether a slot still reads while its card is lent to the VM.
+
+## Curves (0.25.0)
+
+- **Model** (`Fans/FanCurves.cs`, ported from OpenFan.Core): `FanCurve` = Graph (points over one sensor, linear, flat
+  outside, max speed, hysteresis °C/s) | Flat | Mix (max/min/average of non-mix curves). `FanCurveMath.Evaluate`,
+  `FanHysteresisGate` (OpenFan's HysteresisGate). Saved in `~/.config/openhw/fan-curves.json` (`FanCurveStore`: curves,
+  zone → curve, `FourthAt70`, writes per day).
+- **BMC fit** (`Fans/BmcCurveFit.cs`): a curve runs on the BMC when every sensor it reads is a BMC temperature sensor
+  (`bmc:<SDR name>` with an SDR number 1–18). The BMC follows the hottest of its sensors through one curve, so the
+  target is g(T) = the curve with every sensor at T (rising: running max; at least the zone's floor) — for rising
+  child curves that's an upper bound of any max/min/average mix. The fit tries 4-knot combinations (≤ 36 candidate
+  temperatures between where g starts to rise and where it tops out) plus the fixed 100 °C point, raises segments
+  until the BMC line (flat before point 1, linear between) is ≥ g everywhere, and keeps the one with the least excess.
+  Owner's curves: GPU Slot 5 within 1 %, the big CPU+GPUs+35 % mix within 6 %.
+- **Runner** (`App/Power/FanCurveRunner.cs`): BMC-run → `ApplyBmc` (Redfish source if different, IPMI curve if
+  different; once). OpenHW-driven → `Tick` every poll (app side, timer thread): evaluate, round up to 5 %, hysteresis
+  gate, faster at once, slower only ≥ 5 % and ≥ 60 s after the last change (the driver's 30 s / 3 % rules still apply
+  below), counted per day; lease renewed by `fanbeat`; no readings for 20 s → release; app exit → release. Each start
+  and stop of a driven fan costs a write (takeover / restore).
+- **UI**: Power → Fan Curves… (list: where each runs, which fans), graph editor (OpenFan's look; green dashed = the BMC
+  version, note on flash writes), flat and mix dialogs; Fan Control → Curve column with a confirm that spells out the
+  writes; Apply when a BMC-run curve changed since it was written.
 
 ## The hybrid plan (owner, 2026-11-16)
 
@@ -147,8 +188,8 @@ moved (owner rule).
    are **BMC-run**: OpenHW writes the curve and the sources once. Done in 0.24.x.
 2. **Fans that follow sensors the BMC can't see** (GPU core temperatures, NVMe, mixes) get **OpenHW-driven duties**
    through takeover, under a write budget (coarse duty steps, wide hysteresis, slow-downs held, a visible daily
-   count), with the curve loop in the helper so it runs without the window. To decide first: whether the PCIe slot
-   sensors (PCIE01–07) track the GPUs well enough to make this unnecessary. Part 2 (0.25.0), with an import of the
+   count). **Done in 0.25.0, app-side** (the app runs from login in the tray; if it stops, the lease gives the fan back);
+   the PCIe slot sensors turned out to read the GPUs, so GPU curves don't need this. Part 2 (0.25.0), with an import of the
    owner's OpenFan profile (`/home/russellm/Documents/openfan11_14.json`: CPU, GPU Slot 1/5, RTX5060 and Memory
    graph curves, max/min mixes, flat floors, a pump mix) re-pointed to the BMC zones.
 3. OpenFan becomes a client of the driver, then is retired.

@@ -87,7 +87,7 @@ readback, menu entry first.
    32-byte name, PWM source, TCC max, current + generic curve; 02 N set), **temperature source `30 93`** (get: no data
    → one byte per PWM1–23; set: 23 bytes). Source codes aren't listed; the BIOS Q-Fan offers CPU, CPU Package,
    MotherBoard, VRM_W, VRM_E, Chipset, Chipset 2, T_Sensor, up to 3 per fan (Redfish shows `Source` 1 on every zone).
-4. [~] **Stage 2 — hybrid (owner, 2026-11-16)**. **Part 1 built (0.24.0)**: BMC-run curves — Fan Control → Edit…
+4. [x] **Stage 2 — hybrid (owner, 2026-11-16)** — part 2 built in 0.25.0 (see step 5). **Part 1 built (0.24.0)**: BMC-run curves — Fan Control → Edit…
    (sources via Redfish PATCH of Thermal Oem.PWM with the stored `openhw` login; curve via IPMI 30 0e; original kept in
    fan-original.json; floors CPU 20 %, pump 50 %); helper protocol 14; sandbox opened to 169.254.0.0/16 only. **To
    verify on the real BMC**: the Redfish PATCH format (whole PWM list with If-Match, falls back to one entry) — first
@@ -117,11 +117,17 @@ readback, menu entry first.
    - The BMC's host-interface NIC **changes name every boot** (enx + a random MAC): find it by vendor/route, not name.
    - "Publish HII Resources" (owner enabled): 1,300 AMD CBS/PBS BIOS attributes readable over Redfish without a login
      (`/redfish/v1/Systems/Self/Bios`); ASUS Q-Fan items aren't among them.
-5. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
-   BMC DIMM temps; run the loop in the helper; import the owner's `openfan11_14.json` re-pointed to BMC zones) and
-   OpenFan as a client of the driver until it's retired. UI (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
-   OpenHW reads (incl. BMC temperatures and GPU temperatures), with hysteresis and a minimum; a clear "automatic"
-   default. Saved per header, applied when OpenHW starts (opt-in, like CPU caps).
+5. [x] **Stage 2 — curves (0.25.0, 2026-11-17)**. Owner, 2026-11-17: "build the capability to create curves like we can in
+   OpenFan and assign them to a given fan … BMC sensors cause no flash writes … other sensors, but get warned of flash
+   writes", and "the last 2 points MUST be 70 and 100 °C — I want options". Done: OpenFan's curve engine ported
+   (graph / flat / mix, hysteresis, max speed; graph editor), Power → Fan Curves…, a curve per fan in Fan Control;
+   BMC-sensor curves are fitted to the BMC's form (never slower) and written once; others are OpenHW-driven with a
+   warning, 5 % steps, a minute's hold on slow-downs, per-day write counts. **Point 4 is free** (web console edits A–D;
+   the 70 °C rule was an untested assumption); if IPMI refuses it, the app refits with 70 and remembers. **Slot sensors
+   = GPU cores** (`tools/gpu-slot-test/`, 2026-11-17): PCIE01 = slot 1 PRO 6000 (F1), PCIE04 = 5060 Ti, PCIE05 = slot 5
+   PRO 6000 (C1), within ~1 °C. Still to do: the first real Apply with point 4 ≠ 70 (owner); whether slot sensors read a
+   lent card; an "Import from OpenFan…" if wanted (owner: not a priority); OpenFan as a client of the driver; NVIDIA's
+   own fans (step 3).
 5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never
    pushed further; pump/CPU minimums can't be lowered from the UI without an explicit override.
 

@@ -65,7 +65,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowFanCurves = ShowFanCurves, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -80,6 +80,7 @@ public sealed class App : Application
                 _window?.SaveWindowState();
                 WindowPlaces.Flush();
                 _poll?.Dispose();
+                _fans.ReleaseAll(); // OpenHW-driven fans back to their BMC curves (the helper's lease would do it in 15 s)
                 foreach (var (_, icon) in _trayIcons) icon.Dispose();
                 _logger?.Dispose();
                 _notifier.Dispose();
@@ -307,6 +308,7 @@ public sealed class App : Application
             _hub.Sample();
             _logger?.Append(DateTime.Now, id => _hub.Get(id).Current);
             CheckAlerts();
+            if (_fans.Store.Assignments.Count > 0) _fans.Tick(id => _hub.Get(id).Current);
             // Another tool (or the power menu while OpenHW was closed) can change the ceilings; re-check every 10 s.
             if (++_polls % 5 == 0)
             {
@@ -448,7 +450,7 @@ public sealed class App : Application
     {
         if (_exiting) return;
         var ids = _settings.TrayIcons.Select(ResolveTrayId).OfType<string>().Concat(_graphs.Keys).Concat(_loggedIds)
-            .Concat(_alerts.WatchedSensors).ToArray();
+            .Concat(_alerts.WatchedSensors).Concat(FanCurveSensorIds()).ToArray();
         _hub.SetPinned(ids); // tray, graphed, logged and alerted sensors stay live even inside a collapsed group
         var items = _hub.Inventory.ToDictionary(i => i.Id, StringComparer.Ordinal);
         var groups = _trayIcons.Count == 0 ? [] : SensorPresentation.Build(_hub.Inventory, _hub.Children, _hub.Machine);
@@ -778,12 +780,32 @@ public sealed class App : Application
     }
 
     private FanControlWindow? _fanControl;
+    private FanCurvesWindow? _fanCurves;
+    private readonly FanCurveRunner _fans = new(new FanClient(), FanCurveStore.Load());
+
+    private void ShowFanCurves()
+    {
+        if (_fanCurves is null)
+        {
+            WindowPlaces.Track(_fanCurves = new FanCurvesWindow(new FanCurveSensors(_hub, _fans)), "fan-curves");
+            _fanCurves.Closed += (_, _) => _fanCurves = null;
+        }
+        _fanCurves.Show();
+        _fanCurves.Activate();
+    }
+
+    /// <summary>Sensors OpenHW-driven fans read: kept live even inside a collapsed group.</summary>
+    private IEnumerable<string> FanCurveSensorIds()
+    {
+        var library = _fans.Store.Library;
+        return _fans.Store.Assignments.Values.Where(library.ContainsKey).SelectMany(id => FanCurveMath.Sensors(library[id], library));
+    }
 
     private void ShowFanControl()
     {
         if (_fanControl is null)
         {
-            WindowPlaces.Track(_fanControl = new FanControlWindow(_hub), "fan-control");
+            WindowPlaces.Track(_fanControl = new FanControlWindow(_hub, runner: _fans, showCurves: ShowFanCurves), "fan-control");
             _fanControl.Closed += (_, _) => _fanControl = null;
         }
         _fanControl.Show();

@@ -212,7 +212,7 @@ public sealed partial class FanDriver : IDisposable
 
     /// <summary>
     /// Writes a zone's own curve permanently (the BMC runs it from then on, with or without OpenHW). Five points; the
-    /// firmware fixes the last two at 70 and 100 °C; temperatures rise; duties between the zone's floor and 100 %.
+    /// last at 100 °C (the web console edits points A–D only); temperatures rise; duties between the zone's floor and 100 %.
     /// The zone's curve before OpenHW's first change is saved once (fan-original.json) for <see cref="RestoreOriginal"/>.
     /// Refused while a client holds the zone (a takeover) or OpenFan holds BMC fans. One write, read back; none if equal.
     /// </summary>
@@ -222,8 +222,8 @@ public sealed partial class FanDriver : IDisposable
         {
             var (index, zone) = Find(zoneId);
             if (points.Count != 5) throw new ArgumentException("a curve has five points");
-            if (points[3].TemperatureC != 70 || points[4].TemperatureC != 100)
-                throw new ArgumentException("the firmware fixes the last two points at 70 and 100 °C");
+            if (points[4].TemperatureC != 100)
+                throw new ArgumentException("the last point is at 100 °C");
             for (var i = 1; i < 5; i++)
                 if (points[i].TemperatureC <= points[i - 1].TemperatureC) throw new ArgumentException("temperatures must rise from point to point");
             if (points[0].TemperatureC < 0) throw new ArgumentException("temperatures must be 0–100 °C");
