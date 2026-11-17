@@ -24,6 +24,35 @@ public sealed class FanClient(Func<string, string>? request = null)
     public string Release(string zone = "all") => _request($"fanrelease {Token} {zone}");
     public string Beat() => _request("fanbeat " + Token);
 
+    // Configured curves and sources (protocol 14): written once, run by the BMC.
+    public string SetCurve(string zone, IReadOnlyList<FanCurvePoint> curve) =>
+        _request($"fancurve {zone} {string.Join(',', curve.Select(p => $"{p.TemperatureC}:{p.DutyPercent}"))}");
+    public string RestoreOriginal(string zone) => _request("fanoriginal " + zone);
+    public IReadOnlyDictionary<int, long> Sources() => GpuWire.Decode<Dictionary<int, long>>(_request("fansources")) ?? [];
+    public string SetSource(string zone, long mask) => _request($"fansource {zone} {mask.ToString(CultureInfo.InvariantCulture)}");
+
+    /// <summary>The user the helper's BMC login is for, or null when none is stored.</summary>
+    public string? LoginUser() => _request("bmclogin") is var user && user != "none" ? user : null;
+    public string SetLogin(string user, string password) =>
+        _request($"bmclogin {Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(user))} {Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(password))}");
+    public string Logout() => _request("bmclogout");
+
+    /// <summary>The BMC temperature sensors a fan can follow: number 1–18 → name (bit = number − 1 in a source mask).</summary>
+    public IReadOnlyList<(int Number, string Name)> SourceSensors()
+    {
+        var bmc = GpuWire.Decode<BmcWireReply>(_request("bmc"));
+        return bmc?.Sensors.Where(x => x.Kind == HardwareKind.Temperature && x.Number is >= 1 and <= BmcRedfish.SourceBits)
+            .Select(x => ((int)x.Number, x.Name)).OrderBy(x => x.Item1).ToList() ?? [];
+    }
+
+    public static string DescribeSource(long mask, IReadOnlyList<(int Number, string Name)> sensors)
+    {
+        if (mask <= 0 || mask >= 1L << BmcRedfish.SourceBits) return "–";
+        var names = Enumerable.Range(1, BmcRedfish.SourceBits).Where(n => (mask & 1L << (n - 1)) != 0)
+            .Select(n => sensors.FirstOrDefault(x => x.Number == n).Name ?? $"sensor {n}").ToList();
+        return names.Count == 1 ? names[0] : "max of " + string.Join(", ", names);
+    }
+
     public static string Describe(IReadOnlyList<FanCurvePoint>? curve) =>
         curve is null ? "–" : string.Join("  ", curve.Select(p => $"{p.TemperatureC}°→{p.DutyPercent}%"));
 
@@ -32,23 +61,24 @@ public sealed class FanClient(Func<string, string>? request = null)
 }
 
 /// <summary>
-/// Power → Fan Control… (stage 1): the fan driver's zones — live RPM, who controls each (the BMC's own curve or a
-/// client's fixed duty), the active curve and how many writes the BMC has taken since the helper started. Read-only:
-/// curves come in the next stage; zone checks run from <c>openhw --fan-test</c>.
+/// Power → Fan Control…: the BMC's fan zones — live RPM, who controls each (the BMC's own curve or a client's fixed
+/// duty), which BMC sensors it follows, its active curve and the writes since the helper started — and, per fan,
+/// Edit… (curve + sources, written once, run by the BMC). Zone checks still run from <c>openhw --fan-test</c>.
 /// </summary>
 public sealed class FanControlWindow : Window
 {
     private readonly Sensors.SensorHub _hub;
     private readonly FanClient _client;
     private readonly StackPanel _body = new() { Spacing = 6, Margin = new Thickness(14, 10) };
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private IReadOnlyList<(int Number, string Name)> _sensors = [];
 
     public FanControlWindow(Sensors.SensorHub hub, FanClient? client = null)
     {
         _hub = hub;
         _client = client ?? new FanClient();
         Title = "Fan Control";
-        Width = 900;
+        Width = 1080;
         SizeToContent = SizeToContent.Height;
         Background = Palette.Window;
         Foreground = Palette.Text;
@@ -80,10 +110,10 @@ public sealed class FanControlWindow : Window
         _body.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Palette.Footnote,
-            Text = "OpenHW's fan driver (in openhw-helper) is the one program that writes fan settings. A program takes a fan " +
-                   "over by asking for a duty; the fan goes back to the BMC's own curve when that program lets go or stops. " +
-                   "To spare the BMC's flash, a faster duty is written at once and a slower one only after 30 s. Curves of your " +
-                   "own come in the next version.",
+            Text = "The BMC runs every fan from a 5-point curve that follows one or more of its temperature sensors. Edit… " +
+                   "changes a fan's curve and sensors once; the BMC keeps them (in its flash) and runs them from then on, with or " +
+                   "without OpenHW. The curve a fan had before OpenHW first changed it is kept for Restore original. Fans that " +
+                   "should follow sensors the BMC can't see (GPU temperatures) come in the next version.",
         });
         if (error is not null || status is null)
         {
@@ -95,7 +125,24 @@ public sealed class FanControlWindow : Window
         if (status.OtherController is { } other)
             _body.Children.Add(new TextBlock { Text = other + " OpenHW won't take any fan over until it lets go.", Foreground = AlertUi.Alarm, TextWrapping = TextWrapping.Wrap });
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("150,80,260,*,60"), Margin = new Thickness(0, 6, 0, 0) };
+        string? login = null;
+        IReadOnlyDictionary<int, long> sources = new Dictionary<int, long>();
+        // An older helper (protocol 13) has none of these: the page still shows the zones.
+        static bool Soft(Exception ex) => ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException;
+        try { login = _client.LoginUser(); } catch (Exception ex) when (Soft(ex)) { }
+        try { sources = _client.Sources(); } catch (Exception ex) when (Soft(ex)) { }
+        try { if (_sensors.Count == 0) _sensors = _client.SourceSensors(); } catch (Exception ex) when (Soft(ex)) { }
+        var loginRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
+        loginRow.Children.Add(new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Text = login is null ? "BMC login for changing temperature sources: none stored." : $"BMC login for temperature sources: {login}",
+            Foreground = login is null ? Palette.Footnote : Palette.Text,
+        });
+        loginRow.Children.Add(AlertUi.Button(login is null ? "Give OpenHW the BMC login…" : "Change…", () => new BmcLoginDialog(_client).ShowDialog(this)));
+        _body.Children.Add(loginRow);
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,60,150,240,*,50,70"), Margin = new Thickness(0, 6, 0, 0) };
         void Cell(int row, int col, string text, IBrush? brush = null, FontWeight weight = FontWeight.Normal)
         {
             var cell = new TextBlock { Text = text, Foreground = brush ?? Palette.Text, FontWeight = weight, Margin = new Thickness(0, 2, 10, 2), TextTrimming = TextTrimming.CharacterEllipsis };
@@ -104,7 +151,7 @@ public sealed class FanControlWindow : Window
             grid.Children.Add(cell);
         }
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        string[] headers = ["Fan", "RPM", "Controlled by", "Active curve (°C → duty)", "Writes"];
+        string[] headers = ["Fan", "RPM", "Controlled by", "Follows", "Active curve (°C → duty)", "Writes", ""];
         for (var c = 0; c < headers.Length; c++) Cell(0, c, headers[c], Palette.Footnote, FontWeight.SemiBold);
         var row = 1;
         foreach (var z in status.Zones)
@@ -115,8 +162,23 @@ public sealed class FanControlWindow : Window
             Cell(row, 0, name);
             Cell(row, 1, rpm);
             Cell(row, 2, FanClient.Controller(z), z.Target is null ? Palette.Footnote : Palette.Text);
-            Cell(row, 3, FanClient.Describe(z.Active));
-            Cell(row, 4, z.Writes.ToString(CultureInfo.CurrentCulture));
+            var index = z.Id[^1] - '0';
+            Cell(row, 3, sources.TryGetValue(index, out var mask) ? FanClient.DescribeSource(mask, _sensors) : "–");
+            Cell(row, 4, FanClient.Describe(z.Active));
+            Cell(row, 5, z.Writes.ToString(CultureInfo.CurrentCulture));
+            var zone = z;
+            var edit = AlertUi.Button("Edit…", () =>
+            {
+                _timer.Stop();
+                var dialog = new FanCurveDialog(_client, zone, sources.TryGetValue(index, out var m) ? m : 0, _sensors, login is not null);
+                dialog.Closed += (_, _) => { Refresh(); _timer.Start(); };
+                dialog.ShowDialog(this);
+            });
+            edit.IsEnabled = status.Available && !z.Owned && status.OtherController is null;
+            edit.Padding = new Thickness(8, 1);
+            Grid.SetRow(edit, row);
+            Grid.SetColumn(edit, 6);
+            grid.Children.Add(edit);
             row++;
         }
         _body.Children.Add(grid);

@@ -50,8 +50,12 @@ ReadWritePaths=-/etc/udev/rules.d
 ReadWritePaths=-/etc/libvirt/hooks/qemu.d
 ProtectHome=true
 PrivateTmp=true
-PrivateNetwork=true
-RestrictAddressFamilies=AF_UNIX
+# Network: only the BMC's Redfish service over the BIOS's Redfish host interface (a USB link inside the machine,
+# link-local 169.254.x — the BMC is 169.254.0.17), for fan temperature sources. Every other address is refused.
+# (Was PrivateNetwork=true until 0.24.0.)
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=169.254.0.0/16
 # Not ProtectKernelTunables: it makes all of /sys read-only, and bpffs (/sys/fs/bpf, where the card filter pins its
 # program) can't be made writable again under it (tools/sandbox-bpffs-test.sh, 2026-10-26: RO with ReadWritePaths or
 # BindPaths, RW only without it). The tunables it protects are made read-only here instead.

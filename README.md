@@ -262,7 +262,18 @@ Without the boot service installed, the row says so and stays read-only.
 ## Fan control
 
 openhw-helper is meant to be the one program that writes fan settings (OpenFan, while it's still installed, is to
-use it too). Stage 1 (0.23.0) is the driver; curves of your own come next.
+use it too). The BMC keeps fan settings in its flash, so OpenHW prefers curves the BMC runs itself (written once) over
+duties it would have to keep rewriting.
+
+**Curves the BMC runs (0.24.0)** — Power → Fan Control… → **Edit…** on a fan: tick the BMC temperature sensors it
+follows (CPU Package, TR1 = the T_Sensor header, LAN, each DIMM slot DIMMA1–H1, each PCIe slot PCIE01–07; with several
+ticked the hottest counts) and set its five points (temperature → duty; the firmware fixes the last two at 70 and
+100 °C). **Apply** writes only what changed, once; from then on the BMC runs the curve itself, with or without OpenHW.
+**Restore original** puts back the curve the fan had before OpenHW first changed it. CPU_FAN can't go below 20 % and
+W_PUMP+ below 50 %. Choosing sensors uses the BMC's Redfish service and needs a BMC login: **Give OpenHW the BMC
+login…** (type it, or read a file with the user on line 1 and the password on line 2); the helper checks it with the
+BMC and keeps it in `/etc/openhw/bmc-login`, readable by root only. Curves alone need no login. Fans that should
+follow sensors the BMC can't see (GPU temperatures) come next.
 
 On the ASUS Pro WS WRX90E-SAGE SE every fan header is driven by the BMC — the NCT6798 Super I/O only measures them
 — so the driver works through the BMC's seven fan zones (CPU_FAN together with CPU_OPT, CHA_FAN1–5, W_PUMP+), using
@@ -358,15 +369,17 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
 `ddr5`, `vr`, `rapl`, `bmc` (the board management controller's sensors over IPMI: Get Device ID, the SDR repository,
 Get Sensor Reading and Get Sensor Thresholds — nothing that sets, clears or controls anything), the fan driver
-(`fans`, `fanset`, `fanrelease`, `fanbeat` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+(`fans`, `fanset`, `fanrelease`, `fanbeat`, `fancurve`, `fanoriginal`, `fansources`, `fansource`, `bmclogin`,
+`bmclogout` — see [Fan control](#fan-control)), the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
 `CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
 `/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
-`/etc/openhw` and `/sys/fs/bpf` (the card filter), `/var/lib/openhw` (the fan restore journal), and for GPU Lending's install/uninstall its own drop-in folder,
+`/etc/openhw` and `/sys/fs/bpf` (the card filter, the BMC login and certificate pin), `/var/lib/openhw` (the fan
+restore journal and saved original curves), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d` and `/etc/libvirt/hooks/qemu.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
-`/sys/firmware` read-only; no network; devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
+`/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
@@ -411,5 +424,5 @@ with desktop notifications, power-mode switching that keeps boost working, all-c
 CPU and GPU power limits (boot values follow each card by GPU UUID), GPU lending to a VM, BMC sensors over IPMI,
 board profiles for the Pro WS TRX50-SAGE WIFI A and the Pro WS WRX90E-SAGE SE, Hardware Check after a hardware
 change, and the root helper for NVMe SMART, RAPL, DIMM, VR and BMC sensors, cpufreq ceilings, power limits and the
-card filter. Ships as a .deb (see [Install](#install)). fan control through the BMC (stage 1: the driver; curves next) — planned in [ROADMAP.md](ROADMAP.md),
+card filter. Ships as a .deb (see [Install](#install)). fan control through the BMC (curves the BMC runs; GPU-following curves next) — planned in [ROADMAP.md](ROADMAP.md),
 which tracks all planned work.

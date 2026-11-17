@@ -82,6 +82,8 @@ public sealed class FanDriverTests : IDisposable
         public void Dispose() { }
     }
 
+    internal static IReadOnlyList<FanCurvePoint> CurveOf(byte[] state) => AsusBmcFans.Curve(state);
+
     private FanDriver Driver(FakeAsusBmc bmc, string board = AsusBmcFans.Board, string identity = "machine-1") =>
         new(() => (AsusBmcFans.Open(bmc, AsusBmcFans.Vendor, board, out var reason), reason), Journal, identity,
             () => _now, () => File.Exists(OpenFanJournal) ? "OpenFan is controlling BMC fans right now." : null);
@@ -258,5 +260,76 @@ public sealed class FanDriverTests : IDisposable
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");
         public void Dispose() { }
+    }
+}
+
+/// <summary>Stage 2: curves a user configures — written once, kept by the BMC, the zone's original kept for restoring.</summary>
+public sealed class FanCurveTests : IDisposable
+{
+    private readonly string _dir = Directory.CreateTempSubdirectory("openhw-fancurves").FullName;
+    private const string A = "0123456789abcdef0123456789abcdef";
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private FanDriver Driver(FanDriverTests.FakeAsusBmc bmc, string identity = "machine-1") =>
+        new(() => (AsusBmcFans.Open(bmc, AsusBmcFans.Vendor, AsusBmcFans.Board, out var r), r), Path.Combine(_dir, "fan-restore.json"), identity);
+
+    private static IReadOnlyList<FanCurvePoint> Curve(params int[] td) => Enumerable.Range(0, 5).Select(i => new FanCurvePoint(td[i * 2], td[i * 2 + 1])).ToList();
+
+    [Fact]
+    public void ACurveIsWrittenOnceAndTheOriginalKeptForRestoring()
+    {
+        var bmc = new FanDriverTests.FakeAsusBmc();
+        var original = (byte[])bmc.States[1].Clone();
+        using var fans = Driver(bmc);
+        Assert.Equal("bmc:1 25:30,45:45,60:70,70:100,100:100", fans.SetCurve("bmc:1", Curve(25, 30, 45, 45, 60, 70, 70, 100, 100, 100)));
+        Assert.Equal(new byte[] { 4, 25, 30, 45, 45, 60, 70, 70, 100, 100, 100 }, bmc.States[1]);
+        Assert.Equal(1, bmc.Writes);
+        fans.SetCurve("bmc:1", Curve(25, 30, 45, 45, 60, 70, 70, 100, 100, 100)); // the same again: no write
+        Assert.Equal(1, bmc.Writes);
+        var zone = fans.Status(null).Zones[1];
+        Assert.Equal(FanDriverTests.CurveOf(original), zone.SavedOriginal);
+        fans.SetCurve("bmc:1", Curve(25, 35, 45, 45, 60, 70, 70, 100, 100, 100));
+        Assert.Equal(FanDriverTests.CurveOf(original), fans.Status(null).Zones[1].SavedOriginal); // still the first one
+
+        using var restarted = Driver(bmc); // the saved original outlives the helper
+        restarted.RestoreOriginal("bmc:1");
+        Assert.Equal(original, bmc.States[1]);
+        Assert.Equal(3, bmc.Writes);
+    }
+
+    [Theory]
+    [InlineData("bmc:1", new[] { 20, 20, 45, 40, 65, 70, 75, 100, 100, 100 }, "fixes the last two")]
+    [InlineData("bmc:1", new[] { 20, 20, 45, 40, 40, 70, 70, 100, 100, 100 }, "must rise")]
+    [InlineData("bmc:6", new[] { 20, 40, 45, 80, 60, 80, 70, 100, 100, 100 }, "W_PUMP+ must be 50–100")]
+    [InlineData("bmc:0", new[] { 20, 10, 45, 40, 65, 70, 70, 100, 100, 100 }, "CPU_FAN must be 20–100")]
+    [InlineData("bmc:2", new[] { 20, 0, 45, 40, 65, 70, 70, 100, 100, 100 }, "must be 1–100")]
+    public void CurvesTheFirmwareOrTheFloorsWouldRefuseAreRefusedFirst(string zone, int[] td, string message)
+    {
+        var bmc = new FanDriverTests.FakeAsusBmc();
+        using var fans = Driver(bmc);
+        Assert.Contains(message, Assert.Throws<ArgumentException>(() => fans.SetCurve(zone, Curve(td))).Message);
+        Assert.Equal(0, bmc.Writes);
+    }
+
+    [Fact]
+    public void NotWhileAClientHoldsTheZoneAndNoRestoreWithoutASavedOriginal()
+    {
+        var bmc = new FanDriverTests.FakeAsusBmc();
+        using var fans = Driver(bmc);
+        fans.Set(A, "bmc:3", 60);
+        Assert.Contains("taken over", Assert.Throws<ArgumentException>(() => fans.SetCurve("bmc:3", Curve(20, 30, 45, 30, 65, 30, 70, 100, 100, 100))).Message);
+        Assert.Contains("no saved original", Assert.Throws<ArgumentException>(() => fans.RestoreOriginal("bmc:2")).Message);
+        Assert.Equal(new FanCurvePoint[] { new(20, 20), new(45, 40), new(65, 70), new(70, 100), new(100, 100) }, FanDriver.ParseCurve("20:20,45:40,65:70,70:100,100:100"));
+        Assert.Throws<ArgumentException>(() => FanDriver.ParseCurve("20:20,45:x"));
+    }
+
+    [Fact]
+    public void AnotherMachinesSavedOriginalsAreIgnored()
+    {
+        var bmc = new FanDriverTests.FakeAsusBmc();
+        using (var fans = Driver(bmc, "machine-1")) fans.SetCurve("bmc:1", Curve(25, 30, 45, 45, 60, 70, 70, 100, 100, 100));
+        using var other = Driver(bmc, "machine-2");
+        Assert.Null(other.Status(null).Zones[1].SavedOriginal);
     }
 }

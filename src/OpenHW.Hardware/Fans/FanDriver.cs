@@ -7,9 +7,11 @@ namespace OpenHW.Hardware;
 /// <param name="Target">The fixed duty OpenHW holds the zone at, or null while the firmware's own curve runs.</param>
 /// <param name="Pending">A lower duty asked for that waits for the flash limits (see <see cref="FanDriver"/>).</param>
 /// <param name="Writes">Curve writes to the BMC since the helper started (takeovers, changes, restores).</param>
+/// <param name="SavedOriginal">The zone's curve as it was before OpenHW first configured it (kept for "Restore original").</param>
+/// <param name="MinDuty">The lowest duty a configured curve may use on this zone (pump and CPU fan have floors).</param>
 public sealed record FanZoneStatus(string Id, string Name, string Label, string RpmSensorId, bool Owned, bool OwnedByYou,
     int? Target, int? Pending, IReadOnlyList<FanCurvePoint>? Active, IReadOnlyList<FanCurvePoint>? Original,
-    int Writes, DateTime? LastWriteUtc);
+    int Writes, DateTime? LastWriteUtc, IReadOnlyList<FanCurvePoint>? SavedOriginal = null, int MinDuty = 1);
 
 public sealed record FanDriverStatus(bool Available, string? Reason, string? OtherController, DateTime SinceUtc,
     IReadOnlyList<FanZoneStatus> Zones);
@@ -30,6 +32,12 @@ public sealed partial class FanDriver : IDisposable
     public const int DownStep = 3;
     public const string DefaultJournal = "/var/lib/openhw/fan-restore.json";
     public const string OpenFanJournal = "/var/lib/openfan/bmc-restore.json";
+
+    /// <summary>
+    /// Floors for configured curves: a pump or CPU fan set too low costs the most. CPU_FAN (zone 0) ≥ 20 %, W_PUMP+
+    /// (zone 6) ≥ 50 %; the firmware itself refuses 0 % everywhere.
+    /// </summary>
+    public static int MinDuty(int zone) => zone switch { 0 => 20, 6 => 50, _ => 1 };
     private static readonly TimeSpan ActiveCacheTime = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryOpenAfter = TimeSpan.FromMinutes(1);
 
@@ -51,6 +59,8 @@ public sealed partial class FanDriver : IDisposable
     private readonly Func<DateTime> _now;
     private readonly Func<string?> _otherController;
     private readonly Dictionary<int, byte[]> _original = [];
+    private readonly string _savedOriginalsPath;
+    private readonly Dictionary<int, byte[]> _savedOriginals = [];
     private readonly Zone[] _zones = Enumerable.Range(0, AsusBmcFans.ZoneCount).Select(_ => new Zone()).ToArray();
     private readonly DateTime _since;
     private readonly Timer? _watchdog;
@@ -60,10 +70,11 @@ public sealed partial class FanDriver : IDisposable
     private bool _disposed;
 
     public FanDriver(Func<(AsusBmcFans? Fans, string? Reason)> open, string journalPath, string identity,
-        Func<DateTime>? now = null, Func<string?>? otherController = null, bool startWatchdog = false)
+        Func<DateTime>? now = null, Func<string?>? otherController = null, bool startWatchdog = false, string? savedOriginalsPath = null)
     {
         _open = open;
         _journalPath = journalPath;
+        _savedOriginalsPath = savedOriginalsPath ?? Path.Combine(Path.GetDirectoryName(journalPath)!, "fan-original.json");
         _identity = identity;
         _now = now ?? (() => DateTime.UtcNow);
         _otherController = otherController ?? (() => null);
@@ -190,10 +201,113 @@ public sealed partial class FanDriver : IDisposable
                 return new FanZoneStatus(ZoneId(i), AsusBmcFans.Sensors[i], AsusBmcFans.Labels[i], BmcEngine.IdPrefix + AsusBmcFans.Sensors[i],
                     z.Owner is not null, token is not null && z.Owner == token, z.Target, z.Pending,
                     z.Active is { } a ? AsusBmcFans.Curve(a) : null,
-                    _original.TryGetValue(i, out var o) ? AsusBmcFans.Curve(o) : null, z.Writes, z.LastWrite);
+                    _original.TryGetValue(i, out var o) ? AsusBmcFans.Curve(o) : null, z.Writes, z.LastWrite,
+                    _savedOriginals.TryGetValue(i, out var so) ? AsusBmcFans.Curve(so) : null, MinDuty(i));
             }).ToList();
             return new FanDriverStatus(fans is not null, fans is null ? _reason : null, _otherController(), _since, zones);
         }
+    }
+
+    // ── configured curves (stage 2): written once, kept by the BMC, run by the BMC ───────────────────────────────
+
+    /// <summary>
+    /// Writes a zone's own curve permanently (the BMC runs it from then on, with or without OpenHW). Five points; the
+    /// firmware fixes the last two at 70 and 100 °C; temperatures rise; duties between the zone's floor and 100 %.
+    /// The zone's curve before OpenHW's first change is saved once (fan-original.json) for <see cref="RestoreOriginal"/>.
+    /// Refused while a client holds the zone (a takeover) or OpenFan holds BMC fans. One write, read back; none if equal.
+    /// </summary>
+    public string SetCurve(string zoneId, IReadOnlyList<FanCurvePoint> points)
+    {
+        lock (_gate)
+        {
+            var (index, zone) = Find(zoneId);
+            if (points.Count != 5) throw new ArgumentException("a curve has five points");
+            if (points[3].TemperatureC != 70 || points[4].TemperatureC != 100)
+                throw new ArgumentException("the firmware fixes the last two points at 70 and 100 °C");
+            for (var i = 1; i < 5; i++)
+                if (points[i].TemperatureC <= points[i - 1].TemperatureC) throw new ArgumentException("temperatures must rise from point to point");
+            if (points[0].TemperatureC < 0) throw new ArgumentException("temperatures must be 0–100 °C");
+            var floor = MinDuty(index);
+            if (points.Any(p => p.DutyPercent < floor || p.DutyPercent > 100))
+                throw new ArgumentException($"duties on {AsusBmcFans.Sensors[index]} must be {floor}–100 %");
+            if (zone.Owner is not null) throw new ArgumentException($"{zoneId} is taken over by a client right now");
+            if (_otherController() is { } other) throw new ArgumentException(other);
+            var fans = Fans();
+            var current = fans.Read(index);
+            if (!_savedOriginals.ContainsKey(index))
+            {
+                _savedOriginals[index] = current;
+                try { SaveOriginals(); }
+                catch { _savedOriginals.Remove(index); throw; }
+            }
+            byte[] state = [0x04, .. points.SelectMany(p => new[] { (byte)p.TemperatureC, (byte)p.DutyPercent })];
+            return WriteConfigured(fans, index, zone, current, state);
+        }
+    }
+
+    /// <summary>Puts back the curve the zone had before OpenHW first configured it.</summary>
+    public string RestoreOriginal(string zoneId)
+    {
+        lock (_gate)
+        {
+            var (index, zone) = Find(zoneId);
+            if (zone.Owner is not null) throw new ArgumentException($"{zoneId} is taken over by a client right now");
+            if (!_savedOriginals.TryGetValue(index, out var original)) throw new ArgumentException($"no saved original curve for {zoneId}");
+            var fans = Fans();
+            return WriteConfigured(fans, index, zone, fans.Read(index), original);
+        }
+    }
+
+    private string WriteConfigured(AsusBmcFans fans, int index, Zone zone, byte[] current, byte[] state)
+    {
+        var now = _now();
+        if (!current.AsSpan().SequenceEqual(state))
+        {
+            fans.Write(index, state);
+            zone.Writes++;
+            zone.LastWrite = now;
+        }
+        zone.Active = state;
+        zone.ActiveAt = now;
+        return $"{ZoneId(index)} {string.Join(',', AsusBmcFans.Curve(state).Select(p => $"{p.TemperatureC}:{p.DutyPercent}"))}";
+    }
+
+    private void SaveOriginals()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_savedOriginalsPath)!);
+        var temp = _savedOriginalsPath + ".tmp";
+        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            JsonSerializer.Serialize(stream, new Journal(_identity, _savedOriginals));
+            stream.Flush(flushToDisk: true);
+        }
+        File.Move(temp, _savedOriginalsPath, overwrite: true);
+    }
+
+    private void LoadOriginals()
+    {
+        if (!File.Exists(_savedOriginalsPath)) return;
+        var saved = JsonSerializer.Deserialize<Journal>(File.ReadAllText(_savedOriginalsPath));
+        // Another machine's (or a damaged) file is ignored, not trusted: no "Restore original" until a new one is saved.
+        if (saved?.Curves is null || saved.Identity != _identity) return;
+        foreach (var (zone, state) in saved.Curves)
+            if (zone >= 0 && zone < _zones.Length && state is not null && AsusBmcFans.ValidState(state)) _savedOriginals[zone] = state;
+    }
+
+    /// <summary>Parses "20:20,45:40,65:70,70:100,100:100" (the helper's wire form).</summary>
+    public static IReadOnlyList<FanCurvePoint> ParseCurve(string text)
+    {
+        var points = new List<FanCurvePoint>();
+        foreach (var part in text.Split(','))
+        {
+            var pair = part.Split(':');
+            if (pair.Length != 2 || !int.TryParse(pair[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var t) ||
+                !int.TryParse(pair[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var d) || t > 100 || d > 100)
+                throw new ArgumentException("expected five temperature:duty pairs");
+            points.Add(new FanCurvePoint(t, d));
+        }
+        return points;
     }
 
     // ── watchdog ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -318,6 +432,7 @@ public sealed partial class FanDriver : IDisposable
             _reason = reason;
             if (fans is null) return;
             _fans = fans;
+            LoadOriginals();
             Recover();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)

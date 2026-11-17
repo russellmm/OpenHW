@@ -87,7 +87,12 @@ readback, menu entry first.
    32-byte name, PWM source, TCC max, current + generic curve; 02 N set), **temperature source `30 93`** (get: no data
    → one byte per PWM1–23; set: 23 bytes). Source codes aren't listed; the BIOS Q-Fan offers CPU, CPU Package,
    MotherBoard, VRM_W, VRM_E, Chipset, Chipset 2, T_Sensor, up to 3 per fan (Redfish shows `Source` 1 on every zone).
-4. [ ] **Stage 2 — hybrid (owner, 2026-11-16)**: fans whose curve follows a temperature the BMC knows (CPU, CPU
+4. [~] **Stage 2 — hybrid (owner, 2026-11-16)**. **Part 1 built (0.24.0)**: BMC-run curves — Fan Control → Edit…
+   (sources via Redfish PATCH of Thermal Oem.PWM with the stored `openhw` login; curve via IPMI 30 0e; original kept in
+   fan-original.json; floors CPU 20 %, pump 50 %); helper protocol 14; sandbox opened to 169.254.0.0/16 only. **To
+   verify on the real BMC**: the Redfish PATCH format (whole PWM list with If-Match, falls back to one entry) — first
+   real source change by the owner. **Part 2 (0.25.0)**: OpenHW-driven curves for GPU temperatures and the OpenFan
+   profile import. Original plan: fans whose curve follows a temperature the BMC knows (CPU, CPU
    Package, VRM, MotherBoard, Chipset, T_Sensor) get a **BMC curve written once** — OpenHW sets the zone's source and
    5-point curve, the BMC runs it from memory; writes happen only when the user changes the curve. Fans that follow
    anything else (DIMM, GPU, NVMe temps; mixes) get **OpenHW-driven duties** under a write budget (coarse steps, wide

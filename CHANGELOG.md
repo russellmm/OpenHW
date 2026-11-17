@@ -3,6 +3,24 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.24.0 — 2026-11-16
+
+- **Fan curves the BMC runs** (fan control stage 2, part 1 — the owner's hybrid plan). Power → Fan Control… → **Edit…**
+  per fan: tick which of the BMC's own temperature sensors it follows (CPU Package, TR1/T_Sensor, LAN, each DIMM slot
+  DIMMA1–H1, each PCIe slot PCIE01–07; several = the hottest counts) and set its 5-point curve (the firmware fixes the
+  last two points at 70 and 100 °C). **Apply writes once**; the BMC keeps the setting (in its flash — verified with a
+  BMC cold reset) and runs it from then on, with or without OpenHW. No ongoing writes.
+- **Restore original**: the curve a fan had before OpenHW first changed it is kept (`/var/lib/openhw/fan-original.json`).
+- **Floors**: CPU_FAN never below 20 %, W_PUMP+ never below 50 % in a configured curve.
+- **Sources go through Redfish** (this firmware refuses the IPMI source command): the BMC's `Thermal → Oem.PWM[n].Source`,
+  a bitmask over its temperature sensors (bit = sensor number − 1), decoded with the owner. **Give OpenHW the BMC
+  login…** hands a BMC user to the helper (typed, or read from a file with the user and password on two lines); the
+  helper checks it with a real login and keeps it root-only (`/etc/openhw/bmc-login`). The BMC's certificate is pinned
+  on first use. Curves themselves still go over IPMI and need no login.
+- openhw-helper protocol 14: `fancurve`, `fanoriginal`, `fansources`, `fansource`, `bmclogin`, `bmclogout`. Its sandbox
+  now allows network access to the BMC's link-local host interface (169.254.0.0/16) only.
+- Fan Control shows which sensors each fan follows; the page and BMC sensor names show underscores correctly.
+
 ## 0.23.0 — 2026-11-16
 
 - **Fan driver, stage 1** (owner's plan: one fan driver in openhw-helper that OpenHW — and, until it's retired,

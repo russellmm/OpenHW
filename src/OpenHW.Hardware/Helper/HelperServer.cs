@@ -37,12 +37,14 @@ public static class HelperSocket
 /// Lending (<see cref="CardLending"/>): <c>lendstatus</c>, <c>cardvms</c>, <c>cardvm &lt;name|none&gt;</c> (a VM with the card
 /// assigned), <c>lend</c> and <c>vmreturn</c> (both start in the background; follow them with <c>lendstatus</c>).
 /// Fans (protocol 13, <see cref="FanDriver"/>): <c>fans [token]</c> (status), <c>fanset &lt;token&gt; &lt;zone&gt; &lt;1–100&gt;</c>,
-/// <c>fanrelease &lt;token&gt; &lt;zone|all&gt;</c>, <c>fanbeat &lt;token&gt;</c>.
+/// <c>fanrelease &lt;token&gt; &lt;zone|all&gt;</c>, <c>fanbeat &lt;token&gt;</c>; configured curves <c>fancurve &lt;zone&gt; &lt;t:d,…&gt;</c>,
+/// <c>fanoriginal &lt;zone&gt;</c>. Protocol 14: <c>fansources</c>, <c>fansource &lt;zone&gt; &lt;mask&gt;</c> (Redfish),
+/// <c>bmclogin [base64 user, base64 password]</c>, <c>bmclogout</c>.
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath)
 {
-    public const string Version = "13";
+    public const string Version = "14";
 
     public string HandleLine(string line)
     {
@@ -148,6 +150,60 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 if (fans is null) return "err fan control unavailable";
                 try { return "ok " + GpuWire.Encode(fans.Status(parts.Length == 2 ? parts[1] : null)); }
                 catch (ArgumentException ex) { return "err " + ex.Message; }
+
+            case "fancurve" when parts.Length == 3: // a zone's own curve, kept and run by the BMC: "fancurve bmc:1 20:20,45:40,65:70,70:100,100:100"
+                if (fans is null) return "err fan control unavailable";
+                try { return "ok " + fans.SetCurve(parts[1], FanDriver.ParseCurve(parts[2])); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or InvalidDataException) { return "err " + ex.Message; }
+
+            case "fanoriginal" when parts.Length == 2:
+                if (fans is null) return "err fan control unavailable";
+                try { return "ok " + fans.RestoreOriginal(parts[1]); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or InvalidDataException) { return "err " + ex.Message; }
+
+            // Temperature sources (protocol 14): Redfish, as IPMI's source command is refused on this firmware. Reading
+            // needs no login over the host interface; writing uses the stored BMC login.
+            case "fansources" when parts.Length == 1:
+                if (redfish is null) return "err BMC Redfish unavailable";
+                try { return "ok " + GpuWire.Encode(redfish.ReadSources()); }
+                catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
+
+            case "fansource" when parts.Length == 3:
+                if (redfish is null) return "err BMC Redfish unavailable";
+                if (FanZone().Match(parts[1]) is not { Success: true } zm || !long.TryParse(parts[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var mask))
+                    return "err expected a fan zone and a source bitmask";
+                if (fans?.Status(null).Zones.ElementAtOrDefault(zm.Groups[1].Value[0] - '0') is { Owned: true }) return "err " + parts[1] + " is taken over by a client right now";
+                try { redfish.SetSource(zm.Groups[1].Value[0] - '0', mask); return "ok " + parts[1] + " " + parts[2]; }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
+
+            // The BMC login for Redfish writes: checked by opening a session, then kept root-only. No reply ever
+            // contains the password; "bmclogin" alone says which user is stored.
+            case "bmclogin" when parts.Length == 1:
+                return "ok " + (BmcLogin.Load(loginPath)?.User is { Length: > 0 } stored ? stored : "none");
+
+            case "bmclogin" when parts.Length == 3:
+            {
+                if (redfish is null) return "err BMC Redfish unavailable";
+                string user, password;
+                try { (user, password) = (Encoding.UTF8.GetString(Convert.FromBase64String(parts[1])), Encoding.UTF8.GetString(Convert.FromBase64String(parts[2]))); }
+                catch (FormatException) { return "err expected base64 user and password"; }
+                if (user.Length is 0 or > 32 || password.Length is < 8 or > 20 || user.Any(char.IsControl) || password.Any(char.IsControl))
+                    return "err a BMC user is 1–32 characters and its password 8–20";
+                var candidate = new BmcLogin(user, password);
+                try { redfish.CheckLogin(candidate); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
+                try { candidate.Save(loginPath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
+                return "ok " + user;
+            }
+
+            case "bmclogout" when parts.Length == 1:
+                try { File.Delete(loginPath); return "ok none"; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
 
             case "fanset" or "fanrelease" or "fanbeat":
                 if (fans is null) return "err fan control unavailable";
@@ -256,6 +312,7 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
     }
 
     [GeneratedRegex(@"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$", RegexOptions.CultureInvariant)] private static partial Regex PciAddress();
+    [GeneratedRegex(@"^bmc:([0-6])$", RegexOptions.CultureInvariant)] private static partial Regex FanZone();
     [GeneratedRegex(@"^nvme[0-9]{1,8}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeController();
     [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
     [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();
@@ -289,7 +346,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -340,7 +397,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans, redfish);
         try
         {
             using (client)
