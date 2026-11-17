@@ -79,7 +79,21 @@ readback, menu entry first.
    sensors promptly after an outage instead of once a minute).
 3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
    owns every GPU handle; never on a card that is lent to the VM.
-4. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
+3a. [x] **Flash-free alternatives studied (owner, 2026-11-16: "can we bypass the flash writes?")**. No: the headers are
+   wired to the BMC's PWM outputs; replacing the BMC firmware (OpenBMC) or writing its registers over ASPEED's P2A
+   PCIe bridge are ruled out. The BIOS has no "Onboard Fan Control Source" switch on this board (E26328 mentions it for
+   add-in IPMI cards), so the Super I/O can't take the fans over. **ASUS E26328 (V3, July 2025) §3.7.17**: fan mode
+   `30 0e` / `30 0f` (0x00 Generic, 0x03 Full speed, 0x04 Manual), config `30 13` (01 count, 03 order, 00 N table:
+   32-byte name, PWM source, TCC max, current + generic curve; 02 N set), **temperature source `30 93`** (get: no data
+   → one byte per PWM1–23; set: 23 bytes). Source codes aren't listed; the BIOS Q-Fan offers CPU, CPU Package,
+   MotherBoard, VRM_W, VRM_E, Chipset, Chipset 2, T_Sensor, up to 3 per fan (Redfish shows `Source` 1 on every zone).
+4. [ ] **Stage 2 — hybrid (owner, 2026-11-16)**: fans whose curve follows a temperature the BMC knows (CPU, CPU
+   Package, VRM, MotherBoard, Chipset, T_Sensor) get a **BMC curve written once** — OpenHW sets the zone's source and
+   5-point curve, the BMC runs it from memory; writes happen only when the user changes the curve. Fans that follow
+   anything else (DIMM, GPU, NVMe temps; mixes) get **OpenHW-driven duties** under a write budget (coarse steps, wide
+   hysteresis, slow-downs held, a daily write count). First: decode `30 93` read-only and map the source codes (BIOS
+   Q-Fan change + read back, or Redfish `Source`), confirm BMC curves keep running without OpenHW.
+5. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
    BMC DIMM temps; run the loop in the helper; import the owner's `openfan11_14.json` re-pointed to BMC zones) and
    OpenFan as a client of the driver until it's retired. UI (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
    OpenHW reads (incl. BMC temperatures and GPU temperatures), with hysteresis and a minimum; a clear "automatic"
