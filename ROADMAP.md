@@ -99,8 +99,19 @@ readback, menu entry first.
      1 CPU Package, 2 MotherBoard, 3 VRM_W, 4 VRM_E, 7 T_Sensor, **17 DIMM Group 1 (Max TS), 19 DIMM Group 2 (Max TS)**,
      18 USB4 Thermistor, 99 Multiple Sources (up to three; hidden here: Chipset 5/6, T_Sensor 1/2, DIMM.2 9–12, water
      13–16). So **DIMM temperatures can be BMC-run** — only GPU-following curves need OpenHW-driven duties. Redfish
-     shows `Source` 1 on all zones while the BIOS default is 0 → to check whether BMC and BIOS codes match (set one fan
-     in BIOS, reboot, read Redfish).
+     shows `Source` 1 on all zones while the BIOS default is 0.
+   - **The BIOS hides Chassis Fan(s) Configuration** on this machine (hide rule on internal Setup byte 215 = 1; factory
+     default 0; already hidden before "Publish HII Resources" was enabled — owner): the BMC owns the chassis fans;
+     their sources are set in the **BMC web console** (Fan Control → Temperature Source), not the BIOS.
+   - **BMC temperature sources decoded (2026-11-16)**: the web console offers the BMC's own sensors — CPU Package Temp,
+     TR1, LAN Temp, DIMMA1–H1_Temp, PCIE01–07 Temp (checkboxes). The owner set CHA_FAN1 → DIMMA1_Temp and Redfish
+     `Source` went 1 → **8**: a **bitmask, bit = BMC sensor number − 1** (CPU Package 1→bit0, TR1 2→bit1, LAN 3→bit2,
+     DIMMA1–H1 4–11→bits 3–10, PCIE01–07 12–18→bits 11–17); unused ch7 = 0xFFFFFF. To confirm with two boxes (expect
+     24). So DIMM- and PCIe-slot-following fans can be BMC-run; the IPMI source command (30 93) is refused here, so
+     sources would be set via Redfish PATCH of Thermal Oem (with the `openhw` login), curves via IPMI 30 0e.
+   - The BMC's host-interface NIC **changes name every boot** (enx + a random MAC): find it by vendor/route, not name.
+   - "Publish HII Resources" (owner enabled): 1,300 AMD CBS/PBS BIOS attributes readable over Redfish without a login
+     (`/redfish/v1/Systems/Self/Bios`); ASUS Q-Fan items aren't among them.
 5. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
    BMC DIMM temps; run the loop in the helper; import the owner's `openfan11_14.json` re-pointed to BMC zones) and
    OpenFan as a client of the driver until it's retired. UI (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
