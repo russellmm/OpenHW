@@ -94,7 +94,7 @@ public sealed partial class FanDriver : IDisposable
             return (fans, reason);
         }, DefaultJournal, MachineIdentity(), otherController: OpenFanController, startWatchdog: true);
 
-    private static string MachineIdentity()
+    public static string MachineIdentity()
     {
         var uuid = SysFs.ReadText("/sys/class/dmi/id/product_uuid");
         return uuid.Length > 0 ? uuid : "unavailable";

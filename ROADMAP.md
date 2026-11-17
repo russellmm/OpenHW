@@ -163,6 +163,8 @@ for). Keep platform code behind interfaces now:
       doesn't apply).
 - [x] BMC: discrete sensors (CPU_ECC, Memory_Train_ERR, PSU presence…) and the BMC's event log (SEL), read-only
       (0.34.0, File → BMC Status & Event Log…).
+- [x] BMC fan alarm thresholds (lower non-critical / critical / non-recoverable), per fan, with Restore original
+      (0.35.0, Fan Control → ⋮ → Alarm thresholds…).
 
 ## GPU lending to a VM (replaces RTXinVM) — agreed with the owner 2026-10-25
 

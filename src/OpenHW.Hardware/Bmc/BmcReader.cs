@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace OpenHW.Hardware;
 
 /// <summary>One BMC sensor as the helper sends it to the window: identity, unit, limits and the latest value.</summary>
@@ -5,6 +6,13 @@ public sealed record BmcWireSensor(string Name, byte Number, string Entity, Hard
     BmcThresholds? Limits, double? Value);
 
 /// <summary>The helper's <c>bmc</c> reply: the controller, then its threshold sensors in SDR order.</summary>
+/// <summary>
+/// A fan's lower alarm thresholds (RPM) as the helper's <c>bmcthresh</c> lists them: what the BMC has now, what it had
+/// before OpenHW first changed them (null until then), the step the BMC stores them in, and whether it lets them be set.
+/// </summary>
+public sealed record BmcFanThresholds(string Name, byte Number, double? Reading, double? NonCritical, double? Critical,
+    double? NonRecoverable, double Step, double Max, bool Settable, double[]? Original);
+
 public sealed record BmcWireReply(string Controller, string Firmware, int ManufacturerId, int ProductId, List<BmcWireSensor> Sensors);
 
 /// <summary>
@@ -37,8 +45,116 @@ public sealed class BmcReader : IDisposable
     private uint _selStamp;
     private readonly object _selGate = new();
 
-    public BmcReader(Func<IIpmiTransport?>? open = null) =>
+    public const string DefaultOriginalsPath = "/var/lib/openhw/bmc-thresholds-original.json";
+    private readonly string _originalsPath;
+    private readonly Func<string> _identity;
+
+    public BmcReader(Func<IIpmiTransport?>? open = null, string? originalsPath = null, Func<string>? identity = null)
+    {
         _open = open ?? (() => LinuxIpmiTransport.Exists() ? new LinuxIpmiTransport() : null);
+        _originalsPath = originalsPath ?? DefaultOriginalsPath;
+        _identity = identity ?? FanDriver.MachineIdentity;
+    }
+
+    /// <summary>Where the helper reports threshold writes (its journal through stderr).</summary>
+    public Action<string> Log { get; set; } = line => Console.Error.WriteLine("openhw-helper: bmc: " + line);
+
+    // ── fan alarm thresholds ─────────────────────────────────────────────────────────────────────────────────────
+
+    private sealed record OriginalsFile(string Identity, Dictionary<string, double?[]> Lower);
+
+    private Dictionary<string, double?[]> LoadOriginals()
+    {
+        try
+        {
+            if (!File.Exists(_originalsPath)) return [];
+            var saved = System.Text.Json.JsonSerializer.Deserialize<OriginalsFile>(File.ReadAllText(_originalsPath));
+            // Another machine's (or a damaged) file is ignored: no "Restore original" until a new one is saved.
+            return saved?.Lower is not null && saved.Identity == _identity() ? saved.Lower : [];
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException) { return []; }
+    }
+
+    private void SaveOriginals(Dictionary<string, double?[]> lower)
+    {
+        var temp = _originalsPath + ".tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(_originalsPath)!);
+        using (var stream = File.Create(temp))
+        {
+            System.Text.Json.JsonSerializer.Serialize(stream, new OriginalsFile(_identity(), lower));
+            stream.Flush(flushToDisk: true);
+        }
+        File.Move(temp, _originalsPath, overwrite: true);
+    }
+
+    private static double Step(BmcSensor s) =>
+        s.Convert(1) is { } one && s.Convert(0) is { } zero ? Math.Abs(one - zero) : 1;
+
+    /// <summary>Every fan (RPM) sensor's lower thresholds; null while the BMC hasn't answered.</summary>
+    public List<BmcFanThresholds>? FanThresholds(TimeSpan wait)
+    {
+        if (Read(wait) is null) return null;
+        var originals = LoadOriginals();
+        lock (_gate)
+            return _sensors!.Where(s => s.Kind == HardwareKind.Tach).Select(s =>
+            {
+                var l = _limits.GetValueOrDefault(s);
+                return new BmcFanThresholds(s.Name, s.Number, _values.GetValueOrDefault(s), l?.LowerNonCritical, l?.LowerCritical,
+                    l?.LowerNonRecoverable, Step(s), s.Convert(255) ?? 0, (s.SettableThresholds & 0x07) == 0x07,
+                    originals.TryGetValue(s.Name, out var o) && o.Length == 3 && o.All(x => x is not null) ? o.Select(x => x!.Value).ToArray() : null);
+            }).ToList();
+    }
+
+    /// <summary>
+    /// Sets a fan's lower thresholds (RPM): non-recoverable ≤ critical ≤ non-critical, each a value the BMC can store.
+    /// The thresholds it had before are saved first (once per fan) for <see cref="RestoreFanThresholds"/>. Returns
+    /// what the BMC reads back.
+    /// </summary>
+    public BmcThresholds SetFanThresholds(string name, double nonRecoverable, double critical, double nonCritical)
+    {
+        if (Read(TimeSpan.FromSeconds(20)) is null) throw new IOException(Error ?? "BMC not ready");
+        BmcSensor sensor;
+        IIpmiTransport transport;
+        BmcThresholds? before;
+        lock (_gate)
+        {
+            sensor = _sensors!.FirstOrDefault(s => s.Name == name && s.Kind == HardwareKind.Tach)
+                ?? throw new ArgumentException($"no BMC fan sensor {name}");
+            transport = _transport!;
+            before = _limits.GetValueOrDefault(sensor);
+        }
+        if ((sensor.SettableThresholds & 0x07) != 0x07) throw new ArgumentException($"the BMC doesn't let {name}'s lower thresholds be set");
+        if (!(nonRecoverable <= critical && critical <= nonCritical)) throw new ArgumentException("expected non-recoverable ≤ critical ≤ non-critical");
+        byte Raw(double v) => IpmiCommands.Raw(sensor, v) ?? throw new ArgumentException(
+            $"{v} RPM can't be stored for {name}: use a multiple of {Step(sensor)} RPM up to {sensor.Convert(255)}");
+        var (lnr, lcr, lnc) = (Raw(nonRecoverable), Raw(critical), Raw(nonCritical));
+        if (before is { LowerNonCritical: var a, LowerCritical: var b, LowerNonRecoverable: var c } && a == nonCritical && b == critical && c == nonRecoverable)
+            return before; // nothing to write
+        var originals = LoadOriginals();
+        if (!originals.ContainsKey(name) && before is not null)
+        {
+            originals[name] = [before.LowerNonRecoverable, before.LowerCritical, before.LowerNonCritical];
+            SaveOriginals(originals);
+        }
+        IpmiCommands.SetLowerThresholds(transport, sensor, lnc, lcr, lnr);
+        var after = IpmiCommands.GetThresholds(transport, sensor) ?? throw new IOException($"{name}: thresholds written, but the BMC didn't read them back");
+        lock (_gate) _limits[sensor] = after;
+        Log($"{name} lower thresholds {Describe(before)} → {Describe(after)} RPM");
+        if (after.LowerNonRecoverable != nonRecoverable || after.LowerCritical != critical || after.LowerNonCritical != nonCritical)
+            throw new IOException($"{name}: the BMC reads back {Describe(after)} RPM instead of {nonRecoverable}/{critical}/{nonCritical}");
+        return after;
+    }
+
+    /// <summary>Puts back the thresholds a fan had before OpenHW first changed them.</summary>
+    public BmcThresholds RestoreFanThresholds(string name)
+    {
+        if (!LoadOriginals().TryGetValue(name, out var o) || o.Length != 3 || o.Any(x => x is null))
+            throw new ArgumentException($"OpenHW hasn't changed {name}'s thresholds");
+        return SetFanThresholds(name, o[0]!.Value, o[1]!.Value, o[2]!.Value);
+    }
+
+    private static string Describe(BmcThresholds? t) => t is null ? "?" :
+        string.Join('/', new[] { t.LowerNonRecoverable, t.LowerCritical, t.LowerNonCritical }.Select(v => v?.ToString(CultureInfo.InvariantCulture) ?? "–"));
 
     /// <summary>The latest reply, waiting up to <paramref name="wait"/> for the first sweep; null when there is no BMC.</summary>
     public BmcWireReply? Read(TimeSpan wait)

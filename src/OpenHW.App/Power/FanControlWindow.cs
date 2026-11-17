@@ -537,6 +537,10 @@ public sealed class FanControlWindow : Window
                     items.Add(new Separator());
                     items.Add(edit);
                     items.Add(restore);
+                    var thresholds = new MenuItem { Header = "Alarm thresholds…", IsEnabled = enabled };
+                    thresholds.Click += (_, _) => w.EditThresholds(zone);
+                    ToolTip.SetTip(thresholds, "The RPM below which the BMC logs this fan as slow (its event log)");
+                    items.Add(thresholds);
                     ToolTip.SetTip(edit, assigned is null ? "This fan's own BMC curve" : "Untick Curve to edit this fan's BMC curve directly");
                 }
                 var flyout = new MenuFlyout();
@@ -750,6 +754,13 @@ public sealed class FanControlWindow : Window
         var dialog = new FanCurveDialog(_client, zone, mask, _sensorsNames, _loginUser is not null);
         Settings.WindowPlaces.Track(dialog, "fan-curve");
         dialog.Closed += (_, _) => { RefreshStatus(rebuild: true); _timer.Start(); };
+        dialog.ShowDialog(this);
+    }
+
+    private void EditThresholds(FanZoneStatus zone)
+    {
+        var dialog = new FanThresholdDialog(_client, zone.Name);
+        Settings.WindowPlaces.Track(dialog, "fan-thresholds");
         dialog.ShowDialog(this);
     }
 

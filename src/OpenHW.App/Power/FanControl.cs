@@ -31,6 +31,12 @@ public sealed class FanClient(Func<string, string>? request = null)
     public IReadOnlyDictionary<int, long> Sources() => GpuWire.Decode<Dictionary<int, long>>(_request("fansources")) ?? [];
     public string SetSource(string zone, long mask) => _request($"fansource {zone} {mask.ToString(CultureInfo.InvariantCulture)}");
 
+    // Fan alarm thresholds (protocol 17): the BMC's lower three, in RPM.
+    public IReadOnlyList<BmcFanThresholds> Thresholds() => GpuWire.Decode<List<BmcFanThresholds>>(_request("bmcthresh")) ?? [];
+    public BmcThresholds? SetThresholds(string sensor, double nonRecoverable, double critical, double nonCritical) =>
+        GpuWire.Decode<BmcThresholds>(_request(FormattableString.Invariant($"bmcthresh {sensor} {nonRecoverable:0} {critical:0} {nonCritical:0}")));
+    public BmcThresholds? RestoreThresholds(string sensor) => GpuWire.Decode<BmcThresholds>(_request("bmcthreshoriginal " + sensor));
+
     // NVIDIA fans (protocol 15): ids "nvml:<uuid>:fan:<n>"; 0 % = the card's automatic control.
     public GpuFanDriverStatus? GpuStatus() => GpuWire.Decode<GpuFanDriverStatus>(_request("gpufans " + Token));
     public string GpuSet(string id, int percent) => _request($"gpufanset {Token} {id} {percent.ToString(CultureInfo.InvariantCulture)}");

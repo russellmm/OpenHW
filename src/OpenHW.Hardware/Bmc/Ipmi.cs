@@ -123,7 +123,7 @@ public sealed record BmcThresholds(double? LowerNonCritical, double? LowerCritic
 public sealed record BmcSensor(
     int RecordId, byte Owner, byte Lun, byte Number, string Name, byte EntityId, byte EntityInstance,
     byte SensorType, byte BaseUnit, byte ModifierUnit, int Format, int Linearization, int M, int B, int BExp, int RExp,
-    byte ReadableThresholds)
+    byte ReadableThresholds, byte SettableThresholds = 0)
 {
     public string Unit => BaseUnit switch
     {
@@ -201,7 +201,7 @@ public sealed record BmcSensor(
         if (name.Length == 0) name = $"Sensor {record[7]:X2}h";
         return new BmcSensor(record[0] | record[1] << 8, record[5], (byte)(record[6] & 0x03), record[7], name,
             record[8], record[9], record[12], record[21], record[22], format, linearization, m, b, bexp, rexp,
-            (byte)(record[18] & 0x3f));
+            (byte)(record[18] & 0x3f), (byte)(record[19] & 0x3f));
     }
 
     private static int TenBit(byte ls, byte ms)
@@ -286,6 +286,30 @@ public static class IpmiCommands
         var flags = r[2];
         if ((flags & 0x20) != 0 || (flags & 0x40) == 0) return null;
         return r[1];
+    }
+
+    /// <summary>
+    /// The raw byte that converts to exactly <paramref name="value"/> (any linearization: searched), or null when the
+    /// sensor can't store that value (e.g. not a multiple of a fan's 120 RPM step).
+    /// </summary>
+    public static byte? Raw(BmcSensor s, double value)
+    {
+        for (var b = 0; b < 256; b++)
+            if (s.Convert((byte)b) is { } v && Math.Abs(v - value) < 1e-6) return (byte)b;
+        return null;
+    }
+
+    /// <summary>
+    /// Set Sensor Thresholds (04h/26h) for the lower three only — non-critical, critical, non-recoverable — the one
+    /// write OpenHW makes here. Bits the SDR doesn't mark settable are left out of the mask.
+    /// </summary>
+    public static void SetLowerThresholds(IIpmiTransport t, BmcSensor s, byte lnc, byte lcr, byte lnr)
+    {
+        var mask = (byte)(s.SettableThresholds & 0x07);
+        if (mask == 0) throw new IOException($"{s.Name}: the BMC doesn't let its lower thresholds be set");
+        var r = t.Send(NetFnSensor, 0x26, s.Lun, [s.Number, mask, lnc, lcr, lnr, 0, 0, 0]);
+        if (r.Length < 1 || r[0] != 0)
+            throw new IOException($"{s.Name}: the BMC refused the thresholds (completion 0x{(r.Length > 0 ? r[0] : 0xff):x2})");
     }
 
     public static BmcThresholds? GetThresholds(IIpmiTransport t, BmcSensor s)

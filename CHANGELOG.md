@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.35.0 — 2026-11-17
+
+- **Fan alarm thresholds**: Fan Control → a BMC fan card's ⋮ → **Alarm thresholds…** sets the RPM below which the BMC
+  logs the fan as slow (lower non-critical), failing (lower critical) and stopped (lower non-recoverable). The BMC's
+  defaults (360/360/0 RPM on the WRX90E) made CHA_FAN2 at a 20 % curve log "lower critical" at every boot. Only values
+  the BMC can store are offered (120 RPM steps), in order; Apply writes once (IPMI Set Sensor Thresholds) and reads
+  back; the thresholds a fan had before OpenHW first changed them are saved in
+  `/var/lib/openhw/bmc-thresholds-original.json` for **Restore original**. Helper **protocol 17**: `bmcthresh`,
+  `bmcthresh <sensor> <lnr> <lcr> <lnc>`, `bmcthreshoriginal <sensor>`; writes are logged in the helper's journal.
+
 ## 0.34.0 — 2026-11-17
 
 - **File → BMC Status & Event Log…** (helper protocol 16, read-only): the BMC's discrete sensors — CPU_ECC,

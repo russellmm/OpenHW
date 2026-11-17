@@ -43,11 +43,13 @@ public static class HelperSocket
 /// <c>gpufans [token]</c>, <c>gpufanset &lt;token&gt; &lt;nvml:uuid:fan:n&gt; &lt;0–100&gt;</c> (0 = the card's automatic control),
 /// <c>gpufanrelease &lt;token&gt; &lt;id|all&gt;</c>; <c>fanbeat</c> renews both kinds of lease.
 /// Protocol 16, read-only BMC: <c>bmcstates</c> (discrete sensors' asserted states), <c>bmcsel</c> (the System Event Log).
+/// Protocol 17, fan alarm thresholds: <c>bmcthresh</c> (list), <c>bmcthresh &lt;sensor&gt; &lt;lnr&gt; &lt;lcr&gt; &lt;lnc&gt;</c> (RPM),
+/// <c>bmcthreshoriginal &lt;sensor&gt;</c>.
 /// Replies are "ok …" or "err …".
 /// </summary>
 public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null)
 {
-    public const string Version = "16";
+    public const string Version = "17";
 
     public string HandleLine(string line)
     {
@@ -154,6 +156,31 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "bmcsel" when parts.Length == 1: // read-only (protocol 16): the System Event Log's newest entries
                 if (bmc is null) return "err no BMC";
                 try { return bmc.Sel(TimeSpan.FromSeconds(20)) is { } sel ? "ok " + GpuWire.Encode(sel) : "err " + (bmc.Error ?? "BMC not ready"); }
+                catch (IOException ex) { return "err " + ex.Message; }
+
+            // Fan alarm thresholds (protocol 17): the lower three of an RPM sensor, in RPM; originals kept for restore.
+            case "bmcthresh" when parts.Length == 1:
+                if (bmc is null) return "err no BMC";
+                return bmc.FanThresholds(TimeSpan.FromSeconds(20)) is { } list ? "ok " + GpuWire.Encode(list) : "err " + (bmc.Error ?? "BMC not ready");
+
+            case "bmcthresh" when parts.Length == 5:
+            {
+                if (bmc is null) return "err no BMC";
+                if (!BmcSensorName().IsMatch(parts[1])) return "err invalid sensor name";
+                var rpm = new double[3];
+                for (var i = 0; i < 3; i++)
+                    if (!Rpm().IsMatch(parts[i + 2])) return "err expected RPM values";
+                    else rpm[i] = double.Parse(parts[i + 2], System.Globalization.CultureInfo.InvariantCulture);
+                try { return "ok " + GpuWire.Encode(bmc.SetFanThresholds(parts[1], rpm[0], rpm[1], rpm[2])); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+            }
+
+            case "bmcthreshoriginal" when parts.Length == 2:
+                if (bmc is null) return "err no BMC";
+                if (!BmcSensorName().IsMatch(parts[1])) return "err invalid sensor name";
+                try { return "ok " + GpuWire.Encode(bmc.RestoreFanThresholds(parts[1])); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
                 catch (IOException ex) { return "err " + ex.Message; }
 
             // Fan control (protocol 13): the one writer of fan settings. A client names itself with a random 32-hex
@@ -343,6 +370,8 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
 
     [GeneratedRegex(@"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$", RegexOptions.CultureInvariant)] private static partial Regex PciAddress();
     [GeneratedRegex(@"^bmc:([0-6])$", RegexOptions.CultureInvariant)] private static partial Regex FanZone();
+    [GeneratedRegex(@"^[A-Za-z0-9_.+]{1,32}$", RegexOptions.CultureInvariant)] private static partial Regex BmcSensorName();
+    [GeneratedRegex(@"^[0-9]{1,5}$", RegexOptions.CultureInvariant)] private static partial Regex Rpm();
     [GeneratedRegex(@"^nvme[0-9]{1,8}$", RegexOptions.CultureInvariant)] private static partial Regex NvmeController();
     [GeneratedRegex(@"^[0-9]{1,4}(,[0-9]{1,4}){0,255}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyList();
     [GeneratedRegex(@"^[1-9][0-9]{3,7}$", RegexOptions.CultureInvariant)] private static partial Regex KiloHertz();

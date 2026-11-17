@@ -8,7 +8,7 @@ public sealed class BmcTests
 {
     /// <summary>A Full Sensor Record (type 01h) as an AST2600 stores it, with the conversion factors given.</summary>
     internal static byte[] FullRecord(ushort recordId, byte number, string name, byte baseUnit, int m, int b, int rexp, int bexp,
-        byte entity = 7, int format = 0, byte readable = 0x3f)
+        byte entity = 7, int format = 0, byte readable = 0x3f, byte settable = 0)
     {
         var id = Encoding.ASCII.GetBytes(name);
         var r = new byte[48 + id.Length];
@@ -16,7 +16,7 @@ public sealed class BmcTests
         r[5] = 0x20; r[6] = 0; r[7] = number; r[8] = entity; r[9] = 0;
         r[12] = baseUnit switch { 1 => 0x01, 4 => 0x02, 18 => 0x04, _ => 0x00 };
         r[13] = 0x01; // threshold
-        r[18] = readable;
+        r[18] = readable; r[19] = settable;
         r[20] = (byte)(format << 6); r[21] = baseUnit;
         r[23] = 0; // linear
         r[24] = (byte)(m & 0xff); r[25] = (byte)((m >> 2) & 0xc0);
@@ -66,6 +66,9 @@ public sealed class BmcTests
         public readonly Dictionary<byte, byte?> Raw = []; // null = reading unavailable
         public readonly List<(byte NetFn, byte Cmd)> Unexpected = [];
         public readonly Dictionary<byte, int> States = [];
+        public readonly Dictionary<byte, byte[]> Thresholds = []; // lnc, lcr, lnr raw
+        public int ThresholdWrites;
+        public bool RefuseThresholds;
         public readonly List<byte[]> Sel = [];
         public uint SelLastAdd = 0x6739a000;
         public int SelEntryReads;
@@ -83,10 +86,12 @@ public sealed class BmcTests
                 FullRecord(4, 0x39, "W_PUMP+", 18, m: 60, b: 0, rexp: 0, bexp: 0, entity: 29),
                 FullRecord(5, 0xdf, "PSU1 Power In", 6, m: 2, b: 0, rexp: 0, bexp: 0, entity: 10),
                 FullRecord(6, 0x0c, "PCIE01 Temp", 1, m: 1, b: -10, rexp: 0, bexp: 0, entity: 11, format: 2),
+                FullRecord(10, 0x35, "CHA_FAN2", 18, m: 120, b: 0, rexp: 0, bexp: 0, entity: 29, readable: 0x07, settable: 0x07),
                 CompactRecord(7, 0xf9, "CPU_ECC", 0x0c),
                 CompactRecord(8, 0xe3, "PSU1 Detect", 0x08, entity: 10),
                 CompactRecord(9, 0xfc, "Memory_Train_ERR", 0xc5),
             ];
+            Raw[0x35] = 3; Thresholds[0x35] = [3, 3, 0]; // 360 RPM; lnc 360, lcr 360, lnr 0 as on the WRX90E
             States[0xf9] = 1 << 6; States[0xe3] = 1 << 1; States[0xfc] = 0;
             Raw[0x24] = 197; Raw[0x1e] = 109; Raw[0x01] = 40; Raw[0x39] = 64; Raw[0xdf] = null; Raw[0x0c] = 43;
         }
@@ -133,6 +138,14 @@ public sealed class BmcTests
                 }
                 case (0x04, 0x2d):
                     return Raw.TryGetValue(data[0], out var raw) && raw is { } v ? [0, v, 0xc0, 0] : [0, 0, 0x20, 0];
+                case (0x04, 0x27) when Thresholds.TryGetValue(data[0], out var t):
+                    return [0, 0x07, t[0], t[1], t[2], 0, 0, 0];
+                case (0x04, 0x26) when Thresholds.ContainsKey(data[0]):
+                    if (RefuseThresholds) return [0xcc];
+                    if (data[1] != 0x07) { Unexpected.Add((netFn, command)); return [0xcc]; }
+                    ThresholdWrites++;
+                    Thresholds[data[0]] = [data[2], data[3], data[4]];
+                    return [0];
                 case (0x04, 0x27):
                     return data[0] == 0x24 ? [0, 0x3f, 180, 170, 160, 220, 230, 240] /* LNC LC LNR UNC UC UNR, as ipmitool lists +12V */ : [0, 0x00, 0, 0, 0, 0, 0, 0];
                 default:
@@ -149,7 +162,7 @@ public sealed class BmcTests
     {
         var bmc = new FakeBmc();
         var sensors = IpmiCommands.ReadSdr(bmc).Select(r => BmcSensor.Parse(r)).OfType<BmcSensor>().ToList();
-        Assert.Equal(["+12V", "+VCORE_0", "CPU Package Temp", "W_PUMP+", "PSU1 Power In", "PCIE01 Temp"], sensors.Select(s => s.Name));
+        Assert.Equal(["+12V", "+VCORE_0", "CPU Package Temp", "W_PUMP+", "PSU1 Power In", "PCIE01 Temp", "CHA_FAN2"], sensors.Select(s => s.Name));
         Assert.Equal(11.82, sensors[0].Convert(197));
         Assert.Equal(0.872, sensors[1].Convert(109));
         Assert.Equal(3840, sensors[3].Convert(64));
@@ -186,7 +199,7 @@ public sealed class BmcTests
         Assert.Empty(engine.Discover()); // the first answer comes off the sampling thread
         for (var i = 0; i < 50 && engine.Discover().Count == 0; i++) Thread.Sleep(20);
         var items = engine.Discover();
-        Assert.Equal(["bmc:+12V", "bmc:+VCORE_0", "bmc:CPU Package Temp", "bmc:W_PUMP+", "bmc:PCIE01 Temp"], items.Select(i => i.Id));
+        Assert.Equal(["bmc:+12V", "bmc:+VCORE_0", "bmc:CPU Package Temp", "bmc:W_PUMP+", "bmc:PCIE01 Temp", "bmc:CHA_FAN2"], items.Select(i => i.Id));
         Assert.All(items, i => Assert.Equal(BmcEngine.GroupKey, i.Group));
         Assert.Contains("BMC limits (V): lower critical 10.2, lower warning 10.8, upper warning 13.2, upper critical 13.8", items[0].Details);
         var readings = new Dictionary<string, double?>();
@@ -269,9 +282,68 @@ public sealed class BmcTests
     {
         using var reader = new BmcReader(() => new FakeBmc());
         var session = new HelperSession(new NoSmart(), bmc: reader);
-        Assert.Equal("ok 16", session.HandleLine("ping"));
+        Assert.Equal("ok 17", session.HandleLine("ping"));
         Assert.Equal(3, GpuWire.Decode<List<BmcStateWire>>(session.HandleLine("bmcstates")[3..])!.Count);
         Assert.Equal(0, GpuWire.Decode<BmcSelReply>(session.HandleLine("bmcsel")[3..])!.Entries);
         Assert.Equal("err no BMC", new HelperSession(new NoSmart()).HandleLine("bmcsel"));
+    }
+
+    [Fact]
+    public void FanThresholdsAreSetInStepsWithTheOriginalsKept()
+    {
+        var dir = Directory.CreateTempSubdirectory("openhw-thresh-").FullName;
+        var path = Path.Combine(dir, "bmc-thresholds-original.json");
+        var bmc = new FakeBmc();
+        var logged = new List<string>();
+        using var reader = new BmcReader(() => bmc, path, () => "machine-1") { Log = logged.Add };
+        var fan = reader.FanThresholds(TimeSpan.FromSeconds(10))!.Single(f => f.Name == "CHA_FAN2");
+        Assert.Equal((360.0, 360.0, 0.0, 120.0, true), (fan.NonCritical!.Value, fan.Critical!.Value, fan.NonRecoverable!.Value, fan.Step, fan.Settable));
+        Assert.Null(fan.Original);
+        Assert.DoesNotContain(reader.FanThresholds(TimeSpan.Zero)!, f => f.Name == "+12V"); // fans only
+        Assert.False(reader.FanThresholds(TimeSpan.Zero)!.Single(f => f.Name == "W_PUMP+").Settable);
+
+        Assert.Throws<ArgumentException>(() => reader.SetFanThresholds("CHA_FAN2", 0, 100, 240));   // not a 120 RPM step
+        Assert.Throws<ArgumentException>(() => reader.SetFanThresholds("CHA_FAN2", 0, 240, 120));   // out of order
+        Assert.Throws<ArgumentException>(() => reader.SetFanThresholds("W_PUMP+", 0, 120, 240));    // not settable
+        Assert.Throws<ArgumentException>(() => reader.SetFanThresholds("+12V", 0, 120, 240));       // not a fan
+        Assert.Equal(0, bmc.ThresholdWrites);
+
+        var after = reader.SetFanThresholds("CHA_FAN2", 0, 120, 240);
+        Assert.Equal((240.0, 120.0, 0.0), (after.LowerNonCritical!.Value, after.LowerCritical!.Value, after.LowerNonRecoverable!.Value));
+        Assert.Equal(new byte[] { 2, 1, 0 }, bmc.Thresholds[0x35]);
+        Assert.Equal(["CHA_FAN2 lower thresholds 0/360/360 → 0/120/240 RPM"], logged);
+        Assert.Equal([0.0, 360, 360], reader.FanThresholds(TimeSpan.Zero)!.Single(f => f.Name == "CHA_FAN2").Original);
+
+        reader.SetFanThresholds("CHA_FAN2", 0, 120, 240); // same values: no write
+        Assert.Equal(1, bmc.ThresholdWrites);
+        reader.SetFanThresholds("CHA_FAN2", 0, 0, 120);   // a second change keeps the first original
+        reader.RestoreFanThresholds("CHA_FAN2");
+        Assert.Equal(new byte[] { 3, 3, 0 }, bmc.Thresholds[0x35]);
+
+        bmc.RefuseThresholds = true;
+        Assert.Contains("refused", Assert.Throws<IOException>(() => reader.SetFanThresholds("CHA_FAN2", 0, 120, 240)).Message);
+        Assert.Empty(bmc.Unexpected);
+
+        // Another machine's originals file is ignored.
+        using var other = new BmcReader(() => new FakeBmc(), path, () => "machine-2");
+        Assert.Null(other.FanThresholds(TimeSpan.FromSeconds(10))!.Single(f => f.Name == "CHA_FAN2").Original);
+        Directory.Delete(dir, true);
+    }
+
+    [Fact]
+    public void HelperValidatesThresholdCommands()
+    {
+        var dir = Directory.CreateTempSubdirectory("openhw-thresh-").FullName;
+        using var reader = new BmcReader(() => new FakeBmc(), Path.Combine(dir, "o.json"), () => "m") { Log = _ => { } };
+        var session = new HelperSession(new NoSmart(), bmc: reader);
+        Assert.Equal("ok 17", session.HandleLine("ping"));
+        Assert.Contains(GpuWire.Decode<List<BmcFanThresholds>>(session.HandleLine("bmcthresh")[3..])!, f => f.Name == "CHA_FAN2");
+        Assert.StartsWith("ok ", session.HandleLine("bmcthresh CHA_FAN2 0 120 240"));
+        Assert.Equal("err invalid sensor name", session.HandleLine("bmcthresh ../x 0 120 240"));
+        Assert.Equal("err expected RPM values", session.HandleLine("bmcthresh CHA_FAN2 0 -1 240"));
+        Assert.StartsWith("err ", session.HandleLine("bmcthresh CHA_FAN2 0 130 240"));
+        Assert.StartsWith("ok ", session.HandleLine("bmcthreshoriginal CHA_FAN2"));
+        Assert.StartsWith("err OpenHW hasn't changed", session.HandleLine("bmcthreshoriginal W_PUMP+"));
+        Directory.Delete(dir, true);
     }
 }
