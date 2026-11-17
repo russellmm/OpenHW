@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia;
 using Avalonia.LogicalTree;
 using OpenHW.App.Power;
 using OpenHW.App.Sensors;
@@ -207,6 +209,56 @@ public sealed class FanCurveTests : IDisposable
         Assert.Equal(["bmc:0", "bmc:1", "gpu:a", "bmc:2"], store.Ordered(shown));
         store.Save();
         Assert.Equal(store.ControlOrder, FanCurveStore.Load(store.FilePath).ControlOrder);
+    }
+
+    [AvaloniaFact]
+    public void CardsReorderByDragAndDrop()
+    {
+        using var hub = new SensorHub();
+        var store = Store();
+        store.Curves.Add(new FanCurve { Id = "f35", Name = "35%", Kind = FanCurveKind.Flat, Percent = 35 });
+        var window = new FanControlWindow(hub, runner: Runner(store)) { Width = 1620, Height = 1400 };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var before = window.CardOrder().ToList();
+        var cards = window.GetLogicalDescendants().OfType<Border>().Where(b => b.Parent is WrapPanel).ToList();
+        Point At(Border card, double x, double y) => card.TranslatePoint(new Point(x, y), window)!.Value;
+
+        // Drag the first fan card past the right half of the third: it lands third.
+        var first = cards[0];
+        var third = cards[2];
+        window.MouseDown(At(first, 5, 5), MouseButton.Left);
+        window.MouseMove(At(first, 40, 5));
+        window.MouseMove(At(third, third.Bounds.Width - 20, 30));
+        window.MouseUp(At(third, third.Bounds.Width - 20, 30), MouseButton.Left);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal([before[1], before[2], before[0], .. before.Skip(3)], window.CardOrder());
+
+        // Curve cards: the flat card (first by kind) dragged onto the left half of the last one.
+        var curvesBefore = window.CurvesInOrder().Select(c => c.Id).ToList();
+        var curveCards = window.GetLogicalDescendants().OfType<Border>().Where(b => b.Parent is WrapPanel).Skip(window.CardOrder().Count).ToList();
+        var last = curveCards[^1];
+        window.MouseDown(At(curveCards[0], 5, 5), MouseButton.Left);
+        window.MouseMove(At(curveCards[0], 40, 5));
+        window.MouseMove(At(last, 20, 30));
+        window.MouseUp(At(last, 20, 30), MouseButton.Left);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var curvesAfter = window.CurvesInOrder().Select(c => c.Id).ToList();
+        Assert.Equal(curvesBefore[0], curvesAfter[^2]); // just before the last
+        Assert.Equal(curvesAfter, FanCurveStore.Load(store.FilePath).OrderedCurves(curvesBefore));
+
+        // A click (no movement) and a press on a dropdown don't move anything.
+        var order = window.CardOrder().ToList();
+        var now = window.GetLogicalDescendants().OfType<Border>().First(b => b.Parent is WrapPanel);
+        window.MouseDown(At(now, 5, 5), MouseButton.Left);
+        window.MouseUp(At(now, 5, 5), MouseButton.Left);
+        var combo = now.GetLogicalDescendants().OfType<ComboBox>().First();
+        var onCombo = combo.TranslatePoint(new Point(10, 10), window)!.Value;
+        window.MouseDown(onCombo, MouseButton.Left);
+        window.MouseMove(onCombo + new Point(300, 0));
+        window.MouseUp(onCombo + new Point(300, 0), MouseButton.Left);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(order, window.CardOrder());
     }
 
     [AvaloniaFact]

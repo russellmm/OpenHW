@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.31.0 — 2026-11-17
+
+- **Drag and drop to reorder** both the fan cards and the curve cards: press on a card's background or a label, drag,
+  and an orange bar on the card under the pointer shows which side it lands on. The card's own controls (names,
+  dropdowns, buttons, the curve preview) keep their clicks. Curve cards remember their order too (and it's kept in
+  configurations); new curves still sort flat, graph, mix after the ones you've placed. The ⋮ Move items stay.
+
 ## 0.30.0 — 2026-11-17
 
 - **Reorder the fan cards**: every fan card's **⋮** has Move left, Move right, Move to start and Move to end (as OpenFan's

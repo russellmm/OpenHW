@@ -39,6 +39,7 @@ public sealed class FanControlWindow : Window
     private readonly FanCurveSensors _sensors;
     private readonly WrapPanel _controls = new();
     private readonly WrapPanel _curves = new();
+    private readonly CardDrag _controlDrag, _curveDrag;
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Foreground = Secondary, FontSize = 13 };
     private readonly TextBlock _result = new() { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
     private readonly Button _login;
@@ -60,6 +61,8 @@ public sealed class FanControlWindow : Window
         _client = client ?? runner?.Client ?? new FanClient();
         _runner = runner ?? new FanCurveRunner(_client, FanCurveStore.Load());
         _sensors = new FanCurveSensors(hub, _runner);
+        _controlDrag = new CardDrag(_controls, (id, to) => MoveCardTo(id, to));
+        _curveDrag = new CardDrag(_curves, (id, to) => MoveCurveTo(id, to));
         Title = "Fan Control";
         Width = 1620;
         Height = 1000;
@@ -451,6 +454,7 @@ public sealed class FanControlWindow : Window
     private void BuildControls()
     {
         _controls.Children.Clear();
+        _controlDrag.Clear();
         _updaters.RemoveAll(u => u.Target is ControlCard);
         var controls = Controls();
         _controlsShape = string.Join("|", controls.Select(c => c.Id + (c.Zone?.Owned ?? false))) + "#" + _bmc?.Available + _bmc?.OtherController;
@@ -458,6 +462,7 @@ public sealed class FanControlWindow : Window
         {
             var card = new ControlCard(this, c);
             _controls.Children.Add(card.Root);
+            _controlDrag.Attach(card.Root, c.Id);
             _updaters.Add(card.Update);
         }
         if (controls.Count == 0) _controls.Children.Add(new TextBlock { Text = "No fans to control.", Foreground = Secondary, Margin = new Thickness(6) });
@@ -613,6 +618,31 @@ public sealed class FanControlWindow : Window
 
     private IReadOnlyList<(int Number, string Name)> _sensorsNames => _runner.BmcSensors();
 
+    /// <summary>Curve cards as shown: the saved order first, then flat, graph, mix, each by name.</summary>
+    public List<FanCurve> CurvesInOrder()
+    {
+        var kinds = new Dictionary<FanCurveKind, int> { [FanCurveKind.Flat] = 0, [FanCurveKind.Graph] = 1, [FanCurveKind.Mix] = 2 };
+        var store = _runner.Store;
+        var natural = store.Curves.OrderBy(c => kinds[c.Kind]).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).Select(c => c.Id);
+        return store.OrderedCurves(natural).Select(id => store.Find(id)!).ToList();
+    }
+
+    /// <summary>Drag and drop: a fan card to position <paramref name="to"/> among the shown ones.</summary>
+    public void MoveCardTo(string id, int to)
+    {
+        if (!_runner.Store.Move(Controls().Select(c => c.Id).ToList(), id, to)) return;
+        Save();
+        Dispatcher.UIThread.Post(BuildControls);
+    }
+
+    /// <summary>Drag and drop: a curve card to position <paramref name="to"/>.</summary>
+    public void MoveCurveTo(string id, int to)
+    {
+        if (!_runner.Store.MoveCurve(CurvesInOrder().Select(c => c.Id).ToList(), id, to)) return;
+        Save();
+        Dispatcher.UIThread.Post(BuildCurves);
+    }
+
     /// <summary>Card ⋮ → Move left / right / to start / to end (<paramref name="to"/> maps the card's index to its new one).</summary>
     private void MoveCard(Control0 c, Func<int, int> to)
     {
@@ -731,12 +761,13 @@ public sealed class FanControlWindow : Window
     private void BuildCurves()
     {
         _curves.Children.Clear();
+        _curveDrag.Clear();
         _updaters.RemoveAll(u => u.Target is CurveCard);
-        var order = new Dictionary<FanCurveKind, int> { [FanCurveKind.Flat] = 0, [FanCurveKind.Graph] = 1, [FanCurveKind.Mix] = 2 };
-        foreach (var curve in _runner.Store.Curves.OrderBy(c => order[c.Kind]).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var curve in CurvesInOrder())
         {
             var card = new CurveCard(this, curve);
             _curves.Children.Add(card.Root);
+            _curveDrag.Attach(card.Root, curve.Id);
             _updaters.Add(card.Update);
         }
         if (_runner.Store.Curves.Count == 0)

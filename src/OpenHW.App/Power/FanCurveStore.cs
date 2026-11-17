@@ -20,6 +20,9 @@ public sealed class FanCurveStore
     /// <summary>The order of the fan cards (fan ids); fans not listed follow in their natural order.</summary>
     public List<string> ControlOrder { get; set; } = [];
 
+    /// <summary>The order of the curve cards (curve ids); curves not listed follow (flat, graph, mix, then by name).</summary>
+    public List<string> CurveOrder { get; set; } = [];
+
     /// <summary>A fan's chosen curve while its Curve box is unticked (kept so ticking it again restores the choice).</summary>
     public Dictionary<string, string> Chosen { get; set; } = [];
 
@@ -43,9 +46,9 @@ public sealed class FanCurveStore
 
     /// <summary>A configuration file: the curves, which fan runs which, the fans' names.</summary>
     public sealed record FanConfig(int Version, List<FanCurve> Curves, Dictionary<string, string> Assignments,
-        Dictionary<string, string> Names, Dictionary<string, string> Chosen, List<string>? ControlOrder = null);
+        Dictionary<string, string> Names, Dictionary<string, string> Chosen, List<string>? ControlOrder = null, List<string>? CurveOrder = null);
 
-    public FanConfig Config() => new(1, Curves, Assignments, Names, Chosen, ControlOrder);
+    public FanConfig Config() => new(1, Curves, Assignments, Names, Chosen, ControlOrder, CurveOrder);
 
     /// <summary>Writes the configuration to <paramref name="path"/> (Save / Save as).</summary>
     public void Export(string path)
@@ -71,6 +74,7 @@ public sealed class FanCurveStore
         Names = config.Names ?? [];
         Chosen = config.Chosen ?? [];
         ControlOrder = config.ControlOrder ?? ControlOrder;
+        CurveOrder = config.CurveOrder ?? [];
         Normalise();
         ConfigFile = path;
     }
@@ -124,6 +128,7 @@ public sealed class FanCurveStore
         Chosen = Chosen.Where(a => Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
         Names = Names.Where(n => !string.IsNullOrWhiteSpace(n.Value)).ToDictionary(n => n.Key, n => n.Value);
         ControlOrder = (ControlOrder ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        CurveOrder = (CurveOrder ?? []).Where(id => Curves.Any(c => c.Id == id)).Distinct().ToList();
     }
 
     public void Save()
@@ -157,19 +162,17 @@ public sealed class FanCurveStore
     public void Remove(string id)
     {
         Curves.RemoveAll(c => c.Id == id);
+        CurveOrder.Remove(id);
         foreach (var c in Curves) c.Children.Remove(id);
         foreach (var zone in Assignments.Where(a => a.Value == id).Select(a => a.Key).ToList()) Assignments.Remove(zone);
         foreach (var zone in Chosen.Where(a => a.Value == id).Select(a => a.Key).ToList()) Chosen.Remove(zone);
     }
 
     /// <summary>Fans in card order: listed ones first (in <see cref="ControlOrder"/>), the rest as they come.</summary>
-    public List<string> Ordered(IEnumerable<string> ids)
-    {
-        var list = ids.ToList();
-        return list.Select((id, natural) => (id, natural))
-            .OrderBy(x => ControlOrder.IndexOf(x.id) is var i && i >= 0 ? i : int.MaxValue).ThenBy(x => x.natural)
-            .Select(x => x.id).ToList();
-    }
+    public List<string> Ordered(IEnumerable<string> ids) => OrderBy(ControlOrder, ids);
+
+    /// <summary>Curves in card order (<see cref="CurveOrder"/> first); <paramref name="natural"/> gives the rest's order.</summary>
+    public List<string> OrderedCurves(IEnumerable<string> natural) => OrderBy(CurveOrder, natural);
 
     /// <summary>
     /// Moves a fan's card: <paramref name="to"/> = a position in the current order (clamped). Returns false when it
@@ -177,17 +180,40 @@ public sealed class FanCurveStore
     /// </summary>
     public bool Move(IReadOnlyList<string> shown, string id, int to)
     {
-        var order = Ordered(shown);
+        var order = ControlOrder;
+        var moved = MoveIn(ref order, shown, id, to);
+        ControlOrder = order;
+        return moved;
+    }
+
+    /// <summary>Moves a curve's card (as <see cref="Move"/>); <paramref name="shown"/> = the curve cards as shown.</summary>
+    public bool MoveCurve(IReadOnlyList<string> shown, string id, int to)
+    {
+        var order = CurveOrder;
+        var moved = MoveIn(ref order, shown, id, to);
+        CurveOrder = order;
+        return moved;
+    }
+
+    private static List<string> OrderBy(List<string> saved, IEnumerable<string> ids) =>
+        ids.Select((id, natural) => (id, natural))
+            .OrderBy(x => saved.IndexOf(x.id) is var i && i >= 0 ? i : int.MaxValue).ThenBy(x => x.natural)
+            .Select(x => x.id).ToList();
+
+    private static bool MoveIn(ref List<string> saved, IReadOnlyList<string> shown, string id, int to)
+    {
+        var order = OrderBy(saved, shown);
         var from = order.IndexOf(id);
+        if (from < 0 || order.Count == 0) return false;
         to = Math.Clamp(to, 0, order.Count - 1);
-        if (from < 0 || from == to) return false;
-        // Next to the card it lands on, in the full saved order: fans not shown now keep their places.
+        if (from == to) return false;
+        // Next to the card it lands on, in the full saved order: cards not shown now keep their places.
         var anchor = order[to];
-        var full = Ordered(ControlOrder.Concat(shown).Distinct());
+        var full = OrderBy(saved, saved.Concat(shown).Distinct());
         full.Remove(id);
         var at = full.IndexOf(anchor);
         full.Insert(to < from ? at : at + 1, id);
-        ControlOrder = full;
+        saved = full;
         return true;
     }
 
