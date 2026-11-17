@@ -131,6 +131,9 @@ readback, menu entry first.
 
 ## Windows 11 — eventually (owner, 2026-11-16)
 
+**Working plan: [docs/windows-port.md](docs/windows-port.md)** (2026-11-17) — scope, seams, subsystem table, kernel-access
+choice (LibreHardwareMonitorLib/PawnIO, never WinRing0), phases 0–5, and open questions.
+
 The owner wants OpenHW on Windows 11 too, eventually — **scope (owner, 2026-11-16): the HWiNFO replacement (sensor
 window, tray, logging, alerts) and fan control only; no GPU Lending** (and power/CPU-frequency features aren't asked
 for). Keep platform code behind interfaces now:

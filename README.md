@@ -509,5 +509,6 @@ itself, OpenHW-driven curves with flash-write warnings, NVIDIA fans through NVML
 thresholds; 0.25.0–0.35.0), the BMC's status sensors and event log (0.34.0), and **BIOS Setup** — this board's BIOS
 screen with this machine's settings, planning changes without writing the firmware (0.37.0), and the **WireView
 Pro II** power meter and **UPS** (through NUT) as their own sensor groups (0.38.0).
-Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md). Every window and dialog opens
+Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md); a Windows 11 port is planned in
+[docs/windows-port.md](docs/windows-port.md). Every window and dialog opens
 centred on the primary monitor the first time, then where it was last moved.
