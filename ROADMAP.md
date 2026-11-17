@@ -74,6 +74,9 @@ readback, menu entry first.
    back still reporting the 70 % curve — **curve writes are stored persistently (almost certainly flash)**, so every
    write counts; the driver's 30 s / 3 % limits stay, and stage 2 should keep writes few (and maybe show a daily
    count). The helper's lease and journal rode out the BMC restart; release restored the original curve.
+   **Cold reset too (2026-11-16 18:26, `ipmitool mc reset cold`)**: BMC offline 18:26:29–18:27:21, CHA_FAN1 still flat
+   70 % afterwards → **confirmed persistent (flash)**. BMC sensor readings took ~4–5 min to return (to do: re-check all
+   sensors promptly after an outage instead of once a minute).
 3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
    owns every GPU handle; never on a card that is lent to the VM.
 4. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.

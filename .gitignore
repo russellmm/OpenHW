@@ -6,3 +6,4 @@ obj/
 dist/
 tools/tray-hover-test/out/
 tools/bmc-probe/out/
+/IPMI_Expansion_Card_EM_WEB_EN.pdf
