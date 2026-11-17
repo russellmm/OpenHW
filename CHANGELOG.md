@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.24.1 — 2026-11-16
+
+- Fixed: changing which sensors a fan follows failed with "Redfish 400: The property Oem/Mode is a required property"
+  — the WRX90E's BMC wants the fan mode in every change. OpenHW now sends the mode as it reads it (so it never
+  changes). Nothing was written by the failed attempts.
+
 ## 0.24.0 — 2026-11-16
 
 - **Fan curves the BMC runs** (fan control stage 2, part 1 — the owner's hybrid plan). Power → Fan Control… → **Edit…**

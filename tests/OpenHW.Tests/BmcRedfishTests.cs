@@ -49,7 +49,11 @@ public sealed class BmcRedfishTests : IDisposable
                     if (token is null || !_tokens.Contains(token)) return Json(HttpStatusCode.Unauthorized, "{}");
                     if (!request.Headers.TryGetValues("If-Match", out var match) || match.First() != $"\"{_etag}\"")
                         return Json(HttpStatusCode.PreconditionFailed, """{"error":{"message":"ETag mismatch"}}""");
-                    var pwm = JsonNode.Parse(body!)!["Oem"]!["PWM"]!.AsArray();
+                    var oem = JsonNode.Parse(body!)!["Oem"]!;
+                    if (oem["Mode"] is null) // as the WRX90E's BMC answers
+                        return Json(HttpStatusCode.BadRequest, """{"error":{"@Message.ExtendedInfo":[{"Message":"The property Oem/Mode is a required property and must be included in the request."}]}}""");
+                    if ((string?)oem["Mode"] != "Manual") return Json(HttpStatusCode.BadRequest, """{"error":{"message":"mode changed"}}""");
+                    var pwm = oem["PWM"]!.AsArray();
                     if (RefuseWholeList && pwm.Count > 1)
                         return Json(HttpStatusCode.BadRequest, """{"error":{"@Message.ExtendedInfo":[{"Message":"The value 16777215 for Source is not valid."}]}}""");
                     if (!IgnorePatch) foreach (var p in pwm) Sources[(int)p!["Index"]!] = (long)p["Source"]!;

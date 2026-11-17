@@ -105,7 +105,10 @@ public sealed class BmcRedfish(Uri baseUrl, HttpMessageHandler handler, Func<Bmc
             if ((long)entry["Source"]! == mask) return;
             entry["Source"] = mask;
             // The whole PWM list as read, with one Source changed: AMI's Oem arrays are replaced as a whole.
-            var patch = new JsonObject { ["Oem"] = new JsonObject { ["PWM"] = new JsonArray(pwm.Select(p => p.DeepClone()).ToArray()) } };
+            // The BMC requires Oem.Mode in every change ("Oem/Mode is a required property", 400 on the WRX90E): send the
+            // mode as read, so it never changes.
+            var mode = thermal["Oem"]?["Mode"]?.GetValue<string>() ?? throw new IOException("the BMC's thermal page has no Oem.Mode");
+            var patch = new JsonObject { ["Oem"] = new JsonObject { ["Mode"] = mode, ["PWM"] = new JsonArray(pwm.Select(p => p.DeepClone()).ToArray()) } };
             try
             {
                 using var write = Send(HttpMethod.Patch, ThermalPath, session.Token, patch, etag);
@@ -114,7 +117,7 @@ public sealed class BmcRedfish(Uri baseUrl, HttpMessageHandler handler, Func<Bmc
             catch (IOException whole) when (whole.Message.StartsWith("Redfish 4", StringComparison.Ordinal))
             {
                 // Refused as a whole list (e.g. the unused 8th slot's value): send only the one zone's entry.
-                var single = new JsonObject { ["Oem"] = new JsonObject { ["PWM"] = new JsonArray(new JsonObject { ["Index"] = zone, ["Source"] = mask }) } };
+                var single = new JsonObject { ["Oem"] = new JsonObject { ["Mode"] = mode, ["PWM"] = new JsonArray(new JsonObject { ["Index"] = zone, ["Source"] = mask }) } };
                 using var retry = Send(HttpMethod.Get, ThermalPath, session.Token, null);
                 using var write = Send(HttpMethod.Patch, ThermalPath, session.Token, single, retry.Headers.ETag?.Tag);
                 Parse(write, allowEmpty: true);
