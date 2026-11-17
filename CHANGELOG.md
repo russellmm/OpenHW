@@ -3,6 +3,14 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.33.1 — 2026-11-17
+
+- **GPU fans come back to their curves after a lend.** A lend hands every GPU fan back to its card's own control (not
+  only the lent card's), and the helper doesn't tell the app; the curve runner only sent a new speed when the curve's
+  output changed, so after Return the fans stayed on automatic until a temperature moved (seen in the first lend on
+  the WRX90E: about a minute). Now the runner asks the helper every 5 polls which GPU fans it still holds and sets any
+  it lost again at once.
+
 ## 0.33.0 — 2026-11-17
 
 - **GPU Lending follows the card for its whole handoff.** The libvirt hook that does the hardware handoff was

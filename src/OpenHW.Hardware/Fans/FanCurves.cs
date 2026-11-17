@@ -163,6 +163,9 @@ public sealed class FanHysteresisGate(double deadbandC, double holdSeconds)
     private int _last;
     private double _lastTemp, _lastAt;
 
+    /// <summary>The last duty let through (null before the first).</summary>
+    public int? Last => _has ? _last : null;
+
     public int? Decide(double percent, double nowSeconds, double temperatureC)
     {
         var p = Math.Clamp((int)Math.Round(percent, MidpointRounding.AwayFromZero), 0, 100);

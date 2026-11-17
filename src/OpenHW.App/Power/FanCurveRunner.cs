@@ -192,6 +192,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
             bool Driven(KeyValuePair<string, string> a) => IsGpu(a.Key) || !BmcCurveFit.RunsOnBmc(library[a.Value], library, BmcNumber);
             foreach (var zone in _driven.Keys.Where(z => !wanted.Any(w => w.Key == z && Driven(w))).ToList())
                 ReleaseDriven(zone);
+            if (++_ticks % GpuHoldCheckEvery == 0) ForgetLostGpuFans();
             foreach (var (zoneId, curveId) in wanted)
             {
                 var curve = library[curveId];
@@ -214,7 +215,10 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                 if (IsGpu(zoneId))
                 {
                     // NVML: nothing stored, so the curve's own hysteresis is the only gate (as in OpenFan).
-                    if (d.Gate.Decide(value.Value, (now - DateTime.UnixEpoch).TotalSeconds, tempNow) is not { } duty || duty == d.Duty) continue;
+                    // A fan we don't hold (first tick, or the helper gave it back) takes the gate's last decision at once:
+                    // waiting for the temperature to move past the deadband would leave it on automatic meanwhile.
+                    var decided = d.Gate.Decide(value.Value, (now - DateTime.UnixEpoch).TotalSeconds, tempNow) ?? (d.Duty is null ? d.Gate.Last : null);
+                    if (decided is not { } duty || duty == d.Duty) continue;
                     try
                     {
                         var reply = client.GpuSet(zoneId, duty).Split(' ');
@@ -248,6 +252,28 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
             if (_driven.Values.Any(x => x.Duty is not null))
                 try { client.Beat(); } catch (Exception ex) when (Soft(ex)) { }
         }
+    }
+
+    /// <summary>How often (in ticks, one per poll) the helper is asked which GPU fans it still holds for us.</summary>
+    public const int GpuHoldCheckEvery = 5;
+    private long _ticks;
+
+    /// <summary>
+    /// The helper gives every GPU fan back to its card's own control when a card is lent (and when a lease runs out),
+    /// without telling the client. A GPU fan we think we set but the helper no longer holds for us is set again.
+    /// </summary>
+    private void ForgetLostGpuFans()
+    {
+        var mine = _driven.Where(x => IsGpu(x.Key) && x.Value.Duty is not null).ToList();
+        if (mine.Count == 0) return;
+        HashSet<string> held;
+        try
+        {
+            if (client.GpuStatus() is not { } status) return;
+            held = status.Fans.Where(f => f.OwnedByYou).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (Soft(ex)) { return; }
+        foreach (var (_, d) in mine.Where(x => !held.Contains(x.Key))) d.Duty = null;
     }
 
     /// <summary>Gives every OpenHW-driven fan back to its BMC curve (OpenHW is exiting).</summary>

@@ -60,6 +60,31 @@ public sealed class FanCurveTests : IDisposable
     private FanCurveRunner Runner(FanCurveStore store) => new(new FanClient(Helper), store, () => _now);
 
     [Fact]
+    public void AGpuFanTheHelperGaveBackIsSetAgainWithoutATemperatureChange()
+    {
+        // A lend hands every GPU fan back to its card (helper Suspend) without telling the app; afterwards the curve's
+        // duty hasn't changed, so the runner used to skip it and the fan stayed on automatic (seen 2026-11-17).
+        const string Fan = "nvml:GPU-x:fan:0";
+        var held = true;
+        var store = Store();
+        store.Assignments[Fan] = "nvml";
+        var runner = new FanCurveRunner(new FanClient(line => line.StartsWith("gpufans ", StringComparison.Ordinal)
+            ? GpuWire.Encode(new GpuFanDriverStatus(null, [new(Fan, "RTX", "00000000:C1:00.0", 0, 30, 100, held, held, held ? 65 : null)]))
+            : Helper(line)), store, () => _now);
+        int Sets() => _sent.Count(l => l.StartsWith($"gpufanset ", StringComparison.Ordinal) && l.Contains(Fan, StringComparison.Ordinal));
+
+        runner.Tick(_ => 60);
+        Assert.Equal(1, Sets());
+        for (var i = 0; i < FanCurveRunner.GpuHoldCheckEvery; i++) { _now += TimeSpan.FromSeconds(2); runner.Tick(_ => 60); }
+        Assert.Equal(1, Sets());                                 // still held: nothing sent again
+
+        held = false;                                            // the lend took it back
+        for (var i = 0; i < FanCurveRunner.GpuHoldCheckEvery; i++) { _now += TimeSpan.FromSeconds(2); runner.Tick(_ => 60.5); }
+        Assert.Equal(2, Sets());                                 // same duty, set again within one check
+        Assert.EndsWith($"{Fan} 65", _sent.Last(l => l.StartsWith("gpufanset ", StringComparison.Ordinal)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ABmcCurveIsWrittenOnceWithItsSensors()
     {
         var store = Store();
