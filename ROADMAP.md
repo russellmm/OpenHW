@@ -44,9 +44,13 @@ readback, menu entry first.
      (CPU_FAN — why it sat at ~510 RPM through 65 °C), ch1/2/3/5 20→40→70→100 % (chassis), ch4 60→100 % (CHA_FAN4),
      ch6 100 % (pump), ch7 unused — the same curves the BIOS Q-Fan writes into the NCT6798. Channel → header mapping
      inferred, to verify. Writes (PATCH of that `Oem` block) presumably need a BMC account: not tried.
-   - **Plan for the BMC route** (owner to set up the account): a dedicated BMC user for OpenHW (BMC web UI → User
-     Management, or BIOS → Server Mgmt → BMC User Settings → Add User), entered once in OpenHW's Fan Control page and
-     stored by the helper root-only (`/etc/openhw/bmc-login`, 0600) — never in the user's config. The helper's sandbox
+   - **BMC account done (owner, 2026-11-16)**: user `openhw` (Administrator; created in the BMC web UI — the BIOS
+     page didn't offer it), password in the owner's `/mnt/SOLIDIGM/Claude/.secrets/BMC_openhw` (password only). The
+     owner's own test: Redfish login → **200**. The web console refuses `openhw` (an AMI web-access setting; not
+     needed). Account list is readable without a login: `/redfish/v1/AccountService/Accounts` (5 = openhw).
+     OpenHW's helper reads the login from a root-only copy (to decide: `/etc/openhw/bmc-login` 0600, installed from
+     the owner's file) — never in the user's config. Claude never signs in to the BMC itself; authenticated checks are
+     run by the owner. The helper's sandbox
      gets network access to 169.254.0.17 only (`IPAddressAllow=169.254.0.17`, `IPAddressDeny=any`, AF_INET) and pins
      the BMC's self-signed certificate on first use. Then: read the mode and curves (no login), save the originals,
      verify the channel → header map one channel at a time, write curves/mode with readback, restore on request.
