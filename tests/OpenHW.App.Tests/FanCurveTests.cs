@@ -187,6 +187,15 @@ public sealed class FanCurveTests : IDisposable
         var captures = Environment.GetEnvironmentVariable("OPENHW_CAPTURES") ?? Path.GetTempPath();
         window.CaptureRenderedFrame()?.Save(Path.Combine(captures, "openhw-fan-control-curves.png"));
 
+        var copy = window.Duplicate(store.Find("f35")!);
+        Assert.Equal("35% copy", copy.Name);
+        Assert.Equal(35, copy.Percent);
+        Assert.NotEqual("f35", copy.Id);
+        Assert.Equal("35% copy 2", window.Duplicate(store.Find("f35")!).Name);
+        var mixCopy = window.Duplicate(store.Find("mix")!);
+        Assert.Equal(["slot5", "f35"], mixCopy.Children);
+        Assert.Equal("mix", store.AssignedTo("bmc:2")!.Id); // fans keep the original
+
         // The GPU fan runs its curve through NVML at once: no budget, no 5 % steps.
         runner.Tick(id => id == "bmc:PCIE01 Temp" ? 53.5 : 60);
         Assert.Contains(_sent, l => l.StartsWith("gpufanset ", StringComparison.Ordinal) && l.EndsWith(":fan:0 45", StringComparison.Ordinal));

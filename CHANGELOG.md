@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.27.0 — 2026-11-17
+
+- **Fan Control… in the tray menu** (after Power Limits…).
+- **+ Flat / + Graph / + Mix open a menu**: a new curve, or **Duplicate** any curve of that kind already made (named
+  "… copy", "… copy 2"; a duplicated graph opens in the editor). Fans keep the curve they had.
+- The orange buttons stay orange under the pointer.
+
 ## 0.26.1 — 2026-11-17
 
 - Fixed: a fan card's RPM (and a curve card's temperature) froze when its group was collapsed in the sensor window.

@@ -159,6 +159,7 @@ public sealed class App : Application
             },
             new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)),
             new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
+            new("Fan Control…", () => Dispatcher.UIThread.Post(ShowFanControl)),
             new("GPU Lending…", () => Dispatcher.UIThread.Post(ShowGpuLending)),
             TrayMenuItem.Separator,
             new("Tray Icons…", () => Dispatcher.UIThread.Post(ShowTrayIcons)),

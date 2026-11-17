@@ -79,7 +79,7 @@ public sealed class FanControlWindow : Window
         top.Children.Add(_login);
         top.Children.Add(title);
 
-        var newButtons = AlertUi.Row(Fab("+ Flat", () => NewCurve(FanCurveKind.Flat)), Fab("+ Graph", () => NewCurve(FanCurveKind.Graph)), Fab("+ Mix", () => NewCurve(FanCurveKind.Mix)));
+        var newButtons = AlertUi.Row(NewButton("+ Flat", FanCurveKind.Flat), NewButton("+ Graph", FanCurveKind.Graph), NewButton("+ Mix", FanCurveKind.Mix));
         var curvesHead = new DockPanel { Margin = new Thickness(6, 18, 6, 4) };
         DockPanel.SetDock(newButtons, Dock.Right);
         curvesHead.Children.Add(newButtons);
@@ -125,7 +125,53 @@ public sealed class FanControlWindow : Window
         b.Foreground = Brushes.Black;
         b.FontWeight = FontWeight.SemiBold;
         b.Padding = new Thickness(14, 5);
+        // Stay orange under the pointer (Fluent's own hover look turns it gray).
+        b.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Color.Parse("#F5B562"));
+        b.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Color.Parse("#D88A2A"));
+        b.Resources["ButtonForegroundPointerOver"] = Brushes.Black;
+        b.Resources["ButtonForegroundPressed"] = Brushes.Black;
         return b;
+    }
+
+    /// <summary>+ Flat / + Graph / + Mix: a menu — a new curve, or a copy of one of that kind already made.</summary>
+    private Button NewButton(string text, FanCurveKind kind)
+    {
+        var button = Fab(text, () => { });
+        var menu = new MenuFlyout();
+        button.Flyout = menu;
+        menu.Opening += (_, _) =>
+        {
+            menu.Items.Clear();
+            var fresh = new MenuItem { Header = "New " + kind.ToString().ToLowerInvariant() };
+            fresh.Click += (_, _) => NewCurve(kind);
+            menu.Items.Add(fresh);
+            var existing = _runner.Store.Curves.Where(c => c.Kind == kind).OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            if (existing.Count > 0) menu.Items.Add(new Separator());
+            foreach (var c in existing)
+            {
+                var copy = new MenuItem { Header = new TextBlock { Text = $"Duplicate \"{c.Name}\"" } };
+                var source = c;
+                copy.Click += (_, _) => Duplicate(source);
+                menu.Items.Add(copy);
+            }
+        };
+        return button;
+    }
+
+    /// <summary>A copy of a curve under a new name (" copy", " copy 2", …); a graph opens in the editor right away.</summary>
+    public FanCurve Duplicate(FanCurve source)
+    {
+        var copy = source.Clone();
+        copy.Id = FanCurveStore.NewId();
+        var names = _runner.Store.Curves.Select(c => c.Name).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        copy.Name = source.Name + " copy";
+        for (var n = 2; names.Contains(copy.Name); n++) copy.Name = $"{source.Name} copy {n}";
+        _runner.Store.Curves.Add(copy);
+        Save();
+        BuildCurves();
+        BuildControls();
+        if (copy.Kind == FanCurveKind.Graph) EditGraph(copy);
+        return copy;
     }
 
     private static Border Card(Control child, double width = 300) => new()
