@@ -56,6 +56,12 @@ public sealed class PowerDeviceTests
             new SensorPresentation.MachineInfo("ASUSTeK", "Board", "CPU", [])));
         Assert.Equal("Thermal Grizzly WireView Pro II (12V-2x6)", group.Title);
         AssertExplained(items);
+        // As the real device names itself: no doubled brand.
+        var named = GpuWire.Encode(new List<WireViewDevice> { new("S", "Thermal Grizzly WireView Pro II", "fw", "/dev/ttyACM0",
+            new WireViewSample([27.0, 27.0, null, null], 3.4, 0, [12, 12, 12, 12, 12, 12], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], 0, 0, 12, 600, 0, 0), null) });
+        using var engine2 = new WireViewEngine(_ => named);
+        Assert.Equal("Thermal Grizzly WireView Pro II (12V-2x6)", SensorPresentation.Build(engine2.Discover(),
+            new Dictionary<string, IReadOnlyList<string>>(), new SensorPresentation.MachineInfo("A", "B", "C", [])).Single().Title);
     }
 
     private static void AssertExplained(IReadOnlyList<HardwareItem> items)

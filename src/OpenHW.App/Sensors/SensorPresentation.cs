@@ -118,7 +118,8 @@ public static partial class SensorPresentation
         if (key.StartsWith(NutEngine.GroupPrefix, StringComparison.Ordinal))
             return (8, $"UPS: {sample.Source} (NUT)");
         if (key.StartsWith(WireViewEngine.GroupPrefix, StringComparison.Ordinal))
-            return (9, $"Thermal Grizzly {sample.Source} (12V-2x6)");
+            // The device names itself "Thermal Grizzly WireView Pro II" (build info); older replies said "WireView Pro II".
+            return (9, (sample.Source.StartsWith("Thermal Grizzly", StringComparison.Ordinal) ? sample.Source : "Thermal Grizzly " + sample.Source) + " (12V-2x6)");
         if (key == "edac") return (4, "Memory Controller: EDAC");
         if (key.StartsWith("gpu:", StringComparison.Ordinal))
         {
