@@ -45,11 +45,12 @@ public static class HelperSocket
 /// Protocol 16, read-only BMC: <c>bmcstates</c> (discrete sensors' asserted states), <c>bmcsel</c> (the System Event Log).
 /// Protocol 17, fan alarm thresholds: <c>bmcthresh</c> (list), <c>bmcthresh &lt;sensor&gt; &lt;lnr&gt; &lt;lcr&gt; &lt;lnc&gt;</c> (RPM),
 /// <c>bmcthreshoriginal &lt;sensor&gt;</c>. Protocol 18, Redfish reads: <c>biossettings</c>, <c>bmcaccess</c>.
+/// Protocol 19: <c>wireview</c> (WireView Pro II 12V-2x6 power meters, read-only).
 /// Replies are "ok …" or "err …".
 /// </summary>
-public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null)
+public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null, WireViewReader? wireView = null)
 {
-    public const string Version = "18";
+    public const string Version = "19";
 
     public string HandleLine(string line)
     {
@@ -186,6 +187,10 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
                 if (redfish is null) return "err Redfish unavailable";
                 try { return "ok " + GpuWire.Encode(redfish.ReadAccess()); }
                 catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { return "err " + ex.Message; }
+
+            case "wireview" when parts.Length == 1: // read-only (protocol 19): WireView Pro II power meters on USB serial
+                if (wireView is null) return "err WireView reader unavailable";
+                return "ok " + GpuWire.Encode(wireView.Read(TimeSpan.FromSeconds(5)));
 
             case "bmcthreshoriginal" when parts.Length == 2:
                 if (bmc is null) return "err no BMC";
@@ -416,7 +421,7 @@ public sealed class CachedSmartReader(INvmeSmartReader inner, TimeSpan minInterv
 }
 
 /// <summary>Unix-socket accept loop for <see cref="HelperSession"/>; the openhw-helper daemon is a thin root wrapper.</summary>
-public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, GpuFanDriver? gpuFans = null) : IAsyncDisposable
+public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, GpuFanDriver? gpuFans = null, WireViewReader? wireView = null) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // longest valid request: cpufreqmax with every policy id listed
 
@@ -467,7 +472,7 @@ public sealed class HelperServer(INvmeSmartReader smart, string socketPath, CpuF
 
     private async Task ServeAsync(Socket client)
     {
-        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans, redfish, gpuFans: gpuFans);
+        var session = new HelperSession(smart, cpufreq, gpuPower, cpuPower, boot, rapl, ddr5, vr, gpus, card, lending, bmc, fans, redfish, gpuFans: gpuFans, wireView: wireView);
         try
         {
             using (client)

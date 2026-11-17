@@ -28,6 +28,7 @@ var vr = new BoardVrReader(smbus, BoardVrs.ForThisBoard());
 using var gpus = new SharedGpuEngine();
 using var card = new CardFilter(setup: new LendingSetup());
 using var bmc = new BmcReader();
+using var wireView = new WireViewReader();
 
 if (args is ["--once", .. var command] && command.Length > 0)
 {
@@ -38,7 +39,7 @@ if (args is ["--once", .. var command] && command.Length > 0)
     // Fans: status only (a one-shot process can't hold a zone: it would give it back as it exits).
     using var fansRead = command is ["fans"] ? FanDriver.Live() : null;
     var redfishRead = command is ["fansources"] or ["biossettings"] or ["bmcaccess"] ? BmcRedfish.Live() : null; // read-only
-    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc, fans: fansRead, redfish: redfishRead).HandleLine(string.Join(' ', command)));
+    Console.WriteLine(new HelperSession(smart, gpuPower: limits, rapl: new RaplReader(), ddr5: ddr5, vr: vr, gpus: gpus, card: cardRead, bmc: bmc, fans: fansRead, redfish: redfishRead, wireView: wireView).HandleLine(string.Join(' ', command)));
     return 0;
 }
 
@@ -53,7 +54,7 @@ using var lending = new CardLending(card, () => { gpuFans.Suspend(); nvmlFans.Su
 using var fans = FanDriver.Live();
 if (fans.Status(null) is { Available: false, Reason: { } why }) Console.WriteLine($"openhw-helper: fan control off: {why}");
 var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc, fans,
-    fans.Status(null).Available ? BmcRedfish.Live() : null, gpuFans);
+    fans.Status(null).Available ? BmcRedfish.Live() : null, gpuFans, wireView);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
 // boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
 try { card.Start(TimeSpan.FromSeconds(60)); }

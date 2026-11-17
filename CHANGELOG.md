@@ -3,6 +3,24 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.38.0 — 2026-11-17
+
+- **Thermal Grizzly WireView Pro II** (the 12V-2x6 power meter between the PSU cable and a GPU, USB 0483:5740): its
+  own sensor group, keyed by the device's USB serial — not by the GPU, so moving it to another card changes nothing.
+  Each of the six 12 V wires' voltage, current and power; total power and current, average voltage, **current
+  imbalance** (busiest wire vs the average, blank near idle); connector temperatures (in/out, plus external probes
+  when plugged in); the PSU's sense-pin power limit; fault counts now and logged; the WireView's own supply and fan.
+  Read through openhw-helper (**protocol 19**, `wireview`; the serial port is root-only) with read commands only
+  (vendor data, build info, sensor values — never config, calibration, flash, fault clearing, reset or bootloader).
+  The link has no checksum: out-of-step frames are recognised and dropped. Helper unit: `DeviceAllow=char-ttyACM rw`.
+  Protocol facts from the community wireview-linux project; the code is OpenHW's own (`tools/wireview-probe/probe.py`
+  is the standalone read-only check).
+- **UPS** through Network UPS Tools (upsd on 127.0.0.1:3493, read-only `LIST` commands, no root): a group per UPS with
+  input/output voltage (and frequency where reported), load, output power, apparent power, power rating, battery
+  charge / voltage / runtime, and On Battery / Low Battery / Replace Battery / Overloaded. Shown for the CyberPower
+  CP2000PFCRM2U.
+- Every new row has a plain-language tooltip.
+
 ## 0.37.0 — 2026-11-17
 
 - **File → BIOS Setup…: the BIOS emulator, inside OpenHW, with this machine's settings.** The standalone Python/Qt

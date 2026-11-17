@@ -115,6 +115,10 @@ public static partial class SensorPresentation
             return (6, $"{vendor} {machine.BoardName} ({BoardVrs.For(machine.BoardVendor, machine.BoardName)?.Chip ?? sample.Source})");
         if (key == BmcEngine.GroupKey)
             return (6, $"{vendor} {machine.BoardName} (BMC: {sample.Source.Split(' ')[0]})");
+        if (key.StartsWith(NutEngine.GroupPrefix, StringComparison.Ordinal))
+            return (8, $"UPS: {sample.Source} (NUT)");
+        if (key.StartsWith(WireViewEngine.GroupPrefix, StringComparison.Ordinal))
+            return (9, $"Thermal Grizzly {sample.Source} (12V-2x6)");
         if (key == "edac") return (4, "Memory Controller: EDAC");
         if (key.StartsWith("gpu:", StringComparison.Ordinal))
         {

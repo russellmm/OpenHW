@@ -23,11 +23,14 @@ public sealed class SensorHub : IDisposable
 
     public SensorHub()
     {
-        _engines = [_system, _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), Bmc, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia];
+        _engines = [_system, _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), Bmc, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia, WireView, new NutEngine()];
     }
 
     /// <summary>The board management controller (IPMI through the helper); the hardware check reads its full sensor list.</summary>
     public BmcEngine Bmc { get; } = new();
+
+    /// <summary>WireView Pro II power meters on USB (through the helper).</summary>
+    public WireViewEngine WireView { get; } = new();
 
     public SensorStatistics Statistics { get; } = new();
 

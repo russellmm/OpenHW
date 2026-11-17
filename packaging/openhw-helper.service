@@ -74,6 +74,9 @@ DeviceAllow=char-i2c rw
 # The board management controller (IPMI, /dev/ipmi0): sensor repository, readings and thresholds, and — on the
 # validated WRX90E board only — the fan zones' curves (FanDriver). The device has to be opened read-write.
 DeviceAllow=char-ipmidev rw
+# Thermal Grizzly WireView Pro II power meters (USB CDC-ACM, /dev/ttyACM*): read commands only (WireViewReader); a
+# serial port has to be opened read-write to send them.
+DeviceAllow=char-ttyACM rw
 LockPersonality=true
 RestrictRealtime=true
 

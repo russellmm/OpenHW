@@ -236,6 +236,17 @@ something **new** needs a look — closing the window marks what it showed as se
 know about doesn't reopen it at every start; otherwise it just keeps the snapshot current. It doesn't open while a card is lent to the VM.
 `openhw --hardware-check` prints the same report without a display and changes nothing.
 
+## Power devices: WireView Pro II and UPS
+
+**Thermal Grizzly WireView Pro II** (the meter on a GPU's 12V-2x6 cable): a sensor group per device with each of the
+six wires' voltage, current and power, the totals, the current imbalance between wires, the connector temperatures,
+the PSU's signalled limit and the device's fault counts. It follows the device, not the GPU: move it to another card
+and the readings carry on. openhw-helper reads it (the USB serial port is root-only), with read commands only.
+
+**UPS**: any UPS that Network UPS Tools (NUT) knows shows as a group — input/output voltage, load, output power,
+battery charge, voltage and runtime, and whether it's on battery, low, needs a new battery or is overloaded. OpenHW
+reads upsd on 127.0.0.1 with read-only commands; it needs no root and changes nothing.
+
 ## BMC status and event log
 
 **File → BMC Status & Event Log…** (boards with a BMC) shows the BMC's **status sensors** — CPU_ECC, memory training
@@ -435,10 +446,10 @@ policy to its hardware maximum) — see [Power modes and CPU frequency caps](#po
 so a device filter on the desktop session can't hide a card from OpenHW, and the app can't hold a card a VM needs),
 `ddr5`, `vr`, `rapl`, `bmc`, `bmcstates` and `bmcsel` (the board management controller's sensors, status sensors and
 event log over IPMI: Get Device ID, the SDR repository, Get Sensor Reading / Thresholds, Get SEL Info / Entry —
-nothing that clears or controls anything), `biossettings` and `bmcaccess` (Redfish reads), the fan driver
+nothing that clears or controls anything), `biossettings` and `bmcaccess` (Redfish reads), `wireview` (WireView Pro II power meters, read-only), the fan driver
 (`fans`, `fanset`, `fanrelease`, `fanbeat`, `fancurve`, `fanoriginal`, `fansources`, `fansource`, `bmclogin`,
 `bmclogout`, NVIDIA fans `gpufans`, `gpufanset`, `gpufanrelease`, and fan alarm thresholds `bmcthresh`,
-`bmcthreshoriginal` — see [Fan control](#fan-control)); protocol 18, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
+`bmcthreshoriginal` — see [Fan control](#fan-control)); protocol 19, the card filter (`cardfilter [on|off]`, `cardselect`, `cardhide`, `cardshow`, `cardforget`)
 and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall`, `lenduninstall`) — see [GPU lending](#gpu-lending) — and the boot
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
@@ -447,7 +458,7 @@ at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP
 `/etc/openhw` and `/sys/fs/bpf` (the card filter, the BMC login and certificate pin), `/var/lib/openhw` (the fan
 restore journal, saved original curves and alarm thresholds), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d`, `/etc/libvirt/hooks/qemu.d` and `/etc/wireplumber/wireplumber.conf.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
-`/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*` and `/dev/ipmi*`).
+`/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*`, `/dev/ipmi*` and `/dev/ttyACM*` (the WireView)).
 It's `Type=notify` and ordered before the display manager, so the card filter is in force before the login screen. Re-run the install below after updating OpenHW when the helper changes.
 
 Install once, then log out and back in so your account joins the `openhw` group (reboot instead if systemd
@@ -471,7 +482,7 @@ Headless: the helper protocol, its validation and the client/server socket round
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
 HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
-against a fake machine's UEFI variables. 368 tests (180 library + 188 headless UI) as of 0.37.0.
+against a fake machine's UEFI variables. 374 tests (184 library + 190 headless UI) as of 0.38.0.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
