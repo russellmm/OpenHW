@@ -69,7 +69,7 @@ readback, menu entry first.
    Tests on OpenFan's captured firmware replies; read check on the real BMC passed (2026-11-16); bmc:1 (CHA_FAN1) write test passed (1,440 → 3,480 RPM at 70 %,
    curve restored identical); bmc:6 (W_PUMP+) passed (3,480 → 3,960 RPM at 100 %). Each test = 2 BMC writes.
    bmc:0 CPU_FAN, bmc:2/3/5 CHA_FAN2/3/5 passed at 70 % — **all six connected zones verified**, mapping confirmed
-   (bmc:4 has no fan). **To do**: the owner's guarded `--fan-test` of every zone; the flash
+   (bmc:4 has no fan). **To do**: the flash
    persistence check (write a zone, BMC warm reset, read back).
 3. [ ] **NVIDIA fans** through NVML (set speed per fan, restore the default policy), in the helper, which already
    owns every GPU handle; never on a card that is lent to the VM.
