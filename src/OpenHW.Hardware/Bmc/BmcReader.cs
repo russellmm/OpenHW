@@ -30,6 +30,12 @@ public sealed class BmcReader : IDisposable
     private Thread? _thread;
     private volatile bool _stopping;
     private string? _error;
+    private List<BmcDiscreteSensor> _discrete = [];
+    private readonly Dictionary<BmcDiscreteSensor, int?> _states = [];
+    private Dictionary<byte, string> _names = [];
+    private BmcSelReply? _sel;
+    private uint _selStamp;
+    private readonly object _selGate = new();
 
     public BmcReader(Func<IIpmiTransport?>? open = null) =>
         _open = open ?? (() => LinuxIpmiTransport.Exists() ? new LinuxIpmiTransport() : null);
@@ -57,6 +63,51 @@ public sealed class BmcReader : IDisposable
 
     public string? Error { get { lock (_gate) return _error; } }
 
+    /// <summary>The discrete sensors' asserted states from the last sweep (waits for the first, like <see cref="Read"/>).</summary>
+    public List<BmcStateWire>? States(TimeSpan wait)
+    {
+        if (Read(wait) is null) return null;
+        lock (_gate)
+            return _discrete.Select(d => _states.GetValueOrDefault(d) is { } bits
+                    ? new BmcStateWire(d.Name, d.Number, EntityName(d.EntityId), IpmiEvents.SensorTypeName(d.SensorType),
+                        IpmiEvents.States(d.SensorType, d.EventType, bits), bits, true)
+                    : new BmcStateWire(d.Name, d.Number, EntityName(d.EntityId), IpmiEvents.SensorTypeName(d.SensorType), [], 0, false))
+                .ToList();
+    }
+
+    /// <summary>
+    /// The System Event Log: its info and the newest <paramref name="newest"/> entries. Read on request only (a full
+    /// walk over KCS takes a few seconds), and again only when the BMC's "last add" or "last erase" time changes.
+    /// </summary>
+    public BmcSelReply? Sel(TimeSpan wait, int newest = 500)
+    {
+        if (Read(wait) is null) return null;
+        IIpmiTransport? transport;
+        Dictionary<byte, string> names;
+        lock (_gate) { transport = _transport; names = _names; }
+        if (transport is null) return null;
+        lock (_selGate)
+        {
+            var info = IpmiEvents.GetSelInfo(transport) ?? throw new IOException("BMC did not answer Get SEL Info");
+            var stamp = info.LastAdd ^ info.LastErase * 31 ^ (uint)info.Entries;
+            if (_sel is null || stamp != _selStamp)
+            {
+                var records = info.Entries == 0 ? [] : IpmiEvents.ReadSel(transport);
+                var entries = records.Select(r => IpmiEvents.Decode(r, n => names.GetValueOrDefault(n))).ToList();
+                _sel = new BmcSelReply(info.Entries, info.FreeBytes, IpmiEvents.Utc(info.LastAdd), IpmiEvents.Utc(info.LastErase),
+                    entries.Skip(Math.Max(0, entries.Count - newest)).ToList());
+                _selStamp = stamp;
+            }
+            return _sel;
+        }
+    }
+
+    private static string EntityName(byte id) => id switch
+    {
+        3 => "Processor", 7 => "System board", 8 => "Memory module", 10 => "Power supply", 11 => "Add-in card",
+        29 => "Fan", 34 => "BIOS", 40 => "Battery", 49 => "Add-in card", _ => $"Entity {id}",
+    };
+
     // The management controller locator record names the BMC chip on ASPEED boards ("AST2600").
     private string? _controllerName;
 
@@ -73,10 +124,14 @@ public sealed class BmcReader : IDisposable
             string? mcName = null;
             if (mc is not null && (mc[15] & 0x1f) is var len and > 0 && mc.Length >= 16 + len)
                 mcName = System.Text.Encoding.ASCII.GetString(mc, 16, len).TrimEnd('\0', ' ');
+            var discrete = records.Select(r => BmcDiscreteSensor.Parse(r)).OfType<BmcDiscreteSensor>().ToList();
+            var names = new Dictionary<byte, string>();
+            foreach (var x in sensors) names.TryAdd(x.Number, x.Name);
+            foreach (var x in discrete) names.TryAdd(x.Number, x.Name);
             var limits = sensors.ToDictionary(s => s, s => Try(() => IpmiCommands.GetThresholds(transport, s)));
             lock (_gate)
             {
-                _transport = transport; _device = device; _controllerName = mcName;
+                _transport = transport; _device = device; _controllerName = mcName; _discrete = discrete; _names = names;
                 foreach (var (s, l) in limits) _limits[s] = l;
             }
             Sweep(transport, sensors, all: true);
@@ -100,6 +155,14 @@ public sealed class BmcReader : IDisposable
     private void Sweep(IIpmiTransport transport, List<BmcSensor> sensors, bool all)
     {
         if (all) _lastAbsentCheck = DateTime.UtcNow;
+        List<BmcDiscreteSensor> discrete;
+        lock (_gate) discrete = _discrete;
+        foreach (var d in discrete)
+        {
+            if (_stopping) return;
+            var bits = Try(() => IpmiEvents.GetStates(transport, d));
+            lock (_gate) _states[d] = bits;
+        }
         foreach (var s in sensors)
         {
             if (_stopping) return;

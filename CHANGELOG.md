@@ -3,6 +3,21 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.34.0 — 2026-11-17
+
+- **File → BMC Status & Event Log…** (helper protocol 16, read-only): the BMC's discrete sensors — CPU_ECC,
+  Memory_Train_ERR, PSU presence/AC/over-temperature, watchdog, BIOS/CPU/memory/PCIe hardware change — with their
+  asserted states in words (IPMI generic and sensor-specific tables), and its System Event Log, newest first, decoded
+  (time, sensor by SDR name, event, deasserted). The log is walked only when the BMC's "last added"/"last cleared"
+  time changes. Nothing clears the log or changes the BMC. New helper commands `bmcstates` and `bmcsel`.
+- **GPU fans on slot-sensor curves don't wait for the BMC.** The BMC answers ~20 s after OpenHW starts (and slowly
+  after a BMC reset); until then a GPU fan whose curve follows a BMC PCIe slot sensor (= the card's core temperature)
+  sat on automatic. Now, while the only missing readings are slot sensors, the curve reads the fan's own card's core
+  temperature (NVML), and goes back to the slot sensor once it reads (both logged).
+- **Fans are given back at once when OpenHW is stopped** (`pkill`, logout, systemd stop): SIGTERM and SIGINT run the
+  same exit as the tray's Exit, so a restarted OpenHW no longer has its sets refused as "controlled by another client"
+  until the old instance's 15 s lease runs out. "released N fan(s) (exiting)" in the journal.
+
 ## 0.33.2 — 2026-11-17
 
 - **Fan diagnostics in the journal** (`journalctl --user -t openhw`, lines "openhw: fans: …"): a fan taken (with its

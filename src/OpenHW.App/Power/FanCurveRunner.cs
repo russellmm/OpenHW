@@ -28,6 +28,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
         public DateTime LastChange;
         public DateTime? MissingSince;
         public string? Problem;
+        public bool OwnTemp; // reading its card's own core temperature in place of a silent BMC slot sensor
     }
 
     private readonly object _gate = new();
@@ -208,7 +209,19 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                     var (c, s) = FanCurveMath.Hysteresis(curve, library);
                     _driven[zoneId] = d = new Driven { CurveId = curveId, Gate = new FanHysteresisGate(c, s), Duty = d?.Duty, LastChange = d?.LastChange ?? default };
                 }
-                var value = FanCurveMath.Evaluate(curve, library, reading);
+                var read = reading;
+                if (IsGpu(zoneId))
+                {
+                    var own = OwnTempReading(zoneId, curve, library, reading);
+                    if (own is not null != d.OwnTemp)
+                    {
+                        d.OwnTemp = own is not null;
+                        Log(d.OwnTemp ? $"{zoneId}: no BMC slot reading yet; following its own core temperature meanwhile"
+                                      : $"{zoneId}: BMC slot reading back; following \"{curve.Name}\" again");
+                    }
+                    read = own ?? reading;
+                }
+                var value = FanCurveMath.Evaluate(curve, library, read);
                 if (value is null)
                 {
                     if (d.MissingSince is null)
@@ -220,7 +233,7 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
                 }
                 if (d.MissingSince is { } since) Log($"{zoneId}: readings back after {(now - since).TotalSeconds:0} s");
                 d.MissingSince = null;
-                var tempNow = FanCurveMath.Sensors(curve, library).Select(reading).OfType<double>().DefaultIfEmpty(0).Max();
+                var tempNow = FanCurveMath.Sensors(curve, library).Select(read).OfType<double>().DefaultIfEmpty(0).Max();
                 if (IsGpu(zoneId))
                 {
                     // NVML: nothing stored, so the curve's own hysteresis is the only gate (as in OpenFan).
@@ -266,6 +279,26 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
         }
     }
 
+    /// <summary>
+    /// The BMC's PCIe slot sensors are the GPUs' core temperatures (measured 2026-11-17), but the BMC answers only
+    /// ~20 s after OpenHW starts (its SDR read) and slowly after a BMC reset. Meanwhile a GPU fan whose curve reads
+    /// slot sensors would sit on automatic and then be released. So when every sensor of the curve that has no reading
+    /// is a BMC slot sensor ("bmc:PCIE…"), those read the fan's own card's core temperature until the BMC answers.
+    /// Returns null when no stand-in is needed (or none is possible).
+    /// </summary>
+    public static Func<string, double?>? OwnTempReading(string gpuFanId, FanCurve curve, IReadOnlyDictionary<string, FanCurve> library, Func<string, double?> reading)
+    {
+        var fan = gpuFanId.LastIndexOf(":fan:", StringComparison.Ordinal);
+        if (fan < 0) return null;
+        var missing = FanCurveMath.Sensors(curve, library).Where(id => reading(id) is null).ToList();
+        if (missing.Count == 0 || !missing.All(IsBmcSlot)) return null;
+        var core = gpuFanId[..fan] + ":temp:core";
+        if (reading(core) is not { } own) return null;
+        return id => reading(id) ?? (IsBmcSlot(id) ? own : null);
+    }
+
+    private static bool IsBmcSlot(string id) => id.StartsWith(BmcEngine.IdPrefix + "PCIE", StringComparison.Ordinal);
+
     /// <summary>How often (in ticks, one per poll) the helper is asked which GPU fans it still holds for us.</summary>
     public const int GpuHoldCheckEvery = 5;
     private long _ticks;
@@ -305,7 +338,9 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
     {
         lock (_gate)
         {
+            var held = _driven.Count(x => x.Value.Duty is not null);
             foreach (var zone in _driven.Keys.ToList()) ReleaseDriven(zone);
+            if (held > 0) Log($"released {held} fan(s) (exiting)");
         }
     }
 

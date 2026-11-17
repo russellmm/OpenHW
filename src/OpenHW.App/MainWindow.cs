@@ -34,6 +34,9 @@ public sealed record WindowCommands(Action ShowCpuFrequency, Action ShowPowerLim
     /// <summary>File → Hardware Check… (what changed, stale saved settings, what isn't read).</summary>
     public Action? ShowHardwareCheck { get; init; }
 
+    /// <summary>File → BMC Status &amp; Event Log… (discrete sensors and the SEL, read-only).</summary>
+    public Action? ShowBmcLog { get; init; }
+
     /// <summary>Power → Fan Control… (the fan driver's zones).</summary>
     public Action? ShowFanControl { get; init; }
 
@@ -706,6 +709,7 @@ public sealed class MainWindow : Window
             if (c.ShowAlerts is { } alerts) file.Items.Add(Item("_Alerts…", alerts));
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
             if (c.ShowHardwareCheck is { } hardwareCheck) file.Items.Add(Item("_Hardware Check…", hardwareCheck));
+            if (c.ShowBmcLog is { } bmcLog) file.Items.Add(Item("_BMC Status & Event Log…", bmcLog));
             if (c.ShowSensorSettings is { } sensorSettings) file.Items.Add(Item("Sensor Setti_ngs…", sensorSettings)); // the footer gear
             file.Items.Add(Item("_Settings…", c.ShowSettings));
             file.Items.Add(new Separator());

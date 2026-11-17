@@ -27,6 +27,25 @@ public sealed class BmcTests
         return r;
     }
 
+    /// <summary>A Compact Sensor Record (02h) for a discrete sensor, as the AST2600 stores CPU_ECC or PSU1 Detect.</summary>
+    internal static byte[] CompactRecord(ushort recordId, byte number, string name, byte sensorType, byte eventType = 0x6f, byte entity = 8)
+    {
+        var id = Encoding.ASCII.GetBytes(name);
+        var r = new byte[32 + id.Length];
+        r[0] = (byte)recordId; r[1] = (byte)(recordId >> 8); r[2] = 0x51; r[3] = 0x02; r[4] = (byte)(r.Length - 5);
+        r[5] = 0x20; r[7] = number; r[8] = entity; r[12] = sensorType; r[13] = eventType;
+        r[31] = (byte)(0xc0 | id.Length);
+        id.CopyTo(r, 32);
+        return r;
+    }
+
+    /// <summary>A 16-byte system event record (type 02h).</summary>
+    internal static byte[] SelRecord(ushort id, uint time, byte sensorType, byte sensor, byte dirType, byte data1, byte data2 = 0xff, byte data3 = 0xff)
+    {
+        var t = BitConverter.GetBytes(time);
+        return [(byte)id, (byte)(id >> 8), 0x02, t[0], t[1], t[2], t[3], 0x20, 0x00, 0x04, sensorType, sensor, dirType, data1, data2, data3];
+    }
+
     /// <summary>A management controller locator (12h) naming the chip, as the AST2600 reports itself.</summary>
     private static byte[] ControllerRecord(ushort recordId, string name)
     {
@@ -46,6 +65,10 @@ public sealed class BmcTests
         public readonly List<byte[]> Records;
         public readonly Dictionary<byte, byte?> Raw = []; // null = reading unavailable
         public readonly List<(byte NetFn, byte Cmd)> Unexpected = [];
+        public readonly Dictionary<byte, int> States = [];
+        public readonly List<byte[]> Sel = [];
+        public uint SelLastAdd = 0x6739a000;
+        public int SelEntryReads;
         private ushort _reservation = 1;
         private bool _cancelledOnce;
 
@@ -60,7 +83,11 @@ public sealed class BmcTests
                 FullRecord(4, 0x39, "W_PUMP+", 18, m: 60, b: 0, rexp: 0, bexp: 0, entity: 29),
                 FullRecord(5, 0xdf, "PSU1 Power In", 6, m: 2, b: 0, rexp: 0, bexp: 0, entity: 10),
                 FullRecord(6, 0x0c, "PCIE01 Temp", 1, m: 1, b: -10, rexp: 0, bexp: 0, entity: 11, format: 2),
+                CompactRecord(7, 0xf9, "CPU_ECC", 0x0c),
+                CompactRecord(8, 0xe3, "PSU1 Detect", 0x08, entity: 10),
+                CompactRecord(9, 0xfc, "Memory_Train_ERR", 0xc5),
             ];
+            States[0xf9] = 1 << 6; States[0xe3] = 1 << 1; States[0xfc] = 0;
             Raw[0x24] = 197; Raw[0x1e] = 109; Raw[0x01] = 40; Raw[0x39] = 64; Raw[0xdf] = null; Raw[0x0c] = 43;
         }
 
@@ -87,6 +114,22 @@ public sealed class BmcTests
                     var next = index + 1 < Records.Count ? (ushort)(Records[index + 1][0] | Records[index + 1][1] << 8) : (ushort)0xffff;
                     var take = Math.Min(count, record.Length - offset);
                     return [0, (byte)next, (byte)(next >> 8), .. record.AsSpan(offset, take)];
+                }
+                case (0x04, 0x2d) when States.TryGetValue(data[0], out var bits):
+                    return [0, 0, 0xc0, (byte)bits, (byte)(bits >> 8)];
+                case (0x0a, 0x40): // Get SEL Info
+                {
+                    var add = BitConverter.GetBytes(SelLastAdd);
+                    return [0, 0x51, (byte)Sel.Count, (byte)(Sel.Count >> 8), 0x00, 0x40, .. add, 0, 0, 0, 0, 0x02];
+                }
+                case (0x0a, 0x43): // Get SEL Entry (whole records, no reservation)
+                {
+                    SelEntryReads++;
+                    var id = (ushort)(data[2] | data[3] << 8);
+                    var index = id == 0 ? 0 : Sel.FindIndex(r => (r[0] | r[1] << 8) == id);
+                    if (index < 0 || index >= Sel.Count) return [0xcb];
+                    var next = index + 1 < Sel.Count ? (ushort)(Sel[index + 1][0] | Sel[index + 1][1] << 8) : (ushort)0xffff;
+                    return [0, (byte)next, (byte)(next >> 8), .. Sel[index]];
                 }
                 case (0x04, 0x2d):
                     return Raw.TryGetValue(data[0], out var raw) && raw is { } v ? [0, v, 0xc0, 0] : [0, 0, 0x20, 0];
@@ -175,5 +218,60 @@ public sealed class BmcTests
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");
         public void Dispose() { }
+    }
+
+    [Fact]
+    public void DiscreteSensorsReadAsStatesInWords()
+    {
+        var bmc = new FakeBmc();
+        using var reader = new BmcReader(() => bmc);
+        var states = reader.States(TimeSpan.FromSeconds(10))!;
+        Assert.Equal(["CPU_ECC", "PSU1 Detect", "Memory_Train_ERR"], states.Select(x => x.Name));
+        Assert.Equal(["presence detected"], states[0].States);
+        Assert.Equal(("Memory", "Memory module"), (states[0].SensorType, states[0].Entity));
+        Assert.Equal(["failure detected"], states[1].States);
+        Assert.Empty(states[2].States);
+        Assert.Equal("OEM C5h", states[2].SensorType);
+        // Threshold sensors stay where they were; discrete ones aren't among them.
+        Assert.DoesNotContain(reader.Read(TimeSpan.FromSeconds(1))!.Sensors, x => x.Name == "CPU_ECC");
+        Assert.Empty(bmc.Unexpected);
+    }
+
+    [Fact]
+    public void SelIsDecodedAndReadAgainOnlyWhenItChanges()
+    {
+        var bmc = new FakeBmc();
+        bmc.Sel.Add(SelRecord(1, 0x6739a000, 0x0c, 0xf9, 0x6f, 0x00));          // correctable ECC on CPU_ECC
+        bmc.Sel.Add(SelRecord(2, 0x6739a010, 0x0c, 0xf9, 0xef, 0x00));          // … deasserted
+        bmc.Sel.Add(SelRecord(3, 0x6739a020, 0x01, 0x01, 0x01, 0x59, 0x5a, 0x55)); // CPU Package upper critical going high
+        bmc.Sel.Add(SelRecord(4, 100, 0x10, 0x00, 0x6f, 0x02));                 // log cleared, before the clock was set
+        using var reader = new BmcReader(() => bmc);
+        var sel = reader.Sel(TimeSpan.FromSeconds(10))!;
+        Assert.Equal(4, sel.Entries);
+        Assert.Equal(("CPU_ECC", "Memory", "correctable ECC"), (sel.Newest[0].Sensor, sel.Newest[0].SensorType, sel.Newest[0].Event));
+        Assert.True(sel.Newest[1].Deasserted);
+        Assert.Equal("correctable ECC — deasserted", sel.Newest[1].Event);
+        Assert.Equal("CPU Package Temp", sel.Newest[2].Sensor);
+        Assert.Equal("upper critical going high (reading 0x5a)", sel.Newest[2].Event);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(0x6739a020).UtcDateTime, sel.Newest[2].TimeUtc);
+        Assert.Equal(("+100 s after BMC start", "log area reset/cleared"), (sel.Newest[3].Time, sel.Newest[3].Event));
+        var reads = bmc.SelEntryReads;
+        reader.Sel(TimeSpan.FromSeconds(1));
+        Assert.Equal(reads, bmc.SelEntryReads); // unchanged SEL: served from the last walk
+        bmc.Sel.Add(SelRecord(5, 0x6739b000, 0x23, 0xfe, 0x6f, 0x01));
+        bmc.SelLastAdd = 0x6739b000;
+        Assert.Equal("hard reset", reader.Sel(TimeSpan.FromSeconds(1))!.Newest[^1].Event);
+        Assert.Empty(bmc.Unexpected);
+    }
+
+    [Fact]
+    public void HelperAnswersBmcStatesAndSel()
+    {
+        using var reader = new BmcReader(() => new FakeBmc());
+        var session = new HelperSession(new NoSmart(), bmc: reader);
+        Assert.Equal("ok 16", session.HandleLine("ping"));
+        Assert.Equal(3, GpuWire.Decode<List<BmcStateWire>>(session.HandleLine("bmcstates")[3..])!.Count);
+        Assert.Equal(0, GpuWire.Decode<BmcSelReply>(session.HandleLine("bmcsel")[3..])!.Entries);
+        Assert.Equal("err no BMC", new HelperSession(new NoSmart()).HandleLine("bmcsel"));
     }
 }

@@ -42,11 +42,12 @@ public static class HelperSocket
 /// <c>bmclogin [base64 user, base64 password]</c>, <c>bmclogout</c>. Protocol 15, NVIDIA fans (<see cref="GpuFanDriver"/>):
 /// <c>gpufans [token]</c>, <c>gpufanset &lt;token&gt; &lt;nvml:uuid:fan:n&gt; &lt;0–100&gt;</c> (0 = the card's automatic control),
 /// <c>gpufanrelease &lt;token&gt; &lt;id|all&gt;</c>; <c>fanbeat</c> renews both kinds of lease.
+/// Protocol 16, read-only BMC: <c>bmcstates</c> (discrete sensors' asserted states), <c>bmcsel</c> (the System Event Log).
 /// Replies are "ok …" or "err …".
 /// </summary>
 public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLimits? cpufreq = null, GpuPowerLimits? gpuPower = null, CpuPowerLimits? cpuPower = null, BootPowerLimits? boot = null, RaplReader? rapl = null, Ddr5Reader? ddr5 = null, BoardVrReader? vr = null, SharedGpuEngine? gpus = null, CardFilter? card = null, CardLending? lending = null, BmcReader? bmc = null, FanDriver? fans = null, BmcRedfish? redfish = null, string loginPath = BmcLogin.DefaultPath, GpuFanDriver? gpuFans = null)
 {
-    public const string Version = "15";
+    public const string Version = "16";
 
     public string HandleLine(string line)
     {
@@ -145,6 +146,15 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "bmc" when parts.Length == 1: // read-only: the board management controller's threshold sensors (IPMI)
                 if (bmc is null) return "err no BMC";
                 return bmc.Read(TimeSpan.FromSeconds(20)) is { } reply ? "ok " + GpuWire.Encode(reply) : "err " + (bmc.Error ?? "BMC not ready");
+
+            case "bmcstates" when parts.Length == 1: // read-only (protocol 16): discrete sensors' asserted states
+                if (bmc is null) return "err no BMC";
+                return bmc.States(TimeSpan.FromSeconds(20)) is { } states ? "ok " + GpuWire.Encode(states) : "err " + (bmc.Error ?? "BMC not ready");
+
+            case "bmcsel" when parts.Length == 1: // read-only (protocol 16): the System Event Log's newest entries
+                if (bmc is null) return "err no BMC";
+                try { return bmc.Sel(TimeSpan.FromSeconds(20)) is { } sel ? "ok " + GpuWire.Encode(sel) : "err " + (bmc.Error ?? "BMC not ready"); }
+                catch (IOException ex) { return "err " + ex.Message; }
 
             // Fan control (protocol 13): the one writer of fan settings. A client names itself with a random 32-hex
             // token; its zones go back to their firmware curves when it releases them or stops renewing (15 s).

@@ -49,6 +49,7 @@ public sealed class App : Application
     private int _sampling; // 1 while a poll is running: a slow driver read must not stack polls up
     private int _polls;
     private volatile bool _exiting;
+    private readonly List<System.Runtime.InteropServices.PosixSignalRegistration> _signals = [];
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -65,7 +66,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -89,6 +90,22 @@ public sealed class App : Application
                 _hub.Dispose();
                 CloseAvaloniaDBus();
             };
+            // `pkill openhw`, a logout or a systemd stop sends SIGTERM: run the same exit as the tray's Exit, so the
+            // fans OpenHW drives go back at once instead of after the helper's 15 s lease (which also kept a new
+            // instance's sets refused as "controlled by another client" meanwhile). If the UI thread is stuck, the
+            // fans are released from here and the process ends after 5 s anyway.
+            foreach (var signal in new[] { System.Runtime.InteropServices.PosixSignal.SIGTERM, System.Runtime.InteropServices.PosixSignal.SIGINT })
+                _signals.Add(System.Runtime.InteropServices.PosixSignalRegistration.Create(signal, context =>
+                {
+                    context.Cancel = true;
+                    Console.Error.WriteLine($"openhw: {context.Signal}: exiting");
+                    Dispatcher.UIThread.Post(() => lifetime.Shutdown());
+                    _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ =>
+                    {
+                        _fans.ReleaseAll();
+                        Environment.Exit(143);
+                    }, TaskScheduler.Default);
+                }));
 
             _lendFollow.Tick += (_, _) =>
             {
@@ -687,6 +704,22 @@ public sealed class App : Application
                 choice => Dispatcher.UIThread.Post(() => answer(choice)));
         public void Save() => app._settings.Save();
         public void OpenPage() => Dispatcher.UIThread.Post(app.ShowGpuLending);
+    }
+
+    // ── BMC status & event log ───────────────────────────────────────────────────────────────────────────────
+
+    private HardwareCheck.BmcLogWindow? _bmcLog;
+
+    private void ShowBmcLog()
+    {
+        if (_bmcLog is null)
+        {
+            WindowPlaces.Track(_bmcLog = new HardwareCheck.BmcLogWindow(), "bmc-log");
+            _bmcLog.Closed += (_, _) => _bmcLog = null;
+        }
+        else _bmcLog.Refresh();
+        _bmcLog.Show();
+        _bmcLog.Activate();
     }
 
     // ── Hardware Check ───────────────────────────────────────────────────────────────────────────────────────

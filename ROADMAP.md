@@ -161,7 +161,8 @@ for). Keep platform code behind interfaces now:
       buses. Needs a root scan of the others, which the BMC shares — careful; the BMC already gives all 8 temperatures.
 - [ ] **WRX90E board VR**: find out whether this board has a PMBus VR worth mapping (the TRX50's XDPE19283B entry
       doesn't apply).
-- [ ] BMC: discrete sensors (CPU_ECC, Memory_Train_ERR, PSU presence…) and the BMC's event log (SEL), read-only.
+- [x] BMC: discrete sensors (CPU_ECC, Memory_Train_ERR, PSU presence…) and the BMC's event log (SEL), read-only
+      (0.34.0, File → BMC Status & Event Log…).
 
 ## GPU lending to a VM (replaces RTXinVM) — agreed with the owner 2026-10-25
 

@@ -440,4 +440,29 @@ public sealed class FanCurveTests : IDisposable
             .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(6, saved!.Points.Count);
     }
+
+    [Fact]
+    public void GpuFanFollowsItsOwnCoreTemperatureUntilTheBmcAnswers()
+    {
+        const string Fan = "nvml:GPU-c1:fan:0", Core = "nvml:GPU-c1:temp:core";
+        var slot = new FanCurve { Id = "s", Name = "s", SensorId = "bmc:PCIE05 Temp", Points = [new(40, 30), new(80, 100)] };
+        var cpu = new FanCurve { Id = "c", Name = "c", SensorId = "bmc:CPU Package Temp", Points = [new(40, 30), new(80, 100)] };
+        var both = new FanCurve { Id = "m", Name = "m", Kind = FanCurveKind.Mix, Children = ["s", "c"] };
+        var library = new Dictionary<string, FanCurve> { ["s"] = slot, ["c"] = cpu, ["m"] = both };
+
+        // BMC silent, card readable: the slot sensor reads the card's own core temperature.
+        var own = FanCurveRunner.OwnTempReading(Fan, slot, library, id => id == Core ? 61 : null);
+        Assert.NotNull(own);
+        Assert.Equal(61, own!("bmc:PCIE05 Temp"));
+        Assert.Null(own("bmc:CPU Package Temp"));
+
+        // The BMC answers: no stand-in.
+        Assert.Null(FanCurveRunner.OwnTempReading(Fan, slot, library, id => id == Core ? 61 : 45));
+        // A missing sensor that isn't a slot sensor (CPU Package): no stand-in, the curve waits as before.
+        Assert.Null(FanCurveRunner.OwnTempReading(Fan, both, library, id => id == Core ? 61 : null));
+        // Card not readable (lent): nothing to stand in with.
+        Assert.Null(FanCurveRunner.OwnTempReading(Fan, slot, library, _ => null));
+        // Not a GPU fan.
+        Assert.Null(FanCurveRunner.OwnTempReading("bmc:1", slot, library, id => id == Core ? 61 : null));
+    }
 }
