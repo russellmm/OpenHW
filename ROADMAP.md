@@ -93,6 +93,14 @@ readback, menu entry first.
    anything else (DIMM, GPU, NVMe temps; mixes) get **OpenHW-driven duties** under a write budget (coarse steps, wide
    hysteresis, slow-downs held, a daily write count). First: decode `30 93` read-only and map the source codes (BIOS
    Q-Fan change + read back, or Redfish `Source`), confirm BMC curves keep running without OpenHW.
+   - `30 93` read refused with 0xC7 (request length) on this firmware, as OpenFan found; other lengths not tried (the
+     same command sets sources).
+   - **BIOS 1405 source codes per fan** (Q-Fan "… Q-Fan Source", BIOS emulator data, hide rules evaluated): 0 CPU,
+     1 CPU Package, 2 MotherBoard, 3 VRM_W, 4 VRM_E, 7 T_Sensor, **17 DIMM Group 1 (Max TS), 19 DIMM Group 2 (Max TS)**,
+     18 USB4 Thermistor, 99 Multiple Sources (up to three; hidden here: Chipset 5/6, T_Sensor 1/2, DIMM.2 9–12, water
+     13–16). So **DIMM temperatures can be BMC-run** — only GPU-following curves need OpenHW-driven duties. Redfish
+     shows `Source` 1 on all zones while the BIOS default is 0 → to check whether BMC and BIOS codes match (set one fan
+     in BIOS, reboot, read Redfish).
 5. [ ] **Stage 2 — curves** (port OpenFan's curve engine: graph / mix / flat, hysteresis; any OpenHW sensor incl.
    BMC DIMM temps; run the loop in the helper; import the owner's `openfan11_14.json` re-pointed to BMC zones) and
    OpenFan as a client of the driver until it's retired. UI (Power → Fan Control…): per header the current mode, RPM and duty; manual duty; curves from any sensor
