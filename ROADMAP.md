@@ -45,9 +45,11 @@ readback, menu entry first.
      ch6 100 % (pump), ch7 unused — the same curves the BIOS Q-Fan writes into the NCT6798. Channel → header mapping
      inferred, to verify. Writes (PATCH of that `Oem` block) presumably need a BMC account: not tried.
    - **BMC account done (owner, 2026-11-16)**: user `openhw` (Administrator; created in the BMC web UI — the BIOS
-     page didn't offer it), password in the owner's `/mnt/SOLIDIGM/Claude/.secrets/BMC_openhw` (password only). The
-     owner's own test: Redfish login → **200**. The web console refuses `openhw` (an AMI web-access setting; not
-     needed). Account list is readable without a login: `/redfish/v1/AccountService/Accounts` (5 = openhw).
+     page didn't offer it), password in the owner's `/mnt/SOLIDIGM/Claude/.secrets/BMC_openhw` (user on line 1,
+     password on line 2). **Reads prove nothing here**: over the host interface every GET succeeds without a login,
+     even with bogus credentials (so a first "200" test was meaningless). The real test is a session login (POST
+     SessionService/Sessions: 201 accepted, 401 refused — a bogus login gets 401): `tools/bmc-probe/login-test.sh
+     <file>`, run by the owner. The web console refuses `openhw` (an AMI web-access setting; maybe not needed). Account list is readable without a login: `/redfish/v1/AccountService/Accounts` (5 = openhw).
      OpenHW's helper reads the login from a root-only copy (to decide: `/etc/openhw/bmc-login` 0600, installed from
      the owner's file) — never in the user's config. Claude never signs in to the BMC itself; authenticated checks are
      run by the owner. The helper's sandbox
