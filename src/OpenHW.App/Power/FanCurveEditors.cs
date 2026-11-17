@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -38,6 +39,143 @@ public sealed class FanCurveSensors(Sensors.SensorHub hub, FanCurveRunner runner
     public double? Reading(string id) => hub.Get(id).Current;
 
     private static IEnumerable<Sensors.SensorView> Flatten(IEnumerable<Sensors.SensorView> views) => views.SelectMany(v => Flatten(v.Children).Prepend(v));
+}
+
+/// <summary>
+/// The temperature source of a graph: one sensor or several ("bulk": the hottest counts — what the BMC does with a fan's
+/// ticked sensors, as in its web console's checkbox list). A dropdown-like button; its flyout has a checkbox per sensor,
+/// the BMC's own first (no flash writes), quick All DIMMs / All PCIe slots toggles, and each sensor's live reading.
+/// </summary>
+public sealed class SensorPicker : Button
+{
+    private readonly IReadOnlyList<FanSensorChoice> _choices;
+    private readonly Func<string, double?> _reading;
+    private readonly Action<IReadOnlyList<string>> _changed;
+    private readonly List<(FanSensorChoice Choice, CheckBox Box)> _boxes = [];
+    private readonly TextBlock _summary = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private List<string> _selected;
+    private bool _suppress;
+
+    protected override Type StyleKeyOverride => typeof(Button);
+
+    public SensorPicker(IReadOnlyList<FanSensorChoice> choices, IReadOnlyList<string> selected, Func<string, double?> reading,
+        Action<IReadOnlyList<string>> changed, double width = 270)
+    {
+        _choices = choices;
+        _reading = reading;
+        _changed = changed;
+        _selected = [.. selected];
+        Width = width;
+        HorizontalAlignment = HorizontalAlignment.Left;
+        HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        Padding = new Thickness(10, 4);
+        Background = Palette.Window;
+        BorderBrush = FooterIcons.ButtonEdge;
+        BorderThickness = new Thickness(1);
+        Foreground = Palette.Text;
+        var arrow = new TextBlock { Text = "▾", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(arrow, Dock.Right);
+        Content = new DockPanel { Children = { arrow, _summary } };
+
+        var list = new StackPanel { Spacing = 1 };
+        Button Group(string text, Func<FanSensorChoice, bool> which)
+        {
+            var b = AlertUi.Button(text, () => Toggle(which));
+            b.Padding = new Thickness(8, 1);
+            return b;
+        }
+        list.Children.Add(AlertUi.Row(Group("All DIMMs", c => c.Bmc && c.Label.Contains("DIMM", StringComparison.Ordinal)),
+            Group("All PCIe slots", c => c.Bmc && c.Label.Contains("PCIE", StringComparison.Ordinal))));
+        void Header(string text, IBrush brush) =>
+            list.Children.Add(new TextBlock { Text = text, Foreground = brush, FontSize = 11, Margin = new Thickness(0, 6, 0, 2) });
+        Header("BMC sensors — the BMC can run these (no flash writes after Apply)", CurveUi.BmcLine);
+        foreach (var c in choices.Where(c => c.Bmc)) Add(list, c);
+        Header("Other sensors — ⚠ on a BMC fan, OpenHW drives it (flash writes)", CurveUi.Warn);
+        foreach (var c in choices.Where(c => !c.Bmc)) Add(list, c);
+        foreach (var id in _selected.Where(id => choices.All(c => c.Id != id)))
+            Add(list, new FanSensorChoice(id, id + " (not present)", false));
+        var flyout = new Flyout
+        {
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            Content = new ScrollViewer { MaxHeight = 520, Width = 440, Content = list },
+        };
+        flyout.Opening += (_, _) => Refresh();
+        Flyout = flyout;
+        UpdateSummary();
+    }
+
+    public IReadOnlyList<string> Selected => _selected;
+
+    private void Add(StackPanel list, FanSensorChoice c)
+    {
+        var box = new CheckBox { Content = new TextBlock { Text = c.Label }, IsChecked = _selected.Contains(c.Id), Padding = new Thickness(4, 0) };
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if (_suppress) return;
+            var now = _boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Choice.Id).ToList();
+            if (now.Count == 0) { _suppress = true; box.IsChecked = true; _suppress = false; return; } // a graph needs a sensor
+            Commit(now);
+        };
+        _boxes.Add((c, box));
+        list.Children.Add(box);
+    }
+
+    /// <summary>Ticks every sensor of a group, or unticks them all when they're all ticked (one stays if nothing else is).</summary>
+    public void Toggle(Func<FanSensorChoice, bool> which)
+    {
+        var group = _boxes.Where(b => which(b.Choice)).ToList();
+        if (group.Count == 0) return;
+        var all = group.All(b => b.Box.IsChecked == true);
+        _suppress = true;
+        foreach (var b in group) b.Box.IsChecked = !all;
+        if (_boxes.All(b => b.Box.IsChecked != true)) group[0].Box.IsChecked = true;
+        _suppress = false;
+        Commit(_boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Choice.Id).ToList());
+    }
+
+    /// <summary>Ticks exactly these sensors (tests).</summary>
+    public void Select(IEnumerable<string> ids)
+    {
+        var set = ids.ToHashSet();
+        _suppress = true;
+        foreach (var b in _boxes) b.Box.IsChecked = set.Contains(b.Choice.Id);
+        _suppress = false;
+        Commit(_boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Choice.Id).ToList());
+    }
+
+    private void Commit(List<string> ids)
+    {
+        if (ids.SequenceEqual(_selected)) return;
+        _selected = ids;
+        UpdateSummary();
+        _changed(ids);
+    }
+
+    /// <summary>Live readings in the list (on opening).</summary>
+    public void Refresh()
+    {
+        foreach (var (c, box) in _boxes)
+            ((TextBlock)box.Content!).Text = _reading(c.Id) is { } v ? $"{c.Label}   —   {v:0.#} °C" : c.Label;
+    }
+
+    private void UpdateSummary()
+    {
+        _summary.Text = Summary(_selected, _choices);
+        ToolTip.SetTip(this, _selected.Count > 1
+            ? "Follows the hottest of:\n" + string.Join("\n", _selected.Select(id => _choices.FirstOrDefault(c => c.Id == id)?.Label ?? id))
+            : "Click to choose one sensor or several (the hottest counts)");
+    }
+
+    public static string Summary(IReadOnlyList<string> ids, IReadOnlyList<FanSensorChoice> choices)
+    {
+        string Label(string id) => (choices.FirstOrDefault(c => c.Id == id)?.Label ?? id).Replace("BMC · ", "") is var l && l.StartsWith(BmcEngine.IdPrefix, StringComparison.Ordinal) ? l[BmcEngine.IdPrefix.Length..] : l;
+        return ids.Count switch
+        {
+            0 => "choose a temperature",
+            1 => Label(ids[0]),
+            _ => $"Hottest of {ids.Count}: " + string.Join(", ", ids.Select(Label)),
+        };
+    }
 }
 
 /// <summary>Shared look for the curve windows.</summary>
@@ -84,7 +222,7 @@ internal static class CurveUi
     public static string Describe(FanCurve c, IReadOnlyList<FanSensorChoice> choices) => c.Kind switch
     {
         FanCurveKind.Flat => $"flat {c.Percent:0} %",
-        FanCurveKind.Graph => "graph on " + (choices.FirstOrDefault(x => x.Id == c.SensorId)?.Label ?? c.SensorId ?? "no sensor"),
+        FanCurveKind.Graph => "graph on " + SensorPicker.Summary(c.Inputs, choices),
         _ => $"{c.Function.ToString().ToLowerInvariant()} of {c.Children.Count}",
     };
 
@@ -105,7 +243,7 @@ public sealed class GraphEditorWindow : Window
     private readonly FanCurve _edit;
     private readonly Action<FanCurve> _onOk;
     private readonly Canvas _plot = new() { Height = 360, Background = new SolidColorBrush(Color.Parse("#11161A")), ClipToBounds = true };
-    private readonly ComboBox _sensor = new() { Width = 420 };
+    private SensorPicker _sensor = null!;
     private readonly TextBlock _temp = new() { Foreground = Palette.Footnote };
     private readonly TextBlock _where = new() { TextWrapping = TextWrapping.Wrap };
     private readonly NumericUpDown _selTemp = CurveUi.Number(0, 0, 100, 0.5, "0.#", 130), _selPct = CurveUi.Number(0, 0, 100, 1, "0", 130);
@@ -126,13 +264,7 @@ public sealed class GraphEditorWindow : Window
         var name = new TextBox { Text = _edit.Name, Width = 220 };
         name.TextChanged += (_, _) => { if (!string.IsNullOrWhiteSpace(name.Text)) _edit.Name = name.Text.Trim(); };
         _choices = sensors.Choices();
-        foreach (var c in _choices) _sensor.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = c.Label + (c.Bmc ? "" : "   ⚠ flash writes") }, Tag = c.Id });
-        _sensor.SelectedItem = _sensor.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == _edit.SensorId);
-        _sensor.PlaceholderText = _edit.SensorId is null ? "choose a temperature" : $"{_edit.SensorId} (not present)";
-        _sensor.SelectionChanged += (_, _) =>
-        {
-            if ((_sensor.SelectedItem as ComboBoxItem)?.Tag is string id) { _edit.SensorId = id; RefreshTemp(); Refit(); }
-        };
+        _sensor = new SensorPicker(_choices, _edit.Inputs, sensors.Reading, ids => { _edit.SetInputs(ids); RefreshTemp(); Refit(); }, 420);
 
         var hystC = CurveUi.Number(_edit.HysteresisC, 0, 20, 0.5, "0.#", 130);
         var hystS = CurveUi.Number(_edit.HysteresisS, 0, 120, 1, "0", 130);
@@ -223,7 +355,7 @@ public sealed class GraphEditorWindow : Window
     {
         var library = new Dictionary<string, FanCurve>(_sensors.Runner.Store.Library) { [_edit.Id] = _edit };
         _plan = BmcCurveFit.Plan(_edit, library, _sensors.Runner.BmcNumber, 1, _sensors.Runner.Store.FourthAt70);
-        var (text, brush) = _edit.SensorId is null ? ("Choose a temperature sensor.", Palette.Footnote) : CurveUi.Where(_plan, _choices);
+        var (text, brush) = _edit.Inputs.Count == 0 ? ("Choose a temperature sensor.", Palette.Footnote) : CurveUi.Where(_plan, _choices);
         _where.Text = text;
         _where.Foreground = brush;
         Render();
@@ -242,7 +374,7 @@ public sealed class GraphEditorWindow : Window
             Line(X(t), Pad / 2, X(t), H - Pad, CurveUi.GridLine);
             Text($"{t:0}°", X(t) - 9, H - Pad + 8);
         }
-        if (_edit.SensorId is { } id && _sensors.Reading(id) is { } now && now >= TMin && now <= TMax)
+        if (FanCurveMath.Hottest(_edit, _sensors.Reading) is { } now && now >= TMin && now <= TMax)
             Line(X(now), Pad / 2, X(now), H - Pad, CurveUi.Marker, 1.5, [3, 3]);
         if (_edit.MaxSpeedPercent is > 0 and < 100)
             Line(Pad, Y(_edit.MaxSpeedPercent), W - Pad / 2, Y(_edit.MaxSpeedPercent), CurveUi.Dot, 1.5, [4, 3]);
@@ -259,7 +391,7 @@ public sealed class GraphEditorWindow : Window
             _plot.Children.Add(new Polygon { Fill = CurveUi.AreaFill, Points = area });
             _plot.Children.Add(new Polyline { Stroke = Brushes.White, StrokeThickness = 2.5, Points = new AvaloniaList<Point>(line) });
         }
-        if (_plan is { OnBmc: true } plan && _edit.SensorId is not null)
+        if (_plan is { OnBmc: true } plan && _edit.Inputs.Count > 0)
         {
             var temps = new List<double> { TMin };
             temps.AddRange(plan.Points.Select(p => (double)p.TemperatureC).Where(t => t > TMin && t < TMax));
@@ -298,8 +430,9 @@ public sealed class GraphEditorWindow : Window
 
     private void RefreshTemp()
     {
-        var t = _edit.SensorId is { } id ? _sensors.Reading(id) : null;
-        _temp.Text = t is null ? (_edit.SensorId is null ? "no sensor selected" : "reading unavailable") : $"{t:0.0} °C";
+        var t = FanCurveMath.Hottest(_edit, _sensors.Reading);
+        _temp.Text = t is null ? (_edit.Inputs.Count == 0 ? "no sensor selected" : "reading unavailable")
+            : $"{t:0.0} °C" + (_edit.Inputs.Count > 1 ? $" (hottest of {_edit.Inputs.Count})" : "");
         Render();
     }
 

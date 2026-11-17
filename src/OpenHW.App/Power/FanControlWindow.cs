@@ -618,6 +618,10 @@ public sealed class FanControlWindow : Window
 
     private IReadOnlyList<(int Number, string Name)> _sensorsNames => _runner.BmcSensors();
 
+    /// <summary>When the BMC's version of a mix differs from what the mix means, and how (null when it's the same).</summary>
+    public static string? MixWarning(FanCurve mix, IReadOnlyDictionary<string, FanCurve> library, BmcCurvePlan plan) =>
+        CurveCard.MixWarning(mix, library, plan);
+
     /// <summary>Curve cards as shown: the saved order first, then flat, graph, mix, each by name.</summary>
     public List<FanCurve> CurvesInOrder()
     {
@@ -782,6 +786,9 @@ public sealed class FanControlWindow : Window
         private readonly TextBlock _where = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _sensorNow = new() { FontSize = 12, Foreground = Secondary };
         private readonly Canvas _preview = new() { Height = 60, ClipToBounds = true };
+        private readonly TextBlock _mixNote = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = CurveUi.Warn, IsVisible = false };
+        private BmcCurvePlan? _mixPlan;
+        private double[]? _mixWanted;
         public readonly Border Root;
 
         public CurveCard(FanControlWindow w, FanCurve curve)
@@ -857,18 +864,12 @@ public sealed class FanControlWindow : Window
         private void BuildGraph(StackPanel body)
         {
             body.Children.Add(new TextBlock { Text = "Temperature source", FontSize = 11, Foreground = Secondary });
-            var sensor = new ComboBox { Width = 270, HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Left };
-            foreach (var c in _w._choices)
-                sensor.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = c.Label + (c.Bmc ? "" : "   ⚠") }, Tag = c.Id });
-            sensor.SelectedItem = sensor.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == _curve.SensorId);
-            sensor.PlaceholderText = _curve.SensorId is null ? "choose a temperature" : _curve.SensorId;
-            sensor.SelectionChanged += (_, _) =>
+            var sensor = new SensorPicker(_w._choices, _curve.Inputs, id => _w._hub.Get(id).Current, ids =>
             {
-                if ((sensor.SelectedItem as ComboBoxItem)?.Tag is not string id || id == _curve.SensorId) return;
-                _curve.SensorId = id;
+                _curve.SetInputs(ids);
                 _w.Save();
                 Update();
-            };
+            });
             var edit = new Button { Content = "Edit", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = CurveUi.Dot, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Bottom };
             edit.Click += (_, _) => _w.EditGraph(_curve);
             var row = new DockPanel();
@@ -917,6 +918,68 @@ public sealed class FanControlWindow : Window
             body.Children.Add(add);
             body.Children.Add(list);
             body.Children.Add(_output);
+            body.Children.Add(_preview);
+            body.Children.Add(_mixNote);
+            ToolTip.SetTip(_preview, "White: this mix with every sensor at the same temperature (what the BMC's one curve is fitted to).\n" +
+                                     "Green dashed: the 5-point curve the BMC would run. Dot: now, at the hottest of the mix's sensors.");
+            _preview.SizeChanged += (_, _) => DrawMixPreview();
+        }
+
+        /// <summary>
+        /// The mix as the BMC would run it: white = the mix with every sensor at the same temperature (what the BMC's one
+        /// curve is fitted to), green dashed = the fitted 5-point BMC curve, dot = now (the hottest of the mix's sensors).
+        /// </summary>
+        private void DrawMixPreview()
+        {
+            _preview.Children.Clear();
+            if (_mixPlan is not { OnBmc: true } plan || _mixWanted is not { } g) return;
+            var w = Math.Max(_preview.Bounds.Width, 40);
+            var h = _preview.Height;
+            const double pad = 4, tMin = 20, tMax = 100;
+            double X(double t) => pad + (t - tMin) / (tMax - tMin) * (w - 2 * pad);
+            double Y(double p) => h - pad - p / 100.0 * (h - 2 * pad);
+            var wanted = Enumerable.Range((int)tMin * 2, (int)(tMax - tMin) * 2 + 1).Select(i => new Point(X(i / 2.0), Y(g[i]))).ToList();
+            _preview.Children.Add(new Polygon { Fill = CurveUi.AreaFill, Points = new AvaloniaList<Point>(wanted) { new(X(tMax), Y(0)), new(X(tMin), Y(0)) } });
+            _preview.Children.Add(new Polyline { Stroke = Brushes.White, StrokeThickness = 1.5, Points = new AvaloniaList<Point>(wanted) });
+            var temps = new List<double> { tMin };
+            temps.AddRange(plan.Points.Select(p => (double)p.TemperatureC).Where(t => t > tMin && t < tMax));
+            temps.Add(tMax);
+            _preview.Children.Add(new Polyline
+            {
+                Stroke = CurveUi.BmcLine, StrokeThickness = 1.5, StrokeDashArray = [4, 3],
+                Points = new AvaloniaList<Point>(temps.Select(t => new Point(X(t), Y(BmcCurveFit.Duty(plan.Points, t))))),
+            });
+            var library = _w._runner.Store.Library;
+            if (FanCurveMath.Sensors(_curve, library).Select(id => _w._hub.Get(id).Current).OfType<double>().DefaultIfEmpty(double.NaN).Max() is var now && !double.IsNaN(now))
+            {
+                var t = Math.Clamp(now, tMin, tMax);
+                var dot = new Ellipse { Width = 9, Height = 9, Fill = CurveUi.BmcLine, Stroke = Brushes.White, StrokeThickness = 1 };
+                Canvas.SetLeft(dot, X(t) - 4.5);
+                Canvas.SetTop(dot, Y(BmcCurveFit.Duty(plan.Points, now)) - 4.5);
+                _preview.Children.Add(dot);
+            }
+        }
+
+        /// <summary>When the BMC's version differs from what the mix means, and how.</summary>
+        public static string? MixWarning(FanCurve mix, IReadOnlyDictionary<string, FanCurve> library, BmcCurvePlan plan)
+        {
+            if (!plan.OnBmc) return null;
+            var children = mix.Children.Where(library.ContainsKey).Select(id => library[id]).ToList();
+            var graphs = children.Where(c => c.Kind == FanCurveKind.Graph).ToList();
+            var inputs = graphs.Select(c => string.Join("|", c.Inputs.OrderBy(x => x))).Distinct().Count();
+            var notes = new List<string>();
+            if (inputs > 1)
+            {
+                if (mix.Function != FanMixFunction.Max)
+                    notes.Add($"⚠ The BMC follows only the hottest sensor, so {mix.Function.ToString().ToLowerInvariant()} can't be kept: " +
+                              "the fan runs as if every sensor were that hot (never slower than this mix, often faster).");
+                else if (graphs.Select(c => string.Join(";", c.Points.OrderBy(p => p.TemperatureC)) + c.MaxSpeedPercent).Distinct().Count() > 1)
+                    notes.Add("⚠ Different curves on different sensors: the BMC uses the higher curve at the hottest sensor, so the fan " +
+                              "runs faster than this mix when a cooler sensor has the higher curve (never slower).");
+            }
+            if (plan.MaxExtraPercent >= 1)
+                notes.Add($"The 5-point BMC curve runs up to {plan.MaxExtraPercent:0} % above it (at {plan.MaxExtraAtC:0.#} °C).");
+            return notes.Count == 0 ? null : string.Join(" ", notes);
         }
 
         public void Update()
@@ -925,11 +988,22 @@ public sealed class FanControlWindow : Window
             _output.Text = _w._runner.Output(_curve, reading) is { } o ? $"{o:0.#} %" : "—";
             if (_curve.Kind == FanCurveKind.Graph)
             {
-                var t = _curve.SensorId is { } id ? reading(id) : null;
-                _sensorNow.Text = t is { } v ? $"at {v:0.#} °C" : _curve.SensorId is null ? "no sensor" : "no reading";
+                var t = FanCurveMath.Hottest(_curve, reading);
+                _sensorNow.Text = t is { } v ? $"at {v:0.#} °C" : _curve.Inputs.Count == 0 ? "no sensor" : "no reading";
                 DrawPreview();
             }
             var library = _w._runner.Store.Library;
+            if (_curve.Kind == FanCurveKind.Mix)
+            {
+                var plan = _curve.Children.Count == 0 ? null : _w._runner.PlanCurve(_curve);
+                _mixPlan = plan;
+                _mixWanted = plan is { OnBmc: true } ? BmcCurveFit.Requested(_curve, library, 1) : null;
+                var warning = plan is null ? null : MixWarning(_curve, library, plan);
+                _mixNote.Text = warning ?? "";
+                _mixNote.IsVisible = warning is not null;
+                _mixNote.Foreground = warning?.StartsWith('⚠') == true ? CurveUi.Warn : Secondary;
+                DrawMixPreview();
+            }
             var sensors = FanCurveMath.Sensors(_curve, library);
             var onBmc = sensors.All(s => _w._runner.BmcNumber(s) is not null);
             var fans = _w._runner.Store.Assignments.Where(a => a.Value == _curve.Id).Select(a => _w.Controls().FirstOrDefault(c => c.Id == a.Key)?.Title ?? a.Key).ToList();
@@ -957,7 +1031,7 @@ public sealed class FanControlWindow : Window
             var line = xs.Select(t => new Point(X(t), Y(FanCurveMath.Graph(pts, t, _curve.MaxSpeedPercent)))).ToList();
             _preview.Children.Add(new Polygon { Fill = CurveUi.AreaFill, Points = new AvaloniaList<Point>(line) { new(X(tMax), Y(0)), new(X(tMin), Y(0)) } });
             _preview.Children.Add(new Polyline { Stroke = Brushes.White, StrokeThickness = 1.5, Points = new AvaloniaList<Point>(line) });
-            if (_curve.SensorId is { } id && _w._hub.Get(id).Current is { } now)
+            if (FanCurveMath.Hottest(_curve, id => _w._hub.Get(id).Current) is { } now)
             {
                 var t = Math.Clamp(now, tMin, tMax);
                 var dot = new Ellipse { Width = 9, Height = 9, Fill = CurveUi.Dot, Stroke = Brushes.White, StrokeThickness = 1 };

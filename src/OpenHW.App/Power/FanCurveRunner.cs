@@ -68,11 +68,13 @@ public sealed class FanCurveRunner(FanClient client, FanCurveStore store, Func<D
     private readonly Dictionary<string, BmcCurvePlan> _plans = new(StringComparer.Ordinal);
 
     /// <summary>The BMC version of a curve for a zone (fitting takes a moment: cached per curve content).</summary>
-    public BmcCurvePlan Plan(string zoneId, FanCurve curve)
+    public BmcCurvePlan Plan(string zoneId, FanCurve curve) =>
+        IsGpu(zoneId) ? new BmcCurvePlan(false, null, [], 0, 0, []) : PlanCurve(curve, FanDriver.MinDuty(ZoneIndex(zoneId)));
+
+    /// <summary>A curve's BMC version for a fan with this floor (cached per curve content; the mix cards' preview uses floor 1).</summary>
+    public BmcCurvePlan PlanCurve(FanCurve curve, int floor = 1)
     {
-        if (IsGpu(zoneId)) return new BmcCurvePlan(false, null, [], 0, 0, []);
         var library = store.Library;
-        var floor = FanDriver.MinDuty(ZoneIndex(zoneId));
         var key = $"{floor}|{store.FourthAt70}|" + string.Join("|", Tree(curve, library).Select(c => System.Text.Json.JsonSerializer.Serialize(c)));
         lock (_gate)
         {

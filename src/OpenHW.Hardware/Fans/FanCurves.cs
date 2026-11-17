@@ -16,7 +16,8 @@ public readonly record struct FanGraphPoint(double TemperatureC, double Percent)
 /// <summary>
 /// A fan curve, as OpenFan defines them (ported from OpenFan.Core: GraphCurve, MixCurve, FanController.Evaluate):
 /// <list type="bullet">
-///   <item><b>Graph</b>: any number of points over one temperature sensor, straight lines between them, flat before the
+///   <item><b>Graph</b>: any number of points over a temperature — one sensor, or the <b>hottest</b> of several ("bulk
+///   sensors", as the BMC follows the hottest of a fan's ticked sensors) — straight lines between them, flat before the
 ///   first and after the last; capped at <see cref="MaxSpeedPercent"/>; hysteresis in °C and seconds.</item>
 ///   <item><b>Flat</b>: one fixed duty.</item>
 ///   <item><b>Mix</b>: the max, min or average of other (non-mix) curves.</item>
@@ -28,7 +29,23 @@ public sealed class FanCurve
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public FanCurveKind Kind { get; set; } = FanCurveKind.Graph;
+    /// <summary>The graph's sensor (the first of <see cref="SensorIds"/> when there are several; kept for older files).</summary>
     public string? SensorId { get; set; }
+
+    /// <summary>Several sensors: the graph follows the hottest. Empty = just <see cref="SensorId"/>.</summary>
+    public List<string> SensorIds { get; set; } = [];
+
+    /// <summary>The sensors a graph reads (the hottest counts).</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> Inputs => SensorIds.Count > 0 ? SensorIds : SensorId is { } s ? [s] : [];
+
+    /// <summary>Sets the graph's sensors (one or several).</summary>
+    public void SetInputs(IEnumerable<string> ids)
+    {
+        SensorIds = ids.Where(i => !string.IsNullOrWhiteSpace(i)).Distinct().ToList();
+        SensorId = SensorIds.FirstOrDefault();
+        if (SensorIds.Count <= 1) SensorIds = [];
+    }
     public List<FanGraphPoint> Points { get; set; } = [];
     public double Percent { get; set; } = 50;
     public FanMixFunction Function { get; set; } = FanMixFunction.Max;
@@ -41,7 +58,7 @@ public sealed class FanCurve
 
     public FanCurve Clone() => new()
     {
-        Id = Id, Name = Name, Kind = Kind, SensorId = SensorId, Points = [.. Points], Percent = Percent, Function = Function,
+        Id = Id, Name = Name, Kind = Kind, SensorId = SensorId, SensorIds = [.. SensorIds], Points = [.. Points], Percent = Percent, Function = Function,
         Children = [.. Children], HysteresisC = HysteresisC, HysteresisS = HysteresisS, MinTempC = MinTempC, MaxTempC = MaxTempC,
         MaxSpeedPercent = MaxSpeedPercent,
     };
@@ -92,7 +109,7 @@ public static class FanCurveMath
                 case FanCurveKind.Flat:
                     return Math.Clamp(curve.Percent, 0, 100);
                 case FanCurveKind.Graph:
-                    return curve.SensorId is { } id && reading(id) is { } t ? Graph(curve.Points, t, curve.MaxSpeedPercent) : null;
+                    return Hottest(curve, reading) is { } t ? Graph(curve.Points, t, curve.MaxSpeedPercent) : null;
                 default:
                     var values = curve.Children.Select(c => library.TryGetValue(c, out var child) ? Evaluate(child, library, reading, stack) : null)
                         .OfType<double>().ToList();
@@ -103,6 +120,10 @@ public static class FanCurveMath
         finally { stack.Remove(curve.Id); }
     }
 
+    /// <summary>A graph's input now: the hottest of its sensors that has a reading, or null when none has.</summary>
+    public static double? Hottest(FanCurve curve, Func<string, double?> reading) =>
+        curve.Inputs.Select(reading).OfType<double>().Cast<double?>().DefaultIfEmpty(null).Max();
+
     /// <summary>Every sensor a curve reads (through its mix children).</summary>
     public static IReadOnlyList<string> Sensors(FanCurve curve, IReadOnlyDictionary<string, FanCurve> library)
     {
@@ -110,7 +131,9 @@ public static class FanCurveMath
         void Walk(FanCurve c, HashSet<string> stack)
         {
             if (!stack.Add(c.Id)) return;
-            if (c.Kind == FanCurveKind.Graph && c.SensorId is { } s && !found.Contains(s)) found.Add(s);
+            if (c.Kind == FanCurveKind.Graph)
+                foreach (var s in c.Inputs)
+                    if (!found.Contains(s)) found.Add(s);
             if (c.Kind == FanCurveKind.Mix)
                 foreach (var child in c.Children)
                     if (library.TryGetValue(child, out var cc)) Walk(cc, stack);

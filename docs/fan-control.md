@@ -1,7 +1,7 @@
 # Fan control — design
 
 How OpenHW controls fans on the owner's ASUS Pro WS WRX90E-SAGE SE, what the hardware actually does, and why the
-design looks the way it does. Status as of 0.31.0 (2026-11-17). Plan and history: [ROADMAP.md](../ROADMAP.md)
+design looks the way it does. Status as of 0.32.0 (2026-11-17). Plan and history: [ROADMAP.md](../ROADMAP.md)
 "Fan control"; release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Goals (owner)
@@ -189,6 +189,12 @@ Not yet checked: whether a slot still reads while its card is lent to the VM.
   show Apply, and Apply all writes the pending ones after one confirm. 0.30.0: card order (`ControlOrder`, card ⋮ Move
   left/right/start/end; absent fans keep their place; part of configurations). 0.31.0: drag and drop for fan and curve
   cards (`CardDrag`: plain pointer events, 6 px threshold, orange side bar on the target; `CurveOrder`).
+- **Bulk sensors (0.32.0)**: `FanCurve.SensorIds` (`Inputs`; `SensorId` = the first, for older files) — a graph's input is
+  the hottest reading (`FanCurveMath.Hottest`); on the BMC that's the source bitmask with all of them, so it's exact.
+  Picker: `SensorPicker` (checkbox flyout, BMC first, All DIMMs / All PCIe slots).
+- **Mix cards (0.32.0)**: preview of g(T) and the fitted BMC curve (`FanCurveRunner.PlanCurve`, cached), and
+  `MixWarning`: Min/Average over different sensors, or Max over different curves on different sensors, can't be kept by
+  the BMC (never slower; can be faster). Same curve on different sensors = bulk sensor = exact.
 - **NVIDIA fans (0.26.0)**: `GpuFanDriver` in the helper (protocol 15: `gpufans`, `gpufanset <token> nvml:<uuid>:fan:<n>
   <0–100>`, `gpufanrelease`; `fanbeat` renews both drivers' leases). NVML `nvmlDeviceSetFanSpeed_v2` / `…SetDefaultFanSpeed_v2`
   (0 % = automatic, others ≥ the card's minimum, from `nvmlDeviceGetMinMaxFanSpeed`). Released fans, expired leases

@@ -89,6 +89,25 @@ public sealed class FanCurveFitTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void ABulkSensorGraphFollowsTheHottestAndRunsExactlyOnTheBmc()
+    {
+        var dimms = Graph("dimms", "bmc:DIMMA1_Temp", (45, 30), (60, 74), (75, 100));
+        dimms.SetInputs(["bmc:DIMMA1_Temp", "bmc:PCIE01 Temp"]);
+        var lib = new Dictionary<string, FanCurve>(Library) { ["dimms"] = dimms };
+        Assert.Equal(["bmc:DIMMA1_Temp", "bmc:PCIE01 Temp"], FanCurveMath.Sensors(dimms, lib));
+        double? Read(string id) => id == "bmc:DIMMA1_Temp" ? 50 : id == "bmc:PCIE01 Temp" ? 60 : null;
+        Assert.Equal(74, FanCurveMath.Evaluate(dimms, lib, Read)); // the hottest: 60 °C
+        Assert.Equal(30, FanCurveMath.Evaluate(dimms, lib, id => id == "bmc:DIMMA1_Temp" ? 40 : null)); // a missing one is skipped
+        var plan = BmcCurveFit.Plan(dimms, lib, Bmc);
+        Assert.True(plan.OnBmc);
+        Assert.Equal(1L << 3 | 1L << 11, plan.SourceMask);
+        Assert.True(plan.MaxExtraPercent < 0.5, "the BMC does exactly this: no approximation");
+        dimms.SetInputs(["bmc:DIMMA1_Temp"]);
+        Assert.Empty(dimms.SensorIds); // one sensor: the plain form, as older files have it
+        Assert.Equal("bmc:DIMMA1_Temp", dimms.SensorId);
+    }
+
+    [Fact]
     public void EvaluateMatchesOpenFan()
     {
         Assert.Equal(30, FanCurveMath.Graph(Slot5.Points, 20));

@@ -211,6 +211,45 @@ public sealed class FanCurveTests : IDisposable
         Assert.Equal(store.ControlOrder, FanCurveStore.Load(store.FilePath).ControlOrder);
     }
 
+    [Fact]
+    public void MixCardsWarnWhenTheBmcCantKeepTheMix()
+    {
+        var store = Store();
+        var a = new FanCurve { Id = "a", Name = "a", SensorId = "bmc:PCIE01 Temp", Points = [new(40, 30), new(80, 100)] };
+        var b = new FanCurve { Id = "b", Name = "b", SensorId = "bmc:CPU Package Temp", Points = [new(40, 30), new(80, 100)] };
+        var c = new FanCurve { Id = "c", Name = "c", SensorId = "bmc:CPU Package Temp", Points = [new(50, 20), new(70, 100)] };
+        var floor = new FanCurve { Id = "f", Name = "f", Kind = FanCurveKind.Flat, Percent = 30 };
+        store.Curves.AddRange([a, b, c, floor]);
+        var runner = Runner(store);
+        string? Warn(FanCurve mix)
+        {
+            store.Curves.RemoveAll(x => x.Id == mix.Id);
+            store.Curves.Add(mix);
+            return FanControlWindow.MixWarning(mix, store.Library, runner.PlanCurve(mix));
+        }
+        Assert.Null(Warn(new FanCurve { Id = "m", Kind = FanCurveKind.Mix, Children = ["a", "f"] })); // one sensor + a floor: exact
+        Assert.Null(Warn(new FanCurve { Id = "m", Kind = FanCurveKind.Mix, Children = ["a", "b"] })); // same curve on two sensors = bulk: exact
+        Assert.StartsWith("⚠ Different curves", Warn(new FanCurve { Id = "m", Kind = FanCurveKind.Mix, Children = ["a", "c"] }), StringComparison.Ordinal);
+        Assert.StartsWith("⚠ The BMC follows only the hottest sensor, so min", Warn(new FanCurve { Id = "m", Kind = FanCurveKind.Mix, Function = FanMixFunction.Min, Children = ["a", "b"] }), StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void TheSensorPickerTicksSeveralAndWholeGroups()
+    {
+        FanSensorChoice[] choices = [new("bmc:CPU Package Temp", "BMC · CPU Package Temp", true), new("bmc:DIMMA1_Temp", "BMC · DIMMA1_Temp", true),
+            new("bmc:DIMMB1_Temp", "BMC · DIMMB1_Temp", true), new("bmc:PCIE01 Temp", "BMC · PCIE01 Temp", true), new("nvml:x", "GPU Temperature · GPU", false)];
+        IReadOnlyList<string>? got = null;
+        var picker = new SensorPicker(choices, ["bmc:DIMMA1_Temp"], _ => 40, ids => got = ids);
+        Assert.Equal("DIMMA1_Temp", SensorPicker.Summary(picker.Selected, choices));
+        picker.Toggle(c => c.Bmc && c.Label.Contains("DIMM", StringComparison.Ordinal));
+        Assert.Equal(["bmc:DIMMA1_Temp", "bmc:DIMMB1_Temp"], got);
+        Assert.Equal("Hottest of 2: DIMMA1_Temp, DIMMB1_Temp", SensorPicker.Summary(got!, choices));
+        picker.Toggle(c => c.Bmc && c.Label.Contains("DIMM", StringComparison.Ordinal)); // all ticked → untick, but keep one
+        Assert.Equal(["bmc:DIMMA1_Temp"], got);
+        picker.Select(["bmc:CPU Package Temp", "nvml:x"]);
+        Assert.Equal(["bmc:CPU Package Temp", "nvml:x"], got);
+    }
+
     [AvaloniaFact]
     public void CardsReorderByDragAndDrop()
     {
@@ -286,13 +325,18 @@ public sealed class FanCurveTests : IDisposable
         var store = Store();
         store.Curves.Add(new FanCurve { Id = "f35", Name = "35%", Kind = FanCurveKind.Flat, Percent = 35 });
         store.Curves.Add(new FanCurve { Id = "mix", Name = "mix", Kind = FanCurveKind.Mix, Children = ["slot5", "f35"] });
+        var bulk = new FanCurve { Id = "bulk", Name = "All DIMMs", Points = [new(40, 30), new(55, 60), new(70, 100)] };
+        bulk.SetInputs(["bmc:DIMMA1_Temp", "bmc:DIMMB1_Temp"]);
+        store.Curves.Add(bulk);
+        store.Curves.Add(new FanCurve { Id = "cpu", Name = "CPU", SensorId = "bmc:CPU Package Temp", Points = [new(50, 20), new(70, 100)] });
+        store.Curves.Add(new FanCurve { Id = "mix2", Name = "CPU or GPU", Kind = FanCurveKind.Mix, Children = ["slot5", "cpu"] });
         store.Assignments["bmc:2"] = "mix";
         store.Names["bmc:2"] = "AIO Top";
         store.Assignments["bmc:3"] = "nvml";
         store.Assignments["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"] = "slot5";
         var runner = Runner(store);
         store.ControlOrder = ["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"];
-        var window = new FanControlWindow(hub, runner: runner);
+        var window = new FanControlWindow(hub, runner: runner) { Height = 1450 };
         window.Show();
         Assert.Equal("nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0", window.CardOrder()[0]);
         Assert.Equal("bmc:0", window.CardOrder()[1]);
@@ -307,6 +351,8 @@ public sealed class FanCurveTests : IDisposable
         Assert.Contains("GRAPH", texts);
         Assert.Contains("MIX", texts);
         Assert.Contains("35 %", texts); // the flat card's output
+        Assert.Contains("Hottest of 2: DIMMA1_Temp, DIMMB1_Temp", texts);
+        Assert.Contains(texts, t => t.StartsWith("⚠ Different curves on different sensors", StringComparison.Ordinal));
         Assert.Contains(texts, t => t.StartsWith("BMC sensors — runs on the BMC: one write to put it there, then none\nFans: AIO Top", StringComparison.Ordinal));
         Assert.Contains(texts, t => t.StartsWith("⚠ Not a BMC sensor", StringComparison.Ordinal));
         Assert.Contains(window.GetLogicalDescendants().OfType<Button>(), b => b.Content as string == "Apply");

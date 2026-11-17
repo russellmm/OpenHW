@@ -3,6 +3,17 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.32.0 — 2026-11-17
+
+- **Bulk sensors**: a graph curve can follow **several temperatures — the hottest counts**, exactly what the BMC does
+  with a fan's ticked sensors (as in its web console). The temperature source is now a checkbox list (BMC sensors first,
+  each with its live reading) with **All DIMMs** and **All PCIe slots** toggles; the card shows "Hottest of N: …". On a
+  BMC fan such a curve runs on the BMC exactly (no approximation).
+- **Mix cards show what the BMC would run**: a small preview — white = the mix with every sensor at the same
+  temperature, green dashed = the fitted BMC curve, a dot at the hottest sensor now — and a ⚠ note when the BMC can't
+  keep the mix: Min / Average over different sensors, or different curves on different sensors with Max (the BMC never
+  runs slower than the mix, but can run faster). How far the 5-point curve sits above it is shown too.
+
 ## 0.31.0 — 2026-11-17
 
 - **Drag and drop to reorder** both the fan cards and the curve cards: press on a card's background or a label, drag,
