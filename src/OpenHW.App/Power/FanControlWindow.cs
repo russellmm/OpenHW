@@ -433,7 +433,8 @@ public sealed class FanControlWindow : Window
             var original = $"{ShortGpu(g.Card)} {ShortPci(g.Pci)} Fan {g.Fan}";
             list.Add(new(g.Id, Name(g.Id, original), original, $"{g.Card} {ShortPci(g.Pci)}", g.Id.Replace(":fan:", ":tach:"), null, g));
         }
-        return list;
+        var order = _runner.Store.Ordered(list.Select(c => c.Id));
+        return list.OrderBy(c => order.IndexOf(c.Id)).ToList();
     }
 
     private static string ShortPci(string pci) => pci.Length >= 12 ? pci[^7..] : pci;
@@ -509,15 +510,33 @@ public sealed class FanControlWindow : Window
             _apply.IsVisible = false;
 
             var head = new DockPanel();
-            if (c.Zone is { } zone)
             {
                 var menu = new Button { Content = "⋮", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Secondary, Padding = new Thickness(6, 0) };
-                var edit = new MenuItem { Header = "Edit BMC curve…", IsEnabled = enabled && assigned is null && !zone.Owned };
-                edit.Click += (_, _) => w.EditBmcCurve(zone);
-                var restore = new MenuItem { Header = "Restore original curve", IsEnabled = enabled && zone.SavedOriginal is not null && !zone.Owned };
-                restore.Click += (_, _) => w.RestoreOriginal(zone);
-                menu.Flyout = new MenuFlyout { Items = { edit, restore } };
-                ToolTip.SetTip(menu, assigned is null ? "This fan's own BMC curve" : "Untick Curve to edit this fan's BMC curve directly");
+                var items = new List<Control>();
+                MenuItem Move(string header, Func<int, int> to)
+                {
+                    var item = new MenuItem { Header = header };
+                    item.Click += (_, _) => w.MoveCard(c, to);
+                    return item;
+                }
+                items.Add(Move("Move left", i => i - 1));
+                items.Add(Move("Move right", i => i + 1));
+                items.Add(Move("Move to start", _ => 0));
+                items.Add(Move("Move to end", _ => int.MaxValue));
+                if (c.Zone is { } zone)
+                {
+                    var edit = new MenuItem { Header = "Edit BMC curve…", IsEnabled = enabled && assigned is null && !zone.Owned };
+                    edit.Click += (_, _) => w.EditBmcCurve(zone);
+                    var restore = new MenuItem { Header = "Restore original curve", IsEnabled = enabled && zone.SavedOriginal is not null && !zone.Owned };
+                    restore.Click += (_, _) => w.RestoreOriginal(zone);
+                    items.Add(new Separator());
+                    items.Add(edit);
+                    items.Add(restore);
+                    ToolTip.SetTip(edit, assigned is null ? "This fan's own BMC curve" : "Untick Curve to edit this fan's BMC curve directly");
+                }
+                var flyout = new MenuFlyout();
+                foreach (var item in items) flyout.Items.Add(item);
+                menu.Flyout = flyout;
                 DockPanel.SetDock(menu, Dock.Right);
                 head.Children.Add(menu);
             }
@@ -593,6 +612,19 @@ public sealed class FanControlWindow : Window
     }
 
     private IReadOnlyList<(int Number, string Name)> _sensorsNames => _runner.BmcSensors();
+
+    /// <summary>Card ⋮ → Move left / right / to start / to end (<paramref name="to"/> maps the card's index to its new one).</summary>
+    private void MoveCard(Control0 c, Func<int, int> to)
+    {
+        var shown = Controls().Select(x => x.Id).ToList();
+        var index = shown.IndexOf(c.Id);
+        if (!_runner.Store.Move(shown, c.Id, to(index))) return;
+        Save();
+        Dispatcher.UIThread.Post(BuildControls);
+    }
+
+    /// <summary>Card order (tests).</summary>
+    public IReadOnlyList<string> CardOrder() => Controls().Select(c => c.Id).ToList();
 
     /// <summary>A fan's friendly name: saved per fan id; an empty (or original) name goes back to the original.</summary>
     private void Rename(Control0 c, TextBox box)

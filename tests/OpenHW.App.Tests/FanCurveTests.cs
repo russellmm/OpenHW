@@ -189,6 +189,26 @@ public sealed class FanCurveTests : IDisposable
         Assert.Throws<InvalidDataException>(() => other.Import(Path.Combine(_dir, "junk.json")));
     }
 
+    [Fact]
+    public void CardsMoveAndKeepTheirOrder()
+    {
+        var store = Store();
+        string[] shown = ["bmc:0", "bmc:1", "bmc:2", "gpu:a"];
+        Assert.True(store.Move(shown, "gpu:a", 0));
+        Assert.Equal(["gpu:a", "bmc:0", "bmc:1", "bmc:2"], store.Ordered(shown));
+        Assert.True(store.Move(shown, "bmc:0", int.MaxValue));
+        Assert.Equal(["gpu:a", "bmc:1", "bmc:2", "bmc:0"], store.Ordered(shown));
+        Assert.False(store.Move(shown, "gpu:a", -1)); // already first
+        Assert.True(store.Move(shown, "bmc:1", 0));
+        Assert.Equal(["bmc:1", "gpu:a", "bmc:2", "bmc:0"], store.Ordered(shown));
+        // a fan that isn't there now (a lent card) keeps its place for when it's back
+        Assert.Equal(["bmc:1", "bmc:2", "bmc:0"], store.Ordered(["bmc:0", "bmc:1", "bmc:2"]));
+        Assert.True(store.Move(["bmc:0", "bmc:1", "bmc:2"], "bmc:0", 0));
+        Assert.Equal(["bmc:0", "bmc:1", "gpu:a", "bmc:2"], store.Ordered(shown));
+        store.Save();
+        Assert.Equal(store.ControlOrder, FanCurveStore.Load(store.FilePath).ControlOrder);
+    }
+
     [AvaloniaFact]
     public void LoadingAConfigurationReplacesTheSetupAndOffersApplyAll()
     {
@@ -219,8 +239,11 @@ public sealed class FanCurveTests : IDisposable
         store.Assignments["bmc:3"] = "nvml";
         store.Assignments["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"] = "slot5";
         var runner = Runner(store);
+        store.ControlOrder = ["nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0"];
         var window = new FanControlWindow(hub, runner: runner);
         window.Show();
+        Assert.Equal("nvml:GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0:fan:0", window.CardOrder()[0]);
+        Assert.Equal("bmc:0", window.CardOrder()[1]);
         var texts = window.Texts();
         Assert.Contains("Not on the BMC yet:", texts);
         var aio = window.GetLogicalDescendants().OfType<TextBox>().Single(t => t.Text == "AIO Top");

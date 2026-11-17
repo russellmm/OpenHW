@@ -17,6 +17,9 @@ public sealed class FanCurveStore
     /// <summary>Friendly fan names (fan id → name), shown on the cards; the original name stays in the tooltip.</summary>
     public Dictionary<string, string> Names { get; set; } = [];
 
+    /// <summary>The order of the fan cards (fan ids); fans not listed follow in their natural order.</summary>
+    public List<string> ControlOrder { get; set; } = [];
+
     /// <summary>A fan's chosen curve while its Curve box is unticked (kept so ticking it again restores the choice).</summary>
     public Dictionary<string, string> Chosen { get; set; } = [];
 
@@ -40,9 +43,9 @@ public sealed class FanCurveStore
 
     /// <summary>A configuration file: the curves, which fan runs which, the fans' names.</summary>
     public sealed record FanConfig(int Version, List<FanCurve> Curves, Dictionary<string, string> Assignments,
-        Dictionary<string, string> Names, Dictionary<string, string> Chosen);
+        Dictionary<string, string> Names, Dictionary<string, string> Chosen, List<string>? ControlOrder = null);
 
-    public FanConfig Config() => new(1, Curves, Assignments, Names, Chosen);
+    public FanConfig Config() => new(1, Curves, Assignments, Names, Chosen, ControlOrder);
 
     /// <summary>Writes the configuration to <paramref name="path"/> (Save / Save as).</summary>
     public void Export(string path)
@@ -67,6 +70,7 @@ public sealed class FanCurveStore
         Assignments = config.Assignments ?? [];
         Names = config.Names ?? [];
         Chosen = config.Chosen ?? [];
+        ControlOrder = config.ControlOrder ?? ControlOrder;
         Normalise();
         ConfigFile = path;
     }
@@ -119,6 +123,7 @@ public sealed class FanCurveStore
         Assignments = Assignments.Where(a => Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
         Chosen = Chosen.Where(a => Curves.Any(c => c.Id == a.Value)).ToDictionary(a => a.Key, a => a.Value);
         Names = Names.Where(n => !string.IsNullOrWhiteSpace(n.Value)).ToDictionary(n => n.Key, n => n.Value);
+        ControlOrder = (ControlOrder ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
     }
 
     public void Save()
@@ -155,6 +160,35 @@ public sealed class FanCurveStore
         foreach (var c in Curves) c.Children.Remove(id);
         foreach (var zone in Assignments.Where(a => a.Value == id).Select(a => a.Key).ToList()) Assignments.Remove(zone);
         foreach (var zone in Chosen.Where(a => a.Value == id).Select(a => a.Key).ToList()) Chosen.Remove(zone);
+    }
+
+    /// <summary>Fans in card order: listed ones first (in <see cref="ControlOrder"/>), the rest as they come.</summary>
+    public List<string> Ordered(IEnumerable<string> ids)
+    {
+        var list = ids.ToList();
+        return list.Select((id, natural) => (id, natural))
+            .OrderBy(x => ControlOrder.IndexOf(x.id) is var i && i >= 0 ? i : int.MaxValue).ThenBy(x => x.natural)
+            .Select(x => x.id).ToList();
+    }
+
+    /// <summary>
+    /// Moves a fan's card: <paramref name="to"/> = a position in the current order (clamped). Returns false when it
+    /// didn't move. Fans that aren't shown right now keep their places in the saved order.
+    /// </summary>
+    public bool Move(IReadOnlyList<string> shown, string id, int to)
+    {
+        var order = Ordered(shown);
+        var from = order.IndexOf(id);
+        to = Math.Clamp(to, 0, order.Count - 1);
+        if (from < 0 || from == to) return false;
+        // Next to the card it lands on, in the full saved order: fans not shown now keep their places.
+        var anchor = order[to];
+        var full = Ordered(ControlOrder.Concat(shown).Distinct());
+        full.Remove(id);
+        var at = full.IndexOf(anchor);
+        full.Insert(to < from ? at : at + 1, id);
+        ControlOrder = full;
+        return true;
     }
 
     /// <summary>Counts one OpenHW-driven write for a zone (the count starts again every day).</summary>

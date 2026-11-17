@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.30.0 — 2026-11-17
+
+- **Reorder the fan cards**: every fan card's **⋮** has Move left, Move right, Move to start and Move to end (as OpenFan's
+  card menu). The order is saved (and kept in configurations); a fan that's away — a card lent to the VM — keeps its
+  place for when it's back. BMC fans' ⋮ still has Edit BMC curve… and Restore original curve below.
+
 ## 0.29.0 — 2026-11-17
 
 - **Fan configurations, as in OpenFan**: Fan Control's **⋮** menu — Create new configuration… (Ctrl+N), Save
