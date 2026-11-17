@@ -122,15 +122,18 @@ readback, menu entry first.
 
 ## Windows 11 — eventually (owner, 2026-11-16)
 
-The owner wants all of this to work on Windows 11 too, eventually. Keep platform code behind interfaces now:
+The owner wants OpenHW on Windows 11 too, eventually — **scope (owner, 2026-11-16): the HWiNFO replacement (sensor
+window, tray, logging, alerts) and fan control only; no GPU Lending** (and power/CPU-frequency features aren't asked
+for). Keep platform code behind interfaces now:
 - **BMC fan control** carries over: IPMI raw commands through Windows' built-in IPMI driver (WMI `Microsoft_IPMI`
   RequestResponse) instead of `/dev/ipmi0` — same OEM fan commands, no BMC login; Redfish (temperature sources) via the
   BMC's **LAN address (10.0.0.200 on the owner's network**, where the web console answers under Windows) with the
   `openhw` login, or the host-interface link if its Windows driver is installed. Keep `IIpmiTransport` and a Redfish
   client interface as the seams; fan curves/sources logic stays platform-free.
-- The rest is Linux-specific today: hwmon/libsensors, the systemd helper and its Unix socket, the eBPF card filter
-  (GPU Lending), cpufreq, HSMP sysfs. A Windows build needs a Windows service + named pipe, WMI/PDH and
-  LibreHardwareMonitor-style sensor access. The Avalonia window already runs on Windows.
+- Needed on Windows: sensor engines (hwmon/libsensors → WMI/PDH and LibreHardwareMonitor-style access; NVML and the
+  BMC/IPMI engines port directly), and the root helper → a Windows service with a named pipe (BMC fan driver, NVMe
+  SMART, GPU reads). Not needed there: GPU Lending (eBPF card filter, libvirt), cpufreq, HSMP power limits. The
+  Avalonia window already runs on Windows.
 
 ## After the board swap (2026-11-14, 0.21.0–0.22.0)
 
