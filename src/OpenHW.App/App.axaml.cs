@@ -698,7 +698,13 @@ public sealed class App : Application
         if (_hardwareCheck is null)
         {
             WindowPlaces.Track(_hardwareCheck = new HardwareCheckWindow(new HardwareCheckActions(this)), "hardware-check");
-            _hardwareCheck.Closed += (_, _) => _hardwareCheck = null;
+            _hardwareCheck.Closed += (_, _) =>
+            {
+                _hardwareCheck = null;
+                // Closing the window = seen: it won't open by itself again until something new needs attention.
+                _settings.HardwareCheckSeen = new HardwareCheckActions(this).Build().Signature;
+                _settings.Save();
+            };
         }
         else _hardwareCheck.Refresh();
         _hardwareCheck.Show();
@@ -706,9 +712,9 @@ public sealed class App : Application
     }
 
     /// <summary>
-    /// Once per start: compare the hardware with what OpenHW saved last time. Opens Hardware Check when something
-    /// needs a look (a changed part, saved settings pointing at missing sensors, a broken setup); otherwise just keeps
-    /// the snapshot current. Skipped while a card is lent (its sensors are away, not gone).
+    /// Once per start: compare the hardware with what OpenHW saved last time. Opens Hardware Check when something new
+    /// needs a look (a changed part, saved settings pointing at missing sensors, a broken setup) — not again for what
+    /// the user already closed it on; otherwise just keeps the snapshot current. Skipped while a card is lent (its sensors are away, not gone).
     /// </summary>
     private async Task StartupHardwareCheckAsync()
     {
@@ -719,7 +725,7 @@ public sealed class App : Application
         });
         if (_exiting) return;
         var model = new HardwareCheckActions(this).Build();
-        if (model.NeedsAttention && !_gpuLent) ShowHardwareCheck();
+        if (model.NeedsAttention && !_gpuLent && model.Signature != _settings.HardwareCheckSeen) ShowHardwareCheck();
         else if (model.Changes.Count == 0) model.Now.Save();
     }
 

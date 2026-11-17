@@ -120,6 +120,9 @@ public sealed class AppSettings
     /// <summary>NVMe S.M.A.R.T. health readings (through openhw-helper); drive temperatures from hwmon stay.</summary>
     public bool ReadSmart { get; set; } = true;
 
+    /// <summary>What the Hardware Check showed when the user last closed it (its signature): it reopens by itself only for something new.</summary>
+    public string HardwareCheckSeen { get; set; } = "";
+
     private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
         ? config
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");

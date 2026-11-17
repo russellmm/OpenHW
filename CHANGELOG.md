@@ -3,6 +3,16 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.24.2 — 2026-11-16
+
+- Fixed: changing which sensors a fan follows reported "Redfish 400: … Oem/PWM/1/Temperature1 is a required property"
+  even though the BMC had applied the change. The BMC wants each fan entry it's sent to be complete, and refuses a
+  whole list over the unused 8th slot (while still applying the rest). OpenHW now sends only the one fan's complete
+  entry, as read, with its sensors changed (plus the mode).
+- **Hardware Check no longer opens at every start** for things you've already seen: closing it marks what it showed as
+  seen, and it opens by itself again only when something new needs attention (a change, a missing sensor, a new
+  warning). File → Hardware Check… still opens it any time.
+
 ## 0.24.1 — 2026-11-16
 
 - Fixed: changing which sensors a fan follows failed with "Redfish 400: The property Oem/Mode is a required property"

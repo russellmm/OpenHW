@@ -16,6 +16,20 @@ public sealed record HardwareCheckModel(HardwareSnapshot? Before, HardwareSnapsh
     /// <summary>Worth opening by itself at start: the hardware changed, or saved choices point at sensors that are gone.</summary>
     public bool NeedsAttention => Changes.Count > 0 || Stale.Count > 0 || Notes.Any(n => n.Warning);
 
+    /// <summary>
+    /// A fingerprint of what needs attention (changes, stale settings, warnings). The check opens by itself at start only
+    /// when this differs from the one the user last closed the window on — something new — not for what they've seen.
+    /// </summary>
+    public string Signature
+    {
+        get
+        {
+            var parts = Changes.Select(c => "c " + c.Area + c.Text).Concat(Stale.Select(s => "s " + s.Id))
+                .Concat(Notes.Where(n => n.Warning).Select(n => "w " + n.Area + n.Text)).Order(StringComparer.Ordinal);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join('\n', parts))))[..16];
+        }
+    }
+
     public static HardwareCheckModel Build(SensorHub hub, HardwareSnapshot? before, Settings.AppSettings settings,
         Alerts.AlertStore alerts, bool gpuLent)
     {

@@ -103,25 +103,15 @@ public sealed class BmcRedfish(Uri baseUrl, HttpMessageHandler handler, Func<Bmc
             var pwm = Pwm(thermal).ToList();
             var entry = pwm.FirstOrDefault(p => (int)p["Index"]! == zone) ?? throw new ArgumentException($"no PWM {zone} on the BMC");
             if ((long)entry["Source"]! == mask) return;
-            entry["Source"] = mask;
-            // The whole PWM list as read, with one Source changed: AMI's Oem arrays are replaced as a whole.
-            // The BMC requires Oem.Mode in every change ("Oem/Mode is a required property", 400 on the WRX90E): send the
-            // mode as read, so it never changes.
+            // What the WRX90E's BMC accepts (learned on the real one, 0.24.0–0.24.2): Oem.Mode, and for each PWM entry
+            // sent, the complete entry (Index, Source, Temperature1–5, FanDuty1–5). The whole list is refused over the
+            // unused 8th slot's values (though the BMC applies the rest), so only the one zone's entry is sent, as read,
+            // with its Source changed.
             var mode = thermal["Oem"]?["Mode"]?.GetValue<string>() ?? throw new IOException("the BMC's thermal page has no Oem.Mode");
-            var patch = new JsonObject { ["Oem"] = new JsonObject { ["Mode"] = mode, ["PWM"] = new JsonArray(pwm.Select(p => p.DeepClone()).ToArray()) } };
-            try
-            {
-                using var write = Send(HttpMethod.Patch, ThermalPath, session.Token, patch, etag);
-                Parse(write, allowEmpty: true);
-            }
-            catch (IOException whole) when (whole.Message.StartsWith("Redfish 4", StringComparison.Ordinal))
-            {
-                // Refused as a whole list (e.g. the unused 8th slot's value): send only the one zone's entry.
-                var single = new JsonObject { ["Oem"] = new JsonObject { ["Mode"] = mode, ["PWM"] = new JsonArray(new JsonObject { ["Index"] = zone, ["Source"] = mask }) } };
-                using var retry = Send(HttpMethod.Get, ThermalPath, session.Token, null);
-                using var write = Send(HttpMethod.Patch, ThermalPath, session.Token, single, retry.Headers.ETag?.Tag);
-                Parse(write, allowEmpty: true);
-            }
+            var changed = (JsonObject)entry.DeepClone();
+            changed["Source"] = mask;
+            var patch = new JsonObject { ["Oem"] = new JsonObject { ["Mode"] = mode, ["PWM"] = new JsonArray(changed) } };
+            using (var write = Send(HttpMethod.Patch, ThermalPath, session.Token, patch, etag)) Parse(write, allowEmpty: true);
             using var check = Send(HttpMethod.Get, ThermalPath, session.Token, null);
             var after = Pwm(Parse(check)).FirstOrDefault(p => (int)p["Index"]! == zone);
             if (after is null || (long)after["Source"]! != mask)

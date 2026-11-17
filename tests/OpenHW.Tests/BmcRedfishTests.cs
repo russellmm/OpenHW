@@ -16,7 +16,7 @@ public sealed class BmcRedfishTests : IDisposable
     {
         public readonly long[] Sources = [1, 8, 1, 1, 1, 1, 1, 16777215];
         public readonly List<string> Log = [];
-        public bool RefuseWholeList, IgnorePatch;
+        public bool IgnorePatch;
         public string Password = "correct-horse";
         private int _etag = 100;
         private readonly HashSet<string> _tokens = [];
@@ -54,8 +54,16 @@ public sealed class BmcRedfishTests : IDisposable
                         return Json(HttpStatusCode.BadRequest, """{"error":{"@Message.ExtendedInfo":[{"Message":"The property Oem/Mode is a required property and must be included in the request."}]}}""");
                     if ((string?)oem["Mode"] != "Manual") return Json(HttpStatusCode.BadRequest, """{"error":{"message":"mode changed"}}""");
                     var pwm = oem["PWM"]!.AsArray();
-                    if (RefuseWholeList && pwm.Count > 1)
-                        return Json(HttpStatusCode.BadRequest, """{"error":{"@Message.ExtendedInfo":[{"Message":"The value 16777215 for Source is not valid."}]}}""");
+                    // As the WRX90E's BMC answers: every entry complete; the unused 8th slot's values refused.
+                    foreach (var entry in pwm)
+                    {
+                        foreach (var field in new[] { "Index", "Source", "Temperature1", "FanDuty1", "Temperature5", "FanDuty5" })
+                            if (entry![field] is null)
+                                return Json(HttpStatusCode.BadRequest, new JsonObject { ["error"] = new JsonObject { ["message"] =
+                                    $"The property Oem/PWM/{(int)entry["Index"]!}/{field} is a required property and must be included in the request." } }.ToJsonString());
+                        if ((int)entry["Index"]! == 7)
+                            return Json(HttpStatusCode.BadRequest, """{"error":{"@Message.ExtendedInfo":[{"Message":"The value 16777215 for Source is not valid."}]}}""");
+                    }
                     if (!IgnorePatch) foreach (var p in pwm) Sources[(int)p!["Index"]!] = (long)p["Source"]!;
                     _etag++;
                     return new HttpResponseMessage(HttpStatusCode.NoContent);
@@ -70,7 +78,8 @@ public sealed class BmcRedfishTests : IDisposable
                 ["Mode"] = "Manual",
                 ["PWM"] = new JsonArray(Sources.Select((s, i) => (JsonNode)new JsonObject
                 {
-                    ["Index"] = i, ["Source"] = s, ["Temperature1"] = 20, ["FanDuty1"] = 20,
+                    ["Index"] = i, ["Source"] = s, ["Temperature1"] = 20, ["FanDuty1"] = 20, ["Temperature2"] = 45, ["FanDuty2"] = 20,
+                    ["Temperature3"] = 65, ["FanDuty3"] = 20, ["Temperature4"] = 70, ["FanDuty4"] = 100, ["Temperature5"] = 100, ["FanDuty5"] = 100,
                 }).ToArray()),
             },
         }.ToJsonString();
@@ -113,12 +122,12 @@ public sealed class BmcRedfishTests : IDisposable
     }
 
     [Fact]
-    public void ARefusedWholeListIsRetriedWithJustTheOneZone()
+    public void OnlyTheOneZonesCompleteEntryIsSentSoOtherFansAndTheSpareSlotAreUntouched()
     {
-        var fake = new FakeRedfish { RefuseWholeList = true };
+        var fake = new FakeRedfish();
         Client(fake, Login).SetSource(2, 1L << 11); // PCIE01
-        Assert.Equal(2048, fake.Sources[2]);
-        Assert.Contains(fake.Log, l => l.StartsWith("PATCH", StringComparison.Ordinal) && l.EndsWith("If-Match \"100\"", StringComparison.Ordinal));
+        Assert.Equal([1, 8, 2048, 1, 1, 1, 1, 16777215], fake.Sources);
+        Assert.Single(fake.Log, l => l.StartsWith("PATCH", StringComparison.Ordinal));
     }
 
     [Fact]

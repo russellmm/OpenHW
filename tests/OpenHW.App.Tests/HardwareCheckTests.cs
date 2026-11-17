@@ -165,6 +165,20 @@ public sealed class HardwareCheckTests
     }
 
     [Fact]
+    public void TheCheckReopensOnlyForSomethingNew()
+    {
+        var now = new HardwareSnapshot();
+        CoverageNote Warn(string text) => new("Power limits", text, Warning: true);
+        var seen = new HardwareCheckModel(null, now, [], [], [Warn("boot limits for 01:00.0"), new("Motherboard", "no VR")]);
+        var same = new HardwareCheckModel(null, now, [], [], [new("Motherboard", "no VR"), Warn("boot limits for 01:00.0")]);
+        var infoOnly = new HardwareCheckModel(null, now, [], [], [Warn("boot limits for 01:00.0"), new("Motherboard", "no VR at all")]);
+        var newer = new HardwareCheckModel(null, now, [], [], [Warn("boot limits for 01:00.0"), Warn("GPU Lending card gone")]);
+        Assert.Equal(seen.Signature, same.Signature);       // order doesn't matter
+        Assert.Equal(seen.Signature, infoOnly.Signature);   // information notes don't reopen it
+        Assert.NotEqual(seen.Signature, newer.Signature);   // a new warning does
+    }
+
+    [Fact]
     public void SnapshotsRoundTripAndCountBmcDimms()
     {
         var now = HardwareSnapshot.Take(Wrx90, new("ASUSTeK", "Pro WS WRX90E-SAGE SE", "TR PRO", []), "AST2600", Name);
