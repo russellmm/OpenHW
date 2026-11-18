@@ -12,3 +12,12 @@ foreach ($project in 'src\OpenHW.App\OpenHW.App.csproj', 'src\OpenHW.Helper\Open
     if ($LASTEXITCODE -ne 0) { throw "publish failed: $project" }
 }
 "Built into $out"
+
+# Owner's rule (2026-11-17): every Windows build is also mirrored to C:\StandAlone\OpenHW, where OpenHW runs from.
+# (The OpenHW Helper service runs from Program Files — a SYSTEM service must not run from a user-writable folder.)
+$standalone = 'C:\StandAlone\OpenHW'
+Get-Process openhw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$standalone*" } | Stop-Process -Force
+Start-Sleep -Milliseconds 500
+robocopy $out $standalone /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "copy to $standalone failed (robocopy $LASTEXITCODE)" }
+"Mirrored to $standalone"

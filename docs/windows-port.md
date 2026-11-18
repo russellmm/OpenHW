@@ -53,7 +53,8 @@ Windows.
     (`WindowsPowerLimitsWindow`) sets each card's limit through the service (`gpupower`), and "Apply and keep" saves it
     by UUID (`gpupowersave`, `%ProgramData%\OpenHW\gpu-power-limits.json`); the service reapplies saved limits when it
     starts — OpenFan's behaviour. Not yet exercised live (no limit changed).
-  - Install for now: `packaging\windows\build.ps1` (self-contained win-x64 into dist\win-x64), then
+  - Install for now: `packaging\windows\build.ps1` (self-contained win-x64 into dist\win-x64, **mirrored to
+    `C:\StandAlone\OpenHW`**, where the owner runs OpenHW from — owner's standing rule, 2026-11-17), then
     `packaging\windows\install.ps1` elevated (copies to `C:\Program Files\OpenHW`, registers and starts the service).
   - **Redfish on Windows**: the BMC's LAN address, asked of the BMC over IPMI (Get LAN Configuration, every channel —
     it reports 10.10.10.10 and 10.0.0.200; the one on a subnet this PC is wired to wins), `%ProgramData%OpenHWbmc-url`
