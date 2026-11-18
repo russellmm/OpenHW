@@ -68,7 +68,8 @@ Windows.
   (messages 4/5/6/7, the Linux rules: 50 W to the SMU maximum, read back), service commands `cpupptread`,
   `cpuppt <mW|boot>`, `cpupptsave <W|none>`; the kept value (`%ProgramData%\OpenHW\cpu-power-limit.json`) is applied
   when the service starts. Power → Power Limits shows it. `openhw-helper --hsmp-check` (elevated) repeats the check.
-  **No limit set yet** — first write with the owner's go-ahead. No PawnIO needed for this; the same driver can serve
+  **Write tested live 2026-11-17 21:01** (owner's go-ahead) through the service: 350 → 300 W read back 300 W,
+  then 300 → 350 W read back 350 W; 40 W, 2500 W, "boot" with nothing kept and "abc" refused, limit unchanged. No PawnIO needed for this; the same driver can serve
   the other HSMP readings Linux shows (FCLK/MCLK, DRAM bandwidth, …) later.
 - Kernel access for Super I/O, Tctl/CCD temperatures and SMBus is still phase 3: OpenFan for Windows already loads
   **PawnIO** (its `AMDFamily17.bin` module reads SMN), so PawnIO is the likely route there.
