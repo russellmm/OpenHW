@@ -3,6 +3,19 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## Unreleased — Windows 11 port (2026-11-17)
+
+Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.md).
+
+- OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
+  (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
+  toasts, single instance, start at login.
+- **OpenHW Helper** Windows service (named pipe): the BMC over Windows' IPMI driver (sensors, states, event log, fan
+  zones, thresholds), Redfish over the BMC's LAN address bound to the wired port, NVIDIA fans.
+- **Power → Power Limits on Windows**: the CPU socket limit through AMD's own HSMP driver and each NVIDIA card's limit,
+  live and kept (applied when the service starts).
+- `packaging\windows\build.ps1` (self-contained win-x64, mirrored to `C:\StandAlone\OpenHW`) and `install.ps1`.
+
 ## 0.39.3 — 2026-11-17
 
 - Large tray tiles: bigger text — digits 19 px (was 15), unit 14 px (was 11) on the same 22 px tile (owner: "room to

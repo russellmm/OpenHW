@@ -1,84 +1,133 @@
-# Porting OpenHW to Windows 11 (to replace HWiNFO)
+# Porting OpenHW to Windows 11 (to replace HWiNFO and OpenFan)
 
-Status: written 2026-11-17 against OpenHW 0.38.2 as a plan; **phase 0 done and most of phase 1 done on 2026-11-17**
-(on the owner's Windows 11 Pro install of the same workstation). This is the working document for the port: what
-moves as is, what needs a Windows implementation, the order to do it in, and what to check first.
+Status (2026-11-17, end of day): **phases 0 and 1 done, phase 2 core done, CPU and GPU power limits done** on the
+owner's Windows 11 Pro install of the same workstation. Not released: no version bump, the Windows build is installed
+by script (below). Written as a plan the same day against 0.38.2; the plan sections further down are kept, with what
+changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 
-## Progress (2026-11-17)
+**Owner's rules for the port** (2026-11-17):
+- **The Linux features stay exactly as they are.** Every Windows change is behind `OperatingSystem.IsWindows()` /
+  `IsLinux()`; Linux keeps its code paths and call order. Windows-only code lives in `OpenHW.Hardware/Windows/`,
+  `OpenHW.Helper/WindowsHelper.cs`, `LanBinding.cs` and `Windows*` classes in the app.
+- **No GPU Lending on Windows** (nor CPU frequency caps / power profiles).
+- OpenHW replaces **both HWiNFO and OpenFan** on Windows → **CPU and GPU power limits are in scope**; the CPU limit is
+  set by OpenHW itself, not Ryzen Master.
+- **Don't limit the design because something needs Administrator** — the helper service runs as LocalSystem.
+- **Every Windows build is mirrored to `C:\StandAlone\OpenHW`**, where the owner runs OpenHW from (build.ps1 does it).
+- Redfish to the BMC must **bypass Tailscale**.
 
-Rule from the owner: **the Linux features stay exactly as they are** — every Windows change is behind
-`OperatingSystem.IsWindows()` / `IsLinux()`, Linux keeps its code paths and call order. GPU Lending isn't wanted on
-Windows.
+## Status at a glance
 
-- **Phase 0 — done.** The assembly-wide `[SupportedOSPlatform("linux")]` is gone; Windows code is in
-  `OpenHW.Hardware/Windows/` and marked per class. `OsFiles` (Hardware): config root (`%APPDATA%\openhw`; XDG on Linux),
-  owner-only files (0600 on Linux, a private ACL on Windows). Single instance: a per-user named pipe on Windows.
-  `SensorHub` picks engines per platform. CPU Frequency, Power Limits, power profiles and GPU Lending are hidden on
-  Windows (menus, tray menu, startup). Tests: 297 pass on Windows; 69 Linux-only ones (`[LinuxFact]`,
-  `[LinuxAvaloniaFact]`: lending, card filter, sysfs fakes with ':' names, tests needing Tctl/FCLK) are skipped there.
-- **Phase 1 — mostly done, all without elevation:**
-  - System (`WindowsSystemEngine`): memory/commit/page file (GetPerformanceInfo, PDH), per-core clocks
-    (Processor Frequency × % Processor Performance), per-thread usage, C1/C2/C3 residency. Same ids as Linux.
-  - NVIDIA: NVML read in the app (`nvml.dll` mapped by a DllImport resolver), all three cards with every extra row.
-  - **NVMe (`WindowsNvmeEngine`)**: a query-only handle answers the SMART/Health log, Identify Controller and
-    IOCTL_DISK_PERFORMANCE unelevated (checked on all 8 drives) → SMART rows, composite + sensor temperatures, activity.
-    Drive identity = SHA-256(PCI address + model + serial) exactly as Linux (serial from Identify Controller, PCI
-    address from the controller's device node) — **to confirm on Linux** that the ids match (compare a drive's
-    `nvme-health:<id>` there with the Windows `--dump`/settings).
-  - Network (`WindowsNetworkEngine`): GetIfTable2, hardware interfaces with a connector, not-present adapters dropped.
-  - Tray (`Win32TrayIcon`): Shell_NotifyIcon v4, one icon per sensor, tile rendered at the taskbar's exact icon size,
-    native tooltip (≤127 chars), native right-click menu from the same `TrayMenuItem`s, Explorer-restart re-add.
-    Windows 11 puts new icons in the hidden-icons flyout until the user drags them out.
-  - Alerts (`WindowsNotifier`): balloons on a tray icon, shown as toasts by Windows 11 (no buttons; click = default).
-  - Start at login: `HKCU\…\Run` "OpenHW" (respects Task Manager's Startup apps disable). Tests use a scratch key.
-  - CSV logging works as is (Windows opens the file shared so it can be read while logging).
-  - **Not yet**: WireView in the app (COM port), UPS checked live (NUT client is portable), WHEA error count.
-- **Phase 2 — core done (2026-11-17 evening):**
-  - `openhw-helper` on Windows = the **"OpenHW Helper" service** (OpenHWHelper, LocalSystem, auto start, restart on
-    failure) on `\\.\pipe\openhw-helper`: ACL = SYSTEM, Administrators, group "OpenHW Users", plus accounts listed by SID
-    in `%ProgramData%\OpenHW\pipe-users` (`--install` adds the installing user, so no sign-out is needed); first
-    instance created with FILE_FLAG_FIRST_PIPE_INSTANCE. Modes: `--console`, `--once <cmd>`, `--ipmi-check`,
-    `--install`, `--uninstall`. State in `%ProgramData%\OpenHW` (SYSTEM + Administrators only). `HelperClient` uses the
-    pipe on Windows; the Linux protocol is unchanged (Windows-only commands live in `WindowsHelperSession`).
-  - **`WmiIpmiTransport`** (`Microsoft_IPMI.RequestResponse`, in-box `ipmidrv.sys`): `ResponseData` starts with the
-    completion code (checked live: Get Device ID `00 20 81 02 01 02 BF 3F 0A 00 93 11 22 00 00 00`, AST2600 fw 2.01).
-    Live: 55 BMC sensors, discrete states, SEL, thresholds, **fan control available with all 7 zones** (nothing written).
-  - **HWiNFO collides with it**: with HWiNFO running only 1 of 5 full BMC reads succeeded (undefined completion codes
-    0x02/0x2D, "didn't answer"); with HWiNFO closed 5 of 5. The transport now retries undefined codes; re-check with
-    HWiNFO running before the side-by-side parity phase (or turn HWiNFO's IPMI sensors off).
-  - Machine identity for journals/originals = SMBIOS UUID (WMI), lowercase as Linux's `product_uuid`.
-  - App: BMC group in the window; the BMC's "CPU Package Temp" is the Windows CPU temperature (tray default) until
-    kernel access.
-  - **GPU power limits** (owner 2026-11-17: OpenHW replaces OpenFan on Windows too): Power → Power Limits on Windows
-    (`WindowsPowerLimitsWindow`) sets each card's limit through the service (`gpupower`), and "Apply and keep" saves it
-    by UUID (`gpupowersave`, `%ProgramData%\OpenHW\gpu-power-limits.json`); the service reapplies saved limits when it
-    starts — OpenFan's behaviour. Not yet exercised live (no limit changed).
-  - Install for now: `packaging\windows\build.ps1` (self-contained win-x64 into dist\win-x64, **mirrored to
-    `C:\StandAlone\OpenHW`**, where the owner runs OpenHW from — owner's standing rule, 2026-11-17), then
-    `packaging\windows\install.ps1` elevated (copies to `C:\Program Files\OpenHW`, registers and starts the service).
-  - **Redfish on Windows**: the BMC's LAN address, asked of the BMC over IPMI (Get LAN Configuration, every channel —
-    it reports 10.10.10.10 and 10.0.0.200; the one on a subnet this PC is wired to wins), `%ProgramData%OpenHWbmc-url`
-    overrides. **Bypasses Tailscale** (owner): Tailscale accepts a 10.0.0.0/24 subnet route with a lower metric than
-    the X710 ports, so the connection is bound to the wired port's address (10.0.0.224) — checked: direct, 6 ms.
-    Over the LAN the BMC wants the `openhw` login (`bmcaccess`: not open without login).
-  - Still to do in phase 2: exercise Fan Control (curves/thresholds) and a GPU limit live with the owner's go-ahead;
-    NVIDIA fan control live; Redfish over LAN (`%ProgramData%\OpenHW\bmc-url`, then Fan Control → BMC login); UEFI
-    variables for BIOS Setup; WireView (COM port).
-- **CPU power limit on Windows — done, through AMD's own HSMP driver** (owner: OpenHW, not Ryzen Master, sets it;
-  OpenFan never did). AMD's chipset package installs **AmdHSMPDriver.sys** (1.0.0.7, WHQL-signed, "AMD Host System
-  Management Port", on `ACPI\AMDI0097` — the device Linux's amd_hsmp binds; device ACL SYSTEM + Administrators). No
-  public interface, so it was read from the driver (2026-11-17): device interface `{dc142d67-9b96-4778-a0b3-b6d6eca590be}`,
-  one IOCTL **0x2203C8** (buffered), 48-byte in/out = Linux's `struct hsmp_message` (msg_id u32 @0, num_args u16 @4,
-  response_sz u16 @6, args u32[8] @8, sock_ind u16 @40). Confirmed live with HSMP's test message (0x1234 → 0x1235):
-  interface version 7, socket power ~61 W, PPT limit 350 W, SMU maximum 2000 W. `WindowsHsmp`, `WindowsCpuPowerLimits`
-  (messages 4/5/6/7, the Linux rules: 50 W to the SMU maximum, read back), service commands `cpupptread`,
-  `cpuppt <mW|boot>`, `cpupptsave <W|none>`; the kept value (`%ProgramData%\OpenHW\cpu-power-limit.json`) is applied
-  when the service starts. Power → Power Limits shows it. `openhw-helper --hsmp-check` (elevated) repeats the check.
-  **Write tested live 2026-11-17 21:01** (owner's go-ahead) through the service: 350 → 300 W read back 300 W,
-  then 300 → 350 W read back 350 W; 40 W, 2500 W, "boot" with nothing kept and "abc" refused, limit unchanged. No PawnIO needed for this; the same driver can serve
-  the other HSMP readings Linux shows (FCLK/MCLK, DRAM bandwidth, …) later.
-- Kernel access for Super I/O, Tctl/CCD temperatures and SMBus is still phase 3: OpenFan for Windows already loads
-  **PawnIO** (its `AMDFamily17.bin` module reads SMN), so PawnIO is the likely route there.
+| Area | Windows status | How |
+|---|---|---|
+| Window, layout, graphs, Customize, logging, alerts, single instance, start at login | **done** | Avalonia as is; `%APPDATA%\openhw`; named pipe; `HKCU\…\Run`; balloon/toast alerts |
+| Tray icons | **done** (registered, tooltips; not seen on screen yet) | `Win32TrayIcon` (Shell_NotifyIcon v4) |
+| System: memory, page file, per-core clocks/usage, C-states | **done** | `WindowsSystemEngine` (PDH, GetPerformanceInfo) |
+| NVIDIA GPUs (all rows) | **done** | NVML in the app (`nvml.dll`) |
+| NVMe: SMART, temperatures, activity (8 drives) | **done**, unelevated | `WindowsNvmeEngine` (query-only IOCTLs); ids = Linux's (to confirm on Linux) |
+| Network | **done** | `WindowsNetworkEngine` (GetIfTable2) |
+| BMC sensors, states, SEL, thresholds | **done** (read live) | service + `WmiIpmiTransport` |
+| CPU temperature | **BMC "CPU Package Temp"** for now | Tctl/CCD need kernel access (phase 3) |
+| BMC fan zones, curves, alarm thresholds | **available, not written yet** | same `FanDriver` over WMI IPMI |
+| Redfish (fan sources, BIOS settings, access check) | **reachable; login not saved yet** | BMC LAN address from IPMI, bound to the wired port |
+| CPU power limit (PPT) | **done, write tested** | AMD's own HSMP driver (`WindowsHsmp`) |
+| GPU power limits | **done, not written yet** | NVML in the service, kept by UUID |
+| NVIDIA fan control | **in the service, not exercised** | `GpuFanDriver` (NVML) |
+| BIOS Setup values (UEFI variables) | to do | `GetFirmwareEnvironmentVariableExW` in the service |
+| WireView Pro II | to do | `SerialPort` on its COM port |
+| UPS (NUT) | not checked live | NUT client is portable |
+| Super I/O, Tctl/CCD, effective clocks, RAPL, SMBus (DIMM SPD/PMIC) | phase 3 | PawnIO (as OpenFan) |
+| Installer | phase 4 | scripts for now; Inno Setup is on this PC |
+
+## How it's installed on this PC
+
+- **OpenHW** runs from `C:\StandAlone\OpenHW\openhw.exe` (self-contained win-x64; no .NET install needed).
+- **OpenHW Helper** service (`OpenHWHelper`, LocalSystem, automatic, restarts on failure) runs from
+  `C:\Program Files\OpenHW\openhw-helper.exe` — a SYSTEM service must not run from a user-writable folder.
+- Pipe `\\.\pipe\openhw-helper`: SYSTEM, Administrators, group **"OpenHW Users"**, and accounts listed by SID in
+  `%ProgramData%\OpenHW\pipe-users` (`--install` adds the installing user, so no sign-out is needed). The first pipe
+  instance is created with FILE_FLAG_FIRST_PIPE_INSTANCE (no squatting).
+- Helper state in `%ProgramData%\OpenHW` (SYSTEM + Administrators only): `fan-restore.json`, `fan-original.json`,
+  `bmc-thresholds-original.json`, `bmc-login`, `bmc-cert.sha256`, `bmc-url` (optional override),
+  `gpu-power-limits.json`, `cpu-power-limit.json`, `pipe-users`.
+- **Build**: `packaging\windows\build.ps1` → `dist\win-x64`, mirrored to `C:\StandAlone\OpenHW` (closes an OpenHW
+  running from either). **Install/update the service**: `packaging\windows\install.ps1` elevated → stops the service and
+  waits for its process (fans go back to their curves), copies to Program Files, `openhw-helper --install` (service,
+  group, pipe-users), starts it. **Remove**: `"C:\Program Files\OpenHW\openhw-helper.exe" --uninstall` (elevated).
+- Helper diagnostics (elevated): `--console` (foreground), `--once <command>`, `--ipmi-check` (Get Device ID and
+  request-data variants), `--hsmp-check` (HSMP test message, version, power and limits; sets nothing).
+
+## What was done and found, by phase
+
+- **Phase 0 — builds and tests on Windows.** Assembly-wide `[SupportedOSPlatform("linux")]` removed; Windows classes
+  marked per class. `OsFiles`: config root (XDG / `%APPDATA%`), helper state dir, owner-only files (0600 / private ACL).
+  `SensorHub` picks engines per platform. Tests on Windows: 304 pass, 69 Linux-only skipped (`[LinuxFact]`,
+  `[LinuxAvaloniaFact]`: lending, card filter, sysfs fakes with ':' names, tests needing Tctl/FCLK, RTXinVM autostart);
+  Windows-only tests are `[WindowsFact]`. **Not yet run on Linux** after these changes.
+- **Phase 1 — user-mode readers** (no elevation), same sensor ids as Linux so layouts/tray/alerts/logs carry over:
+  - System: GetPerformanceInfo + PDH `\Processor Information(*)` (% Processor Time, Frequency × % Performance,
+    % C1/C2/C3 Time), cores from GetLogicalProcessorInformationEx. Clocks are Windows' estimate, not MSR readings.
+  - NVMe: a handle opened with no access answers Identify Controller (the real serial — the device descriptor's
+    "serial" is the EUI-64), the SMART/Health log page and IOCTL_DISK_PERFORMANCE. PCI address from the controller's
+    device node → identity = SHA-256(PCI + model + serial), as Linux.
+  - Network: GetIfTable2, hardware interfaces with a connector, not-present (phantom) adapters dropped.
+  - Tray: one icon per sensor at the taskbar's icon size; native tooltip (≤127 chars) and menu; re-added after an
+    Explorer restart. Windows 11 keeps new icons in the hidden-icons flyout until the user drags them out.
+  - Tray tiles on Windows: one more pixel of margin and the unit measured by advance width (Windows' hinting draws
+    glyphs wider than their outlines).
+- **Phase 2 — service and BMC:**
+  - `WmiIpmiTransport` (`Microsoft_IPMI.RequestResponse`, in-box `ipmidrv.sys`, Administrator only): `ResponseData`
+    starts with the completion code (Get Device ID `00 20 81 02 01 02 BF 3F 0A 00 93 11 22 00 00 00`, AST2600 fw 2.01).
+    Live: 55 sensors, states, SEL, thresholds; FanDriver reports all 7 zones available. Machine identity = SMBIOS UUID
+    (lowercase, as Linux's `product_uuid`).
+  - **HWiNFO collides** on the BMC's KCS interface: with HWiNFO running 1 of 5 full reads succeeded (undefined
+    completion codes 0x02 / 0x2D, "didn't answer"); closed, 5 of 5. The transport retries undefined codes (5 tries);
+    not re-checked with HWiNFO running.
+  - **Redfish**: the service asks the BMC for its LAN addresses (IPMI Get LAN Configuration, channels 1–8: 10.10.10.10
+    and 10.0.0.200) and uses the one on a subnet this PC is wired to; `bmc-url` overrides. Tailscale accepts a
+    10.0.0.0/24 subnet route with a lower metric than the X710 ports, so `LanBinding` binds the connection to the
+    wired port's address (10.0.0.224 → 10.0.0.200, direct, 6 ms). Over the LAN the BMC wants the `openhw` login.
+  - **GPU power limits**: Power → Power Limits (`WindowsPowerLimitsWindow`) → `gpupower` (live), `gpupowersave` (kept
+    by UUID); the service reapplies kept limits when it starts (what OpenFan did). Read live: RTX 5060 Ti 180 W (range
+    150–198), both RTX PRO 6000 at 300 W (default 600, range 150–600).
+  - **CPU power limit**: AMD's chipset package installs **AmdHSMPDriver.sys** (1.0.0.7, WHQL, "AMD Host System
+    Management Port", on `ACPI\AMDI0097` like Linux's amd_hsmp; device ACL SYSTEM + Administrators). No published
+    interface; read from the driver: interface `{dc142d67-9b96-4778-a0b3-b6d6eca590be}`, IOCTL **0x2203C8** (buffered),
+    48-byte in/out in Linux's `struct hsmp_message` layout (msg_id u32 @0, num_args u16 @4, response_sz u16 @6,
+    args u32[8] @8, sock_ind u16 @40). Confirmed with HSMP's test message (0x1234 → 0x1235); interface version 7.
+    `WindowsCpuPowerLimits`: messages 4/5/6/7, Linux's rules (50 W to the SMU maximum, 2000 W here; read back).
+    Commands `cpupptread`, `cpuppt <mW|boot>`, `cpupptsave <W|none>`; the kept value is applied at service start.
+    **Write tested 21:01** with the owner's go-ahead: 350 → 300 → 350 W, each read back; 40 W, 2500 W, "boot" with
+    nothing kept and "abc" refused. Left at 350 W, nothing kept.
+
+## Next steps
+
+In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
+
+1. **On Linux next boot**: run both test suites (expected unchanged), and compare a drive's `nvme-health:<id>` there
+   with the Windows ids (`openhw.exe --dump` lists drives; settings keep ids) — confirms layouts carry across.
+2. **Redfish login on Windows**: Fan Control → BMC login with the `openhw` user (the dialog now reaches 10.0.0.200).
+   Then `fansources`, BIOS Settings from the BMC and the Hardware Check's BMC access line.
+3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
+   one alarm threshold and restore — same flash-write rules as Linux. Decide **one fan configuration shared with
+   Linux** or separate (open question 3): the curves live in the BMC either way.
+4. **GPU power limit live**: one card, Apply then Default; "Apply and keep" then a service restart to see it reapplied.
+5. **NVIDIA fan control live** (fixed duty, back to automatic).
+6. **Tray on screen**: drag OpenHW's icons out of the hidden-icons flyout and check tiles, tooltips, menu; check an
+   alert toast.
+7. **BIOS Setup values**: UEFI variables through the service (`uefivars` command, SeSystemEnvironmentPrivilege).
+8. **WireView Pro II**: COM port by VID/PID 0483:5740, `SerialPort`, reuse `WireViewSample.Parse` (in the app; no
+   admin needed).
+9. **UPS** (NUT on 127.0.0.1:3493 or another host) and the **WHEA** corrected-error count.
+10. **HWiNFO coexistence**: re-check BMC reads with HWiNFO running (retries); otherwise turn HWiNFO's IPMI sensors off
+    for the parity phase.
+11. **Phase 3, kernel access**: PawnIO (already installed by OpenFan; its `AMDFamily17` module reads SMN) for
+    Tctl/CCD temperatures, then Super I/O NCT6798 (WRX90E profile), effective clocks / RAPL (MSRs), SMBus. The HSMP
+    driver can also give FCLK/MCLK/DRAM bandwidth (Linux's HSMP extras) without PawnIO.
+12. **Phase 4, installer** (Inno Setup is installed): app to StandAlone or Program Files, service, group, autostart;
+    uninstall gives fans back.
+13. **Phase 5, parity with HWiNFO**, then uninstall HWiNFO; retire OpenFan on Windows once fan control and GPU limits
+    are confirmed.
 
 ## Goal and scope (owner, 2026-11-16)
 
@@ -90,15 +139,19 @@ studied on 2026-10-23 — [hwinfo-research.md](hwinfo-research.md)) so HWiNFO is
   **alerts**, **fan control** (BMC zones + NVIDIA fans, curves, alarm thresholds), the **BMC status / event log**,
   **BIOS Setup** (read-only), the **WireView Pro II** and **UPS** groups.
 - **Out of scope**: GPU Lending (eBPF card filter, libvirt — the Windows install *is* where a lent card would go),
-  CPU frequency caps, power profiles, CPU/GPU power limits (owner hasn't asked for them on Windows).
+  CPU frequency caps, power profiles.
+- **Added 2026-11-17**: CPU and GPU **power limits** (OpenHW replaces OpenFan on Windows too; the CPU limit set by
+  OpenHW, not Ryzen Master).
 
 Success = the owner can uninstall HWiNFO: every group they use there has an OpenHW equivalent that reads the same
 values (compare side by side with HWiNFO's shared memory, `tools/loadgen/hwinfo_shm.py`).
 
-## Where the code stands
+## Where the code stood (the plan, 2026-11-17 morning)
+
+The sections from here on are the original plan, kept for its reasoning; "Status at a glance" above says what is done.
 
 - **UI**: Avalonia 11.3 / .NET 8 — runs on Windows as is. `Platform.cs` in OpenHW.App, OpenHW.Hardware and the
-  helper declares `[assembly: SupportedOSPlatform("linux")]`; that has to become per-file/per-class.
+  helper declares `[assembly: SupportedOSPlatform("linux")]`; that has to become per-file/per-class (done).
 - **Seams that already exist** (keep the platform-free logic above them):
 
   | Interface | Linux implementation | Windows implementation to write |
@@ -200,6 +253,12 @@ mailbox. On Windows OpenHW can't reach the Super I/O, MSRs or SMBus from user mo
 modules directly only if a reading needs a path LHM doesn't expose. Phase 3 begins with a spike to confirm
 LHM + PawnIO read the NCT6798 and the 9975WX's Tctl/Tccd under Windows 11 with Memory Integrity on.
 
+**Update 2026-11-17**: this PC runs Windows 11 Pro with Memory Integrity (HVCI) **on**, and PawnIO is **already
+installed and loaded** (by OpenFan for Windows, whose `AMDFamily17.bin` module reads SMN for Tctl/CCD) — so PawnIO
+works with HVCI here, and direct PawnIO modules (option 2, as OpenFan does) are now the simpler start. The **HSMP
+mailbox doesn't need PawnIO at all**: AMD's own WHQL driver (AmdHSMPDriver.sys) serves it — that is how the CPU power
+limit works on Windows.
+
 The BMC needs **no** third-party driver (in-box IPMI driver), and it already supplies most board readings (CPU
 package, DIMM and slot temperatures, every fan header, the main rails). So the port is useful **before** the kernel
 part: the BMC + NVML + NVMe + WireView + UPS already cover most of what the owner watches in HWiNFO.
@@ -225,9 +284,11 @@ part: the BMC + NVML + NVMe + WireView + UPS already cover most of what the owne
 ## Things that behave differently on Windows
 
 - **BMC host interface**: under Windows it needs a driver for the USB NIC (AMI/ASUS "Redfish host interface"); without
-  it Redfish is reachable only over the LAN — make the Redfish base URL a setting, don't hard-code 169.254.0.17.
-- **Fan writes are shared with nothing**: OpenFan doesn't exist on Windows; but ASUS's own tools (Armoury Crate,
-  AI Suite) and HWiNFO/FanControl can also drive fans — Hardware Check should warn when one is running.
+  it Redfish is reachable only over the LAN. **Done**: the service asks the BMC for its LAN address (IPMI) and binds
+  to the wired port on that subnet (bypassing Tailscale's subnet route); `%ProgramData%\OpenHW\bmc-url` overrides.
+- **Other fan/BMC users on Windows**: OpenFan for Windows exists and runs on this PC (NVIDIA fans, ASUS EC, GPU
+  limits), HWiNFO polls the BMC's KCS interface (collides with OpenHW's IPMI), and ASUS's tools (Armoury Crate,
+  AI Suite) can drive fans — use one fan controller at a time; Hardware Check should warn when another one is running.
 - **The same BMC is used by both OSes**: curves written under Linux stay in the BMC's flash and run under Windows (and
   the other way round). Keep one fan configuration and share it (e.g. export/import the configuration file), or the
   two installs will overwrite each other's curves — count flash writes accordingly.
@@ -251,11 +312,14 @@ part: the BMC + NVML + NVMe + WireView + UPS already cover most of what the owne
 
 ## Open questions for the owner
 
-1. Windows edition and Memory Integrity (HVCI) setting on the Windows install (affects which drivers load).
-2. OK to depend on LibreHardwareMonitorLib + PawnIO (a third-party signed driver) for the Super I/O/CPU/SMBus readings?
+1. ~~Windows edition and HVCI~~ — answered by looking: Windows 11 Pro 26200, Memory Integrity on.
+2. OK to depend on PawnIO (already installed by OpenFan; a third-party signed driver) — and LibreHardwareMonitorLib or
+   only PawnIO's modules — for Super I/O / Tctl / SMBus? (Owner: "don't limit the design because it needs
+   Administrator"; this one is about trusting a third-party driver.)
 3. One fan configuration shared between Linux and Windows, or separate ones?
 4. Is code signing wanted (certificate cost), or is an unsigned installer fine for personal use?
-5. Is the BMC LAN address fixed (10.0.0.200) or should OpenHW discover it (IPMI "Get LAN Configuration" over WMI)?
+5. ~~BMC LAN address~~ — OpenHW discovers it over IPMI (10.0.0.200 on this network); `bmc-url` overrides.
+6. When to retire OpenFan on Windows (after fan control and GPU limits are confirmed in OpenHW)?
 
 ## References
 

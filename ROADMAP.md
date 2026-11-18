@@ -129,10 +129,16 @@ readback, menu entry first.
 5. [ ] **Safety tests**: fake sysfs for every write path; a header that doesn't follow its duty is reported, never
    pushed further; pump/CPU minimums can't be lowered from the UI without an explicit override.
 
-## Windows 11 — eventually (owner, 2026-11-16)
+## Windows 11 — under way (owner, 2026-11-16; started 2026-11-17)
 
-**Working plan: [docs/windows-port.md](docs/windows-port.md)** (2026-11-17) — scope, seams, subsystem table, kernel-access
-choice (LibreHardwareMonitorLib/PawnIO, never WinRing0), phases 0–5, and open questions.
+**Working document: [docs/windows-port.md](docs/windows-port.md)** — status table, install layout, findings, next steps.
+Done 2026-11-17: phases 0–1 (builds/tests on Windows; System, NVIDIA, NVMe, network readers; Win32 tray, alerts,
+autostart), phase 2 core (the **OpenHW Helper** service on a named pipe; BMC over WMI IPMI; Redfish over the BMC's LAN
+address, bypassing Tailscale), and **CPU + GPU power limits** (CPU through AMD's own HSMP driver, write tested). Scope
+grew 2026-11-17: OpenHW replaces **OpenFan** on Windows too, so power limits are in. Next: live fan-control and GPU
+limit tests, BIOS Setup values, WireView, then kernel access (PawnIO), installer, parity with HWiNFO.
+
+The text below is the 2026-11-16 starting point, kept for its reasoning:
 
 The owner wants OpenHW on Windows 11 too, eventually — **scope (owner, 2026-11-16): the HWiNFO replacement (sensor
 window, tray, logging, alerts) and fan control only; no GPU Lending** (and power/CPU-frequency features aren't asked
