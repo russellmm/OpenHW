@@ -65,6 +65,15 @@ public sealed class WindowsHelperTests
             new WindowsHelperSession(new HelperSession(new NoSmart()), null, null).HandleLine("cpuppt 300000"));
     }
 
+    [Fact]
+    public void TheBmcsLanAddressComesFromGetLanConfiguration()
+    {
+        Assert.Equal("10.0.0.200", BmcLanAddress.Parse([0x00, 0x11, 10, 0, 0, 200])?.ToString());
+        Assert.Null(BmcLanAddress.Parse([0x00, 0x11, 0, 0, 0, 0]));        // not configured
+        Assert.Null(BmcLanAddress.Parse([0x00, 0x11, 169, 254, 0, 17]));   // the host interface's link-local address
+        Assert.Null(BmcLanAddress.Parse([0xCC, 0x11, 10, 0, 0, 200]));      // an error reply
+    }
+
     [WindowsFact]
     public void WithoutTheServiceTheClientSaysSo()
     {

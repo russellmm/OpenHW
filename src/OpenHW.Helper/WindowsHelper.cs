@@ -77,8 +77,11 @@ internal static class WindowsHelper
         private readonly WindowsNvmeSmartReader _smart = new();
         private PipeHelperServer? _server;
 
+        private readonly string? _oneShot;
+
         public Host(string? oneShot = null)
         {
+            _oneShot = oneShot;
             Directory.CreateDirectory(StateDir);
             var identity = WindowsMachine.Uuid;
             _bmc = new BmcReader(() => WmiIpmiTransport.Open(out _), Path.Combine(StateDir, "bmc-thresholds-original.json"), () => identity);
@@ -92,14 +95,17 @@ internal static class WindowsHelper
                 _gpuFans = new GpuFanDriver(_nvmlFans, startWatchdog: true);
             }
             if (_fans?.Status(null) is { Available: false, Reason: { } why }) Console.Error.WriteLine($"openhw-helper: fan control off: {why}");
-            _redfish = new BmcRedfish(RedfishBase(), BmcRedfish.PinnedHandler(Path.Combine(StateDir, "bmc-cert.sha256")),
-                () => BmcLogin.Load(LoginPath));
+            var redfishBase = RedfishBase();
+            var handler = (SocketsHttpHandler)BmcRedfish.PinnedHandler(Path.Combine(StateDir, "bmc-cert.sha256"));
+            LanBinding.Apply(handler, redfishBase);
+            _redfish = new BmcRedfish(redfishBase, handler, () => BmcLogin.Load(LoginPath));
         }
 
         private static string LoginPath => Path.Combine(StateDir, "bmc-login");
 
-        // Redfish: the host-interface address only works with the BMC's USB NIC driver installed; else the BMC's LAN
-        // address, from %ProgramData%\OpenHW\bmc-url ("https://10.0.0.200").
+        // Redfish: Windows has no driver for the BMC's USB host-interface NIC, so 169.254.0.17 is unreachable. The BMC's
+        // LAN address instead: %ProgramData%\OpenHW\bmc-url if the owner set one ("https://10.0.0.200"), else the
+        // address the BMC reports for itself over IPMI, else the host interface (works if its driver is installed).
         private static Uri RedfishBase()
         {
             var file = Path.Combine(StateDir, "bmc-url");
@@ -108,6 +114,12 @@ internal static class WindowsHelper
                 if (File.Exists(file) && Uri.TryCreate(File.ReadAllText(file).Trim(), UriKind.Absolute, out var url) && url.Scheme == "https") return url;
             }
             catch (IOException) { }
+            using var ipmi = WmiIpmiTransport.Open(out _);
+            if (ipmi is not null && BmcLanAddress.Find(ipmi, a => LanBinding.LocalAddressOnSubnet(a) is not null) is { } address)
+            {
+                Console.Error.WriteLine($"openhw-helper: Redfish on the BMC's LAN address {address} (of {string.Join(", ", BmcLanAddress.All(ipmi))})");
+                return new Uri($"https://{address}");
+            }
             return BmcRedfish.HostInterface;
         }
 
@@ -124,7 +136,8 @@ internal static class WindowsHelper
         private readonly WindowsCpuPowerLimits _cpuPower = new(() => WindowsHsmp.Open(out _));
 
         public WindowsHelperSession Session() => new(
-            new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans, redfish: _fans?.Status(null).Available == true ? _redfish : null,
+            new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
+                redfish: _fans?.Status(null).Available == true || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans),
             _gpuPower, _savedGpuPower, _cpuPower);
 

@@ -9,7 +9,11 @@ $to = Join-Path $env:ProgramFiles 'OpenHW'
 if (-not (Test-Path (Join-Path $from 'openhw-helper.exe'))) { throw "Build first: packaging\windows\build.ps1" }
 
 if (Get-Service OpenHWHelper -ErrorAction SilentlyContinue) { Stop-Service OpenHWHelper -ErrorAction SilentlyContinue }
+# "Stopped" can come before the process has exited (it is still giving fans back): wait for it, so its files are free.
+Get-Process openhw-helper -ErrorAction SilentlyContinue | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue
+Get-Process openhw-helper -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process openhw -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 500
 New-Item -ItemType Directory -Force $to | Out-Null
 Copy-Item (Join-Path $from '*') $to -Recurse -Force
 # --install runs sc.exe and net.exe, which report "already exists" on stderr when updating: not an error here.

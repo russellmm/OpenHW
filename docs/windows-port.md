@@ -55,6 +55,11 @@ Windows.
     starts — OpenFan's behaviour. Not yet exercised live (no limit changed).
   - Install for now: `packaging\windows\build.ps1` (self-contained win-x64 into dist\win-x64), then
     `packaging\windows\install.ps1` elevated (copies to `C:\Program Files\OpenHW`, registers and starts the service).
+  - **Redfish on Windows**: the BMC's LAN address, asked of the BMC over IPMI (Get LAN Configuration, every channel —
+    it reports 10.10.10.10 and 10.0.0.200; the one on a subnet this PC is wired to wins), `%ProgramData%OpenHWbmc-url`
+    overrides. **Bypasses Tailscale** (owner): Tailscale accepts a 10.0.0.0/24 subnet route with a lower metric than
+    the X710 ports, so the connection is bound to the wired port's address (10.0.0.224) — checked: direct, 6 ms.
+    Over the LAN the BMC wants the `openhw` login (`bmcaccess`: not open without login).
   - Still to do in phase 2: exercise Fan Control (curves/thresholds) and a GPU limit live with the owner's go-ahead;
     NVIDIA fan control live; Redfish over LAN (`%ProgramData%\OpenHW\bmc-url`, then Fan Control → BMC login); UEFI
     variables for BIOS Setup; WireView (COM port).

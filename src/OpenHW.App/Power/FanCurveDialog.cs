@@ -147,7 +147,8 @@ public sealed class BmcLoginDialog : Window
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(14, 10) };
         body.Children.Add(new TextBlock { TextWrapping = TextWrapping.Wrap,
             Text = "OpenHW's helper needs a BMC login to change which sensors a fan follows (the BMC's Redfish service). " +
-                   "It checks the login with the BMC, then keeps it readable by root only. Use a BMC user just for OpenHW." });
+                   "It checks the login with the BMC, then keeps it readable by " +
+                   (OperatingSystem.IsWindows() ? "SYSTEM and Administrators only" : "root only") + ". Use a BMC user just for OpenHW." });
         body.Children.Add(AlertUi.Row(new TextBlock { Text = "User", Width = 70, VerticalAlignment = VerticalAlignment.Center }, _user));
         body.Children.Add(AlertUi.Row(new TextBlock { Text = "Password", Width = 70, VerticalAlignment = VerticalAlignment.Center }, _password));
         body.Children.Add(AlertUi.Row(AlertUi.Button("Save", () => Save(_user.Text ?? "", _password.Text ?? "")),
