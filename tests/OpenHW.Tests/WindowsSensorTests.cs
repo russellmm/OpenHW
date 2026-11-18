@@ -161,6 +161,37 @@ public sealed class WindowsSensorTests
             WindowsGpuExtras.EngineNames(["3D:0", "VideoDecode:3", "VideoDecode:2", "VideoEncode:9", "Copy:1", "Compute_0:7"]).ToList());
     }
 
+    // The NCT6798D's one-shot dump (2026-11-18), through the service's channels and the WRX90E board profile: named and
+    // scaled as Linux's nct6798 + BoardProfiles, values as HWiNFO showed (Vcore 0.9857 V at raw 111, +5V 5.12 V,
+    // +12V 12.0 V, 3VCC 3.264 V, pump 3901 RPM, SYSTIN 33 °C).
+    [Fact]
+    public void NuvotonSioReadsAsLinuxNct6798()
+    {
+        byte[] raw =
+        [
+            0x6F, 0x80, 0xD4, 0xCC, 0x7D, 0x7B, 0x5B, 0xD4, 0xCC, 0xCC, 0x42, 0x4F, 0x82, 0x65, 0x9C, // in0–in14 (in0 = raw 111)
+            0x07, 0x34, 0x02, 0x0E, 0x04, 0x8C, 0x02, 0x18, 0x00, 0x00, 0x05, 0x93, 0x0F, 0x3D,       // fan1–fan7 (0xCC skipped)
+            0x21,                                                                                     // SYSTIN
+        ];
+        var channels = NuvotonSio.Decode(raw);
+        Assert.Equal(3.264, channels.Single(c => c.Feature == "in3").Value!.Value, 6); // ×2 inside the chip
+        Assert.Equal(1.024, channels.Single(c => c.Feature == "in1").Value!.Value, 6); // the board's ×5 comes from the profile
+
+        using var engine = new HwmonEngine(new WindowsKernelSensorsReader(() => GpuWire.Encode(channels.ToList())), "ASUSTeK COMPUTER INC.", "Pro WS WRX90E-SAGE SE");
+        var items = engine.Discover();
+        var readings = new Dictionary<string, double?>();
+        engine.ReadInto(readings, null);
+        double Value(string name) => readings[items.Single(i => i.Name == name && i.Id.StartsWith("hwmon:nct6798:", StringComparison.Ordinal)).Id]!.Value;
+        Assert.Equal(0.9857, Value("+VCORE_0"), 3);
+        Assert.Equal(5.12, Value("+5V"), 3);
+        Assert.Equal(12.0, Value("+12V"), 3);
+        Assert.Equal(3.264, Value("+3.3V"), 3);
+        Assert.Equal(0.8969, Value("+VSOC"), 3);
+        Assert.Equal(3901, Value("W_PUMP+"));
+        Assert.Equal(1844, Value("CHA_FAN1"));
+        Assert.Equal(33, Value("SYSTIN"));
+    }
+
     private sealed class NoSmart : INvmeSmartReader
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");

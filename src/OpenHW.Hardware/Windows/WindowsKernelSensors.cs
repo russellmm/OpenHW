@@ -18,7 +18,7 @@ public sealed record KernelChannel(string Chip, int Index, string Feature, strin
 public sealed class WindowsKernelSensors(IReadOnlyList<Func<IKernelChip?>>? chips = null) : IDisposable
 {
     private readonly object _gate = new();
-    private readonly IReadOnlyList<Func<IKernelChip?>> _factories = chips ?? [() => K10Temp.Open(), () => AsusEc.Open(WindowsMachine.BoardVendor, WindowsMachine.BoardName)];
+    private readonly IReadOnlyList<Func<IKernelChip?>> _factories = chips ?? [() => K10Temp.Open(), () => AsusEc.Open(WindowsMachine.BoardVendor, WindowsMachine.BoardName), NuvotonSio.Open];
     private List<IKernelChip>? _chips;
     private List<KernelChannel>? _last;
     private DateTime _lastAt;
