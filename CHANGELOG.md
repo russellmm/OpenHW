@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.39.3 — 2026-11-17
+
+- Large tray tiles: bigger text — digits 19 px (was 15), unit 14 px (was 11) on the same 22 px tile (owner: "room to
+  grow the size of the text").
+
 ## 0.39.2 — 2026-11-17
 
 - **Large tray tiles actually show**: with a tile file the item now sends no pixmaps. GNOME's AppIndicators draws a

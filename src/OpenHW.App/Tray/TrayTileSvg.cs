@@ -19,8 +19,8 @@ public static class TrayTileSvg
 {
     /// <summary>Tile height in logical pixels: the AppIndicators icon size the owner set (22).</summary>
     public const double Height = 22;
-    public const double DigitsSize = 15;   // ≈ the panel font (Ubuntu Sans 11 pt)
-    public const double UnitSize = 11;
+    public const double DigitsSize = 19;   // fills the 22 px tile with a small margin (owner, 0.39.3: "room to grow")
+    public const double UnitSize = 14;
     private const double Padding = 6;
     private const string FontFamilyName = "Ubuntu Sans";
 
