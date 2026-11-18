@@ -41,6 +41,8 @@ internal static class WindowsHelper
             case ["--smbus-scan"]: return SmbusScan();
             case ["--smbus-switch"]: return SmbusSwitch();
             case ["--spd-scan", var port] when int.TryParse(port, out var p) && p is >= 0 and <= 4: return SpdScan(p);
+            case ["--i2c-read", var c, var a, var r] when int.TryParse(c, out var controller) && TryHex(a, out var address) && TryHex(r, out var register):
+                return I2cRead(controller, address, register);
             case ["--install"]: return Install();
             case ["--uninstall"]: return Uninstall();
             case ["--once", .. var command] when command.Length > 0:
@@ -378,6 +380,25 @@ internal static class WindowsHelper
             try { Console.WriteLine($"  0x{a:x2} MR0 MR1 = {bus.ReadByte(a, 0x00):x2} {bus.ReadByte(a, 0x01):x2}"); }
             catch (IOException ex) { Console.WriteLine($"  0x{a:x2}: {ex.Message}"); }
         }
+        return 0;
+    }
+
+    private static bool TryHex(string text, out int value) =>
+        int.TryParse(text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text, System.Globalization.NumberStyles.HexNumber, null, out value);
+
+    /// <summary>
+    /// The gentle first test of AMDI2C (owner's rule, 2026-11-18: no sweeps): one controller, one address, two
+    /// consecutive registers read (an SPD5118 hub's MR0/MR1 read 51 18). Nothing is written.
+    /// </summary>
+    private static int I2cRead(int controller, int address, int register)
+    {
+        using var i2c = WindowsI2cProvider.Open(out var reason);
+        if (i2c is null) { Console.WriteLine(reason); return 1; }
+        Console.WriteLine($"AMDI2C on the {(i2c.OnTestDriver ? "test" : "official")} PawnIO driver; controllers 0x{i2c.Controllers:x2}");
+        var bus = i2c.Open(controller);
+        foreach (var r in new[] { register, register + 1 })
+            try { Console.WriteLine($"I2C{controller} 0x{address:x2} reg 0x{r:x2} = 0x{bus.ReadByte(address, (byte)r):x2}"); }
+            catch (IOException ex) { Console.WriteLine($"I2C{controller} 0x{address:x2} reg 0x{r:x2}: {ex.Message}"); }
         return 0;
     }
 
