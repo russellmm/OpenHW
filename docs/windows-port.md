@@ -28,11 +28,12 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | Network | **done** | `WindowsNetworkEngine` (GetIfTable2) |
 | BMC sensors, states, SEL, thresholds | **done** (read live) | service + `WmiIpmiTransport` |
 | CPU temperature | **BMC "CPU Package Temp"** for now | Tctl/CCD need kernel access (phase 3) |
+| Fan configuration | **shared with Linux** (`C:\StandAlone\OpenHW\configs` = `/mnt/DriveC/StandAlone/OpenHW/configs`) | `OsFiles.SharedConfigDir`, `FanCurveStore` |
 | BMC fan zones, curves, alarm thresholds | **available, not written yet** | same `FanDriver` over WMI IPMI |
-| Redfish (fan sources, BIOS settings, access check) | **reachable; login not saved yet** | BMC LAN address from IPMI, bound to the wired port |
+| Redfish (fan sources, BIOS settings, access check) | **reachable; login saved** (2026-11-17) | BMC LAN address from IPMI, bound to the wired port |
 | CPU power limit (PPT) | **done, write tested** | AMD's own HSMP driver (`WindowsHsmp`) |
 | GPU power limits | **done, not written yet** | NVML in the service, kept by UUID |
-| NVIDIA fan control | **in the service, not exercised** | `GpuFanDriver` (NVML) |
+| NVIDIA fan control | **running** (both RTX PRO 6000 on their shared curves since 21:35) | `GpuFanDriver` (NVML) |
 | BIOS Setup values (UEFI variables) | to do | `GetFirmwareEnvironmentVariableExW` in the service |
 | WireView Pro II | to do | `SerialPort` on its COM port |
 | UPS (NUT) | not checked live | NUT client is portable |
@@ -49,7 +50,12 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   instance is created with FILE_FLAG_FIRST_PIPE_INSTANCE (no squatting).
 - Helper state in `%ProgramData%\OpenHW` (SYSTEM + Administrators only): `fan-restore.json`, `fan-original.json`,
   `bmc-thresholds-original.json`, `bmc-login`, `bmc-cert.sha256`, `bmc-url` (optional override),
-  `gpu-power-limits.json`, `cpu-power-limit.json`, `pipe-users`.
+  `gpu-power-limits.json`, `cpu-power-limit.json`, `pipe-users`. `fan-original.json` and
+  `bmc-thresholds-original.json` were copied from Linux's `/var/lib/openhw` (same machine identity), so Restore
+  original on Windows goes back to the BMC's real originals, not to what Linux had written.
+- **Fan configuration shared with Linux** in `C:\StandAlone\OpenHW\configs` (`fan-curves.json`, `fan-profiles\`):
+  Linux sees it as `/mnt/DriveC/StandAlone/OpenHW/configs` (ntfs-3g; Fast Startup is off, so Linux can write it).
+  `build.ps1`'s mirror excludes `configs`.
 - **Build**: `packaging\windows\build.ps1` → `dist\win-x64`, mirrored to `C:\StandAlone\OpenHW` (closes an OpenHW
   running from either). **Install/update the service**: `packaging\windows\install.ps1` elevated → stops the service and
   waits for its process (fans go back to their curves), copies to Program Files, `openhw-helper --install` (service,
@@ -100,19 +106,28 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
     **Write tested 21:01** with the owner's go-ahead: 350 → 300 → 350 W, each read back; 40 W, 2500 W, "boot" with
     nothing kept and "abc" refused. Left at 350 W, nothing kept.
 
+- **Shared fan configuration (2026-11-17 night).** The BMC keeps the curves the last OS wrote, so each OS must work
+  from one file. `OsFiles.SharedConfigDir` = `C:\StandAlone\OpenHW\configs` / `/mnt/DriveC/StandAlone/OpenHW/configs`
+  (used when OpenHW's StandAlone folder is there; else the per-user folder as before; `OPENHW_SHARED_CONFIG` overrides,
+  tests set `off`). The file in use is saved relative (`fan-profiles/fans.json`); an absolute one from the other OS
+  is found by name in `fan-profiles`. First start copies the OS's own files in unless the folder has a live file.
+  Seeded from Linux (mounted read-only through WSL). Every curve source is a BMC sensor and GPU fans are keyed by
+  NVIDIA UUID, so the file means the same thing on both. Effect on Windows: the app now drives both RTX PRO 6000
+  cards' fans on their curves (30 % at idle); BMC zones are only written by Apply.
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
 
 1. **On Linux next boot**: run both test suites (expected unchanged), and compare a drive's `nvme-health:<id>` there
    with the Windows ids (`openhw.exe --dump` lists drives; settings keep ids) — confirms layouts carry across.
-2. **Redfish login on Windows**: Fan Control → BMC login with the `openhw` user (the dialog now reaches 10.0.0.200).
-   Then `fansources`, BIOS Settings from the BMC and the Hardware Check's BMC access line.
+2. **Redfish on Windows**: the `openhw` login is saved (owner, 2026-11-17). Next: `fansources`, BIOS Settings from the BMC and the Hardware Check's BMC access line.
 3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
-   one alarm threshold and restore — same flash-write rules as Linux. Decide **one fan configuration shared with
-   Linux** or separate (open question 3): the curves live in the BMC either way.
+   one alarm threshold and restore — same flash-write rules as Linux. The configuration is **shared with Linux** (decided
+   2026-11-17); on the next Linux boot check OpenHW there loads `/mnt/DriveC/StandAlone/OpenHW/configs`.
 4. **GPU power limit live**: one card, Apply then Default; "Apply and keep" then a service restart to see it reapplied.
-5. **NVIDIA fan control live** (fixed duty, back to automatic).
+5. **NVIDIA fan control**: running from the shared curves; check **OpenFan (Windows) isn't also driving GPU fans** —
+   `GpuFanDriver`'s OpenFan guard looks for OpenFan's Linux socket only (Windows guard to add).
 6. **Tray on screen**: drag OpenHW's icons out of the hidden-icons flyout and check tiles, tooltips, menu; check an
    alert toast.
 7. **BIOS Setup values**: UEFI variables through the service (`uefivars` command, SeSystemEnvironmentPrivilege).
@@ -316,7 +331,7 @@ part: the BMC + NVML + NVMe + WireView + UPS already cover most of what the owne
 2. OK to depend on PawnIO (already installed by OpenFan; a third-party signed driver) — and LibreHardwareMonitorLib or
    only PawnIO's modules — for Super I/O / Tctl / SMBus? (Owner: "don't limit the design because it needs
    Administrator"; this one is about trusting a third-party driver.)
-3. One fan configuration shared between Linux and Windows, or separate ones?
+3. ~~One fan configuration or two~~ — one, shared (owner, 2026-11-17): `C:\StandAlone\OpenHW\configs`.
 4. Is code signing wanted (certificate cost), or is an unsigned installer fine for personal use?
 5. ~~BMC LAN address~~ — OpenHW discovers it over IPMI (10.0.0.200 on this network); `bmc-url` overrides.
 6. When to retire OpenFan on Windows (after fan control and GPU limits are confirmed in OpenHW)?

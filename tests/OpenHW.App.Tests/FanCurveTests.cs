@@ -241,6 +241,52 @@ public sealed class FanCurveTests : IDisposable
     }
 
     [Fact]
+    public void TheFileInUseIsSavedRelativeSoBothOperatingSystemsFindIt()
+    {
+        var store = Store();
+        var file = Path.Combine(_dir, "fan-profiles", "fans.json");
+        store.Export(file);
+        store.ConfigFile = file;
+        store.Save();
+        Assert.Contains("\"ConfigFile\": \"fan-profiles/fans.json\"", File.ReadAllText(store.FilePath));
+        Assert.Equal(Path.GetFullPath(file), FanCurveStore.Load(store.FilePath).ConfigFile);
+
+        // Saved by the other OS, or before the move to the shared folder: found by name in this folder's fan-profiles.
+        foreach (var foreign in new[] { "/home/someone/.config/openhw/fan-profiles/fans.json", @"C:\Users\someone\AppData\Roaming\openhw\fan-profiles\fans.json" })
+        {
+            File.WriteAllText(store.FilePath, File.ReadAllText(store.FilePath).Replace("fan-profiles/fans.json", foreign.Replace(@"\", @"\\")));
+            Assert.Equal(Path.GetFullPath(file), FanCurveStore.Load(store.FilePath).ConfigFile);
+        }
+
+        // A file elsewhere stays absolute.
+        var outside = Path.Combine(Directory.CreateTempSubdirectory("openhw-outside-").FullName, "mine.json");
+        store.Export(outside);
+        store.ConfigFile = outside;
+        store.Save();
+        Assert.Equal(outside, FanCurveStore.Load(store.FilePath).ConfigFile);
+        Directory.Delete(Path.GetDirectoryName(outside)!, true);
+    }
+
+    [Fact]
+    public void TheFirstStartWithTheSharedFolderCopiesThisOsFilesUnlessItHasSome()
+    {
+        var local = Directory.CreateDirectory(Path.Combine(_dir, "local", "fan-profiles")).Parent!.FullName;
+        var shared = Path.Combine(_dir, "shared");
+        File.WriteAllText(Path.Combine(local, "fan-curves.json"), "{\"FourthAt70\": true}");
+        File.WriteAllText(Path.Combine(local, "fan-profiles", "fans.json"), "{}");
+
+        FanCurveStore.MoveToShared(local, shared);
+        Assert.True(FanCurveStore.Load(Path.Combine(shared, "fan-curves.json")).FourthAt70);
+        Assert.True(File.Exists(Path.Combine(shared, "fan-profiles", "fans.json")));
+
+        // The shared file is what the other OS last wrote to the BMC: it's never replaced.
+        File.WriteAllText(Path.Combine(local, "fan-curves.json"), "{\"FourthAt70\": false}");
+        FanCurveStore.MoveToShared(local, shared);
+        Assert.True(FanCurveStore.Load(Path.Combine(shared, "fan-curves.json")).FourthAt70);
+        Assert.True(File.Exists(Path.Combine(local, "fan-curves.json"))); // the old file stays
+    }
+
+    [Fact]
     public void CardsMoveAndKeepTheirOrder()
     {
         var store = Store();

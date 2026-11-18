@@ -22,6 +22,26 @@ public static class OsFiles
     /// <summary>The per-user OpenHW folder: ~/.config/openhw, %APPDATA%\openhw.</summary>
     public static string ConfigDir => Path.Combine(ConfigHome, "openhw");
 
+    /// <summary>The configuration both operating systems share, on Windows (C:) — the same folder seen from either side.</summary>
+    public const string SharedConfigWindows = @"C:\StandAlone\OpenHW\configs";
+    public const string SharedConfigLinux = "/mnt/DriveC/StandAlone/OpenHW/configs";
+
+    /// <summary>
+    /// The folder for settings that must match on Linux and Windows (the fan configuration: the BMC keeps whatever the
+    /// last OS wrote, so both have to work from one file). $OPENHW_SHARED_CONFIG overrides it ("off" = none, as tests
+    /// use); otherwise the folder above, when OpenHW's StandAlone folder is there (on Linux: C: is mounted). Null =
+    /// not available: callers keep their files in <see cref="ConfigDir"/>.
+    /// </summary>
+    public static string? SharedConfigDir
+    {
+        get
+        {
+            if (Environment.GetEnvironmentVariable("OPENHW_SHARED_CONFIG") is { Length: > 0 } set) return set == "off" ? null : set;
+            var dir = OperatingSystem.IsWindows() ? SharedConfigWindows : SharedConfigLinux;
+            return Directory.Exists(Path.GetDirectoryName(dir)) ? dir : null;
+        }
+    }
+
     /// <summary>
     /// Machine-wide state the helper keeps (fan journal, saved originals, BMC login): /etc/openhw on Linux,
     /// %ProgramData%\OpenHW on Windows.

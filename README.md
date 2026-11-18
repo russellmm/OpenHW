@@ -320,7 +320,7 @@ would run and warns when it can't keep the mix). **+ Flat / + Graph / + Mix** ma
 curve or duplicate one you already have. Click a fan's name to give it a friendly name (the tooltip keeps the
 original). Drag any fan or curve card to reorder it (or use a fan card's **⋮**: left, right, to start, to end). The
 window's **⋮** saves and loads **configurations** (curves, assignments, names, card order; Ctrl+N / Ctrl+S /
-Ctrl+Shift+S / Ctrl+L, in `~/.config/openhw/fan-profiles/`) as in OpenFan: the file in use is in the title and every change saves there; loading never writes to the BMC by
+Ctrl+Shift+S / Ctrl+L, in the shared `configs/fan-profiles/`) as in OpenFan: the file in use is in the title and every change saves there; loading never writes to the BMC by
 itself — BMC fans wait for Apply (or **Apply all to the BMC**). Each fan card shows its duty and RPM (from the BMC or
 the NVIDIA driver; no calibration needed). **NVIDIA fans** run their curve through the NVIDIA driver (nothing stored;
 untick and the card controls its fans again; a card being lent to a VM gets its fans back first). On BMC fans, where a curve runs
@@ -347,7 +347,10 @@ GPU fans whose curve follows a BMC slot sensor follow their own card's core temp
 W_PUMP+ below 50 %. Choosing sensors uses the BMC's Redfish service and needs a BMC login: **Give OpenHW the BMC
 login…** (type it, or read a file with the user on line 1 and the password on line 2); the helper checks it with the
 BMC and keeps it in `/etc/openhw/bmc-login`, readable by root only. The live setup is saved in
-`~/.config/openhw/fan-curves.json` (and in the configuration file in use).
+`fan-curves.json` (and in the configuration file in use) in the folder **Linux and Windows share**:
+`C:\StandAlone\OpenHW\configs` on Windows = `/mnt/DriveC/StandAlone/OpenHW/configs` on Linux. The BMC keeps the
+curves the last OS wrote, so both work from one file (falls back to `~/.config/openhw` / `%APPDATA%\openhw` when that
+folder isn't there; `OPENHW_SHARED_CONFIG` overrides it).
 
 On the ASUS Pro WS WRX90E-SAGE SE every fan header is driven by the BMC — the NCT6798 Super I/O only measures them
 — so the driver works through the BMC's seven fan zones (CPU_FAN together with CPU_OPT, CHA_FAN1–5, W_PUMP+), using

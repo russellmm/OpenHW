@@ -21,6 +21,8 @@ internal static class TestSetup
     [ModuleInitializer]
     internal static void Initialize()
     {
+        // The real shared fan configuration (C:\StandAlone\OpenHW\configs) is never touched by tests.
+        Environment.SetEnvironmentVariable("OPENHW_SHARED_CONFIG", "off");
         if (!OperatingSystem.IsWindows()) return;
         OpenHW.App.Settings.WindowsAutostart.RunKey = RunKey;
         OpenHW.App.Settings.WindowsAutostart.Approved = @"Software\OpenHW-Tests\StartupApproved";

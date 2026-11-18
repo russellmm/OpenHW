@@ -18,6 +18,8 @@ foreach ($project in 'src\OpenHW.App\OpenHW.App.csproj', 'src\OpenHW.Helper\Open
 $standalone = 'C:\StandAlone\OpenHW'
 Get-Process openhw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$standalone*" } | Stop-Process -Force
 Start-Sleep -Milliseconds 500
-robocopy $out $standalone /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+# configs\ is the fan configuration Linux and Windows share (/mnt/DriveC/StandAlone/OpenHW/configs on Linux): the
+# mirror must never delete it.
+robocopy $out $standalone /MIR /XD (Join-Path $standalone 'configs') /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copy to $standalone failed (robocopy $LASTEXITCODE)" }
 "Mirrored to $standalone"

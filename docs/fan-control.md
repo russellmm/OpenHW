@@ -204,8 +204,10 @@ Not yet checked: whether a slot still reads while its card is lent to the VM.
 
 - **Model** (`Fans/FanCurves.cs`, ported from OpenFan.Core): `FanCurve` = Graph (points over one sensor or the hottest of
   several, linear, flat outside, max speed, hysteresis °C/s) | Flat | Mix (max/min/average of non-mix curves). `FanCurveMath.Evaluate`,
-  `FanHysteresisGate` (OpenFan's HysteresisGate). Saved in `~/.config/openhw/fan-curves.json` (`FanCurveStore`: curves,
-  zone → curve, `FourthAt70`, writes per day).
+  `FanHysteresisGate` (OpenFan's HysteresisGate). Saved in `fan-curves.json` (`FanCurveStore`: curves,
+  zone → curve, `FourthAt70`, writes per day) — since 2026-11-17 in the folder Linux and Windows share
+  (`OsFiles.SharedConfigDir`: `C:\StandAlone\OpenHW\configs` = `/mnt/DriveC/StandAlone/OpenHW/configs`; the file in
+  use is saved relative to it; first start copies this OS's own files there unless it already has a live file).
 - **BMC fit** (`Fans/BmcCurveFit.cs`): a curve runs on the BMC when every sensor it reads is a BMC temperature sensor
   (`bmc:<SDR name>` with an SDR number 1–18). The BMC follows the hottest of its sensors through one curve, so the
   target is g(T) = the curve with every sensor at T (rising: running max; at least the zone's floor) — for rising

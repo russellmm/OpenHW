@@ -4,8 +4,9 @@ using OpenHW.Hardware;
 namespace OpenHW.App.Power;
 
 /// <summary>
-/// The user's fan curves and which fan runs which curve: ~/.config/openhw/fan-curves.json. A missing or unreadable file
-/// means no curves (every fan keeps the BMC curve it has).
+/// The user's fan curves and which fan runs which curve: fan-curves.json in the folder Linux and Windows share
+/// (C:\StandAlone\OpenHW\configs = /mnt/DriveC/StandAlone/OpenHW/configs), else ~/.config/openhw. A missing or
+/// unreadable file means no curves (every fan keeps the BMC curve it has).
 /// </summary>
 public sealed class FanCurveStore
 {
@@ -33,16 +34,52 @@ public sealed class FanCurveStore
     public string WritesDay { get; set; } = "";
     public Dictionary<string, int> WritesToday { get; set; } = [];
 
-    public static string DefaultPath => Path.Combine(Settings.AppSettings.ConfigDir, "fan-curves.json");
+    /// <summary>
+    /// The folder of the live file and the profiles: the configuration Linux and Windows share
+    /// (<see cref="OsFiles.SharedConfigDir"/>: the BMC keeps the curves the last OS wrote, so both work from one file),
+    /// or the per-user folder when that isn't available.
+    /// </summary>
+    public static string Dir => OsFiles.SharedConfigDir ?? Settings.AppSettings.ConfigDir;
+
+    public static string DefaultPath => Path.Combine(Dir, "fan-curves.json");
 
     /// <summary>Where saved configurations go by default (as OpenFan's profiles folder).</summary>
-    public static string ProfilesDir => Path.Combine(Settings.AppSettings.ConfigDir, "fan-profiles");
+    public static string ProfilesDir => Path.Combine(Dir, "fan-profiles");
 
     /// <summary>
     /// The configuration file in use (Save as… / Load… / New…), or null. While set, every change is also saved there,
     /// as in OpenFan ("changes save here").
     /// </summary>
-    public string? ConfigFile { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string? ConfigFile { get; set; }
+
+    /// <summary>
+    /// <see cref="ConfigFile"/> as saved: relative ("fan-profiles/fans.json") when it's beside the live file, so the
+    /// same file means the same configuration from Windows (C:\…) and Linux (/mnt/DriveC/…).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonPropertyName("ConfigFile")]
+    public string? StoredConfigFile
+    {
+        get
+        {
+            if (ConfigFile is null) return null;
+            var relative = Path.GetRelativePath(Path.GetDirectoryName(Path.GetFullPath(FilePath))!, Path.GetFullPath(ConfigFile));
+            return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? ConfigFile : relative.Replace('\\', '/');
+        }
+        set => ConfigFile = value;
+    }
+
+    // After loading: a relative file in use is beside the live file; one saved by the other OS (or before the move to
+    // the shared folder) that isn't there is looked for in this folder's fan-profiles by name.
+    private void ResolveConfigFile()
+    {
+        if (ConfigFile is not { Length: > 0 } stored) { ConfigFile = null; return; }
+        var dir = Path.GetDirectoryName(Path.GetFullPath(FilePath))!;
+        var absolute = stored.Contains(":\\", StringComparison.Ordinal) || stored.StartsWith('/') || stored.StartsWith('\\');
+        if (!absolute) { ConfigFile = Path.GetFullPath(Path.Combine(dir, stored)); return; }
+        if (File.Exists(stored)) return;
+        var moved = Path.Combine(dir, "fan-profiles", stored[(stored.LastIndexOfAny(['/', '\\']) + 1)..]);
+        if (File.Exists(moved)) ConfigFile = moved;
+    }
 
     /// <summary>A configuration file: the curves, which fan runs which, the fans' names.</summary>
     public sealed record FanConfig(int Version, List<FanCurve> Curves, Dictionary<string, string> Assignments,
@@ -102,13 +139,41 @@ public sealed class FanCurveStore
 
     public static FanCurveStore Load(string? path = null)
     {
-        path ??= DefaultPath;
+        if (path is null)
+        {
+            path = DefaultPath;
+            MoveToShared(Settings.AppSettings.ConfigDir, Dir);
+        }
         FanCurveStore store;
         try { store = JsonSerializer.Deserialize<FanCurveStore>(File.ReadAllText(path)) ?? new(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { store = new(); }
         store.FilePath = path;
+        store.ResolveConfigFile();
         store.Normalise();
         return store;
+    }
+
+    /// <summary>
+    /// First start with the shared folder: copies this OS's own fan-curves.json and fan-profiles into it, unless the
+    /// shared folder already has a live file (then that one wins — it's what the other OS last wrote to the BMC). The
+    /// old files stay where they were.
+    /// </summary>
+    public static void MoveToShared(string from, string to)
+    {
+        if (Path.GetFullPath(from) == Path.GetFullPath(to)) return;
+        var live = Path.Combine(from, "fan-curves.json");
+        if (File.Exists(Path.Combine(to, "fan-curves.json")) || !File.Exists(live)) return;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(to, "fan-profiles"));
+            var profiles = Path.Combine(from, "fan-profiles");
+            if (Directory.Exists(profiles))
+                foreach (var file in Directory.GetFiles(profiles, "*.json"))
+                    if (!File.Exists(Path.Combine(to, "fan-profiles", Path.GetFileName(file))))
+                        File.Copy(file, Path.Combine(to, "fan-profiles", Path.GetFileName(file)));
+            File.Copy(live, Path.Combine(to, "fan-curves.json"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"openhw: copying fan curves to {to}: " + ex.Message); }
     }
 
     // A hand-edited or older file can hold anything: keep what the UI could have produced.
