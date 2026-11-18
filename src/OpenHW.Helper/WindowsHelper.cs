@@ -40,6 +40,7 @@ internal static class WindowsHelper
             case ["--hsmp-check"]: return HsmpCheck();
             case ["--smbus-scan"]: return SmbusScan();
             case ["--smbus-switch"]: return SmbusSwitch();
+            case ["--spd-scan", var port] when int.TryParse(port, out var p) && p is >= 0 and <= 4: return SpdScan(p);
             case ["--install"]: return Install();
             case ["--uninstall"]: return Uninstall();
             case ["--once", .. var command] when command.Length > 0:
@@ -354,6 +355,28 @@ internal static class WindowsHelper
         {
             bus.SendByte(0x73, original);
             Console.WriteLine($"0x73 restored to 0x{original:x2}, reads back 0x{Try(() => bus.ReceiveByte(0x73).ToString("x2"))}");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Read-only, one FCH SMBus port: a receive-byte at each DDR5 hub address 0x50–0x57, then MR0/MR1 of the hubs
+    /// that answer (an SPD5118 reads 51 18). Ports 2–4 are the main controller's other ports (port select, restored
+    /// after every transaction); HWiNFO's debug log shows the DIMMs on hosts it numbers 1–3.
+    /// </summary>
+    private static int SpdScan(int port)
+    {
+        using var buses = WindowsSmbusProvider.Open(out var reason);
+        if (buses is null) { Console.WriteLine(reason); return 1; }
+        var bus = (WindowsSmbus)buses.Open(port);
+        var found = new List<int>();
+        for (var a = 0x50; a <= 0x57; a++)
+            try { bus.ReceiveByte(a); found.Add(a); } catch (IOException) { }
+        Console.WriteLine($"port {port} hubs: {(found.Count == 0 ? "none" : string.Join(' ', found.Select(a => a.ToString("x2"))))}");
+        foreach (var a in found)
+        {
+            try { Console.WriteLine($"  0x{a:x2} MR0 MR1 = {bus.ReadByte(a, 0x00):x2} {bus.ReadByte(a, 0x01):x2}"); }
+            catch (IOException ex) { Console.WriteLine($"  0x{a:x2}: {ex.Message}"); }
         }
         return 0;
     }
