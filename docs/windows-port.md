@@ -33,8 +33,35 @@ Windows.
   - Start at login: `HKCU\…\Run` "OpenHW" (respects Task Manager's Startup apps disable). Tests use a scratch key.
   - CSV logging works as is (Windows opens the file shared so it can be read while logging).
   - **Not yet**: WireView in the app (COM port), UPS checked live (NUT client is portable), WHEA error count.
-- Next: phase 2 (helper as a Windows service on a named pipe, `WmiIpmiTransport`, BMC sensors/fans) — needs an
-  elevated install; then the kernel-access decision (open questions below).
+- **Phase 2 — core done (2026-11-17 evening):**
+  - `openhw-helper` on Windows = the **"OpenHW Helper" service** (OpenHWHelper, LocalSystem, auto start, restart on
+    failure) on `\\.\pipe\openhw-helper`: ACL = SYSTEM, Administrators, group "OpenHW Users", plus accounts listed by SID
+    in `%ProgramData%\OpenHW\pipe-users` (`--install` adds the installing user, so no sign-out is needed); first
+    instance created with FILE_FLAG_FIRST_PIPE_INSTANCE. Modes: `--console`, `--once <cmd>`, `--ipmi-check`,
+    `--install`, `--uninstall`. State in `%ProgramData%\OpenHW` (SYSTEM + Administrators only). `HelperClient` uses the
+    pipe on Windows; the Linux protocol is unchanged (Windows-only commands live in `WindowsHelperSession`).
+  - **`WmiIpmiTransport`** (`Microsoft_IPMI.RequestResponse`, in-box `ipmidrv.sys`): `ResponseData` starts with the
+    completion code (checked live: Get Device ID `00 20 81 02 01 02 BF 3F 0A 00 93 11 22 00 00 00`, AST2600 fw 2.01).
+    Live: 55 BMC sensors, discrete states, SEL, thresholds, **fan control available with all 7 zones** (nothing written).
+  - **HWiNFO collides with it**: with HWiNFO running only 1 of 5 full BMC reads succeeded (undefined completion codes
+    0x02/0x2D, "didn't answer"); with HWiNFO closed 5 of 5. The transport now retries undefined codes; re-check with
+    HWiNFO running before the side-by-side parity phase (or turn HWiNFO's IPMI sensors off).
+  - Machine identity for journals/originals = SMBIOS UUID (WMI), lowercase as Linux's `product_uuid`.
+  - App: BMC group in the window; the BMC's "CPU Package Temp" is the Windows CPU temperature (tray default) until
+    kernel access.
+  - **GPU power limits** (owner 2026-11-17: OpenHW replaces OpenFan on Windows too): Power → Power Limits on Windows
+    (`WindowsPowerLimitsWindow`) sets each card's limit through the service (`gpupower`), and "Apply and keep" saves it
+    by UUID (`gpupowersave`, `%ProgramData%\OpenHW\gpu-power-limits.json`); the service reapplies saved limits when it
+    starts — OpenFan's behaviour. Not yet exercised live (no limit changed).
+  - Install for now: `packaging\windows\build.ps1` (self-contained win-x64 into dist\win-x64), then
+    `packaging\windows\install.ps1` elevated (copies to `C:\Program Files\OpenHW`, registers and starts the service).
+  - Still to do in phase 2: exercise Fan Control (curves/thresholds) and a GPU limit live with the owner's go-ahead;
+    NVIDIA fan control live; Redfish over LAN (`%ProgramData%\OpenHW\bmc-url`, then Fan Control → BMC login); UEFI
+    variables for BIOS Setup; WireView (COM port).
+- **CPU power limit on Windows** (owner wants it): needs the HSMP mailbox over SMN → kernel access. OpenFan for Windows
+  already loads **PawnIO** (its `AMDFamily17.bin` module, SMN reads for Tctl/CCD temps) — so the kernel-access choice
+  is likely PawnIO, as OpenFan; whether its AMD module allows the SMN *writes* the mailbox needs is to be checked.
+  OpenFan's Windows source (E:\OpenAI\OpenFan) has GPU power limits only — no CPU limit found there.
 
 ## Goal and scope (owner, 2026-11-16)
 

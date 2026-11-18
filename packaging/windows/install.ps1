@@ -12,5 +12,8 @@ if (Get-Service OpenHWHelper -ErrorAction SilentlyContinue) { Stop-Service OpenH
 Get-Process openhw -ErrorAction SilentlyContinue | Stop-Process -Force
 New-Item -ItemType Directory -Force $to | Out-Null
 Copy-Item (Join-Path $from '*') $to -Recurse -Force
-& (Join-Path $to 'openhw-helper.exe') --install
+# --install runs sc.exe and net.exe, which report "already exists" on stderr when updating: not an error here.
+$ErrorActionPreference = 'Continue'
+& (Join-Path $to 'openhw-helper.exe') --install 2>&1 | ForEach-Object { "$_" }
+if ((Get-Service OpenHWHelper).Status -ne 'Running') { Start-Service OpenHWHelper }
 "Installed to $to"

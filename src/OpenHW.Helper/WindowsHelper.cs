@@ -119,14 +119,21 @@ internal static class WindowsHelper
             return (fans, reason);
         }
 
-        public HelperSession Session() => new(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans, redfish: _fans?.Status(null).Available == true ? _redfish : null,
-            loginPath: LoginPath, gpuFans: _gpuFans);
+        private readonly SavedGpuPowerLimits _savedGpuPower = new();
+
+        public WindowsHelperSession Session() => new(
+            new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans, redfish: _fans?.Status(null).Available == true ? _redfish : null,
+                loginPath: LoginPath, gpuFans: _gpuFans),
+            _gpuPower, _savedGpuPower);
 
         public bool GroupAccess => _server?.GroupAccess ?? false;
 
         public void Start()
         {
-            _server = new PipeHelperServer(Session);
+            // The saved GPU power limits, as nvidia-power-limit.service does at boot on Linux (OpenFan did this on Windows).
+            try { foreach (var line in _savedGpuPower.Apply(_gpuPower)) Console.Error.WriteLine("openhw-helper: GPU power limit at start: " + line); }
+            catch (Exception ex) when (ex is IOException or DllNotFoundException or EntryPointNotFoundException) { Console.Error.WriteLine("openhw-helper: GPU power limits: " + ex.Message); }
+            _server = new PipeHelperServer(() => Session().HandleLine);
             _server.Start();
         }
 

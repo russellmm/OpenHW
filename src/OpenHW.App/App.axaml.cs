@@ -185,9 +185,9 @@ public sealed class App : Application
                 DynamicLabel = () => $"Remove unexpected CPU cap ({PowerModeController.Ghz(_power.UnexpectedCapKHz ?? 0)})",
                 Visible = () => _power.UnexpectedCapKHz is not null,
             },
-            // CPU caps, power limits and GPU Lending are Linux only (not part of the Windows port).
+            // CPU caps and GPU Lending are Linux only (not part of the Windows port).
             new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)) { Visible = OperatingSystem.IsLinux },
-            new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)) { Visible = OperatingSystem.IsLinux },
+            new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
             new("Fan Control…", () => Dispatcher.UIThread.Post(ShowFanControl)),
             new("GPU Lending…", () => Dispatcher.UIThread.Post(ShowGpuLending)) { Visible = OperatingSystem.IsLinux },
             TrayMenuItem.Separator,
@@ -922,8 +922,17 @@ public sealed class App : Application
         _gpuLending.Activate();
     }
 
+    private WindowsPowerLimitsWindow? _windowsPowerLimits;
+
     private void ShowPowerLimits()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            if (_windowsPowerLimits is null) WindowPlaces.Track(_windowsPowerLimits = new WindowsPowerLimitsWindow(_gpuPower), "power-limits");
+            _windowsPowerLimits.Show();
+            _windowsPowerLimits.Activate();
+            return;
+        }
         if (_powerLimits is null) WindowPlaces.Track(_powerLimits = new PowerLimitsWindow(_gpuPower, new CpuPowerLimits()), "power-limits");
         _powerLimits.Show();
         _powerLimits.Activate();

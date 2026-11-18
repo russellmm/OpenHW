@@ -23,7 +23,7 @@ public sealed class WindowsHelperTests
     {
         var name = "openhw-helper-test-" + Guid.NewGuid().ToString("N");
         using var reader = new BmcReader(() => new BmcTests.FakeBmc());
-        await using var server = new PipeHelperServer(() => new HelperSession(new NoSmart(), bmc: reader), name);
+        await using var server = new PipeHelperServer(() => new HelperSession(new NoSmart(), bmc: reader).HandleLine, name);
         server.Start();
 
         Assert.Equal(HelperSession.Version, PipeHelperClient.Request("ping", 2000, 64, name));
@@ -31,8 +31,25 @@ public sealed class WindowsHelperTests
         var refused = Assert.Throws<IOException>(() => PipeHelperClient.Request("bmc set", 2000, 64, name));
         Assert.Contains("err unknown command", refused.Message);
         // A second server can't take the name over (FILE_FLAG_FIRST_PIPE_INSTANCE).
-        await using var impostor = new PipeHelperServer(() => new HelperSession(new NoSmart()), name);
+        await using var impostor = new PipeHelperServer(() => new HelperSession(new NoSmart()).HandleLine, name);
         Assert.ThrowsAny<Exception>(impostor.Start);
+    }
+
+    [WindowsFact]
+    public void SavedGpuLimitsAreKeptByUuidAndTheCommandsValidate()
+    {
+        var path = Path.Combine(Directory.CreateTempSubdirectory("openhw-gpulimits-").FullName, "gpu-power-limits.json");
+        var saved = new SavedGpuPowerLimits(path);
+        Assert.Empty(saved.Read());
+        saved.Set("GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0", 450);
+        saved.Set("GPU-d0f36b3b-abad-1a42-0e65-e78da2139da3", 300);
+        saved.Set("GPU-d0f36b3b-abad-1a42-0e65-e78da2139da3", null);
+        Assert.Equal(new Dictionary<string, long> { ["GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0"] = 450 }, saved.Read());
+
+        var session = new WindowsHelperSession(new HelperSession(new NoSmart()), gpuPower: null, saved);
+        Assert.Equal(saved.Read(), GpuWire.Decode<Dictionary<string, long>>(session.HandleLine("gpupowersaved")[3..]));
+        Assert.Equal("err GPU power limits unavailable", session.HandleLine("gpupowersave GPU-6d3eab54-984e-f1bc-68eb-ee4948e6c3b0 400"));
+        Assert.Equal("ok " + HelperSession.Version, session.HandleLine("ping")); // the shared commands still answer
     }
 
     [WindowsFact]

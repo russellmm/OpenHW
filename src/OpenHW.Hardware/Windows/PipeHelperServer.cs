@@ -22,7 +22,7 @@ public static class HelperPipe
 /// instance is created with FILE_FLAG_FIRST_PIPE_INSTANCE, so another process can't have squatted the name.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class PipeHelperServer(Func<HelperSession> session, string name = HelperPipe.Name) : IAsyncDisposable
+public sealed class PipeHelperServer(Func<Func<string, string>> session, string name = HelperPipe.Name) : IAsyncDisposable
 {
     private const int MaxLineBytes = 1024; // as HelperServer
 
@@ -124,7 +124,7 @@ public sealed class PipeHelperServer(Func<HelperSession> session, string name = 
                 {
                     var line = await ReadLineAsync(pipe, _cts.Token);
                     if (line is null) break;
-                    var reply = Encoding.ASCII.GetBytes(helper.HandleLine(line) + "\n");
+                    var reply = Encoding.ASCII.GetBytes(helper(line) + "\n");
                     await pipe.WriteAsync(reply, _cts.Token);
                     await pipe.FlushAsync(_cts.Token);
                 }
