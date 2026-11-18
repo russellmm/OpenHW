@@ -39,7 +39,10 @@ public sealed class WindowsSmbus(PawnIo pawn, int port) : ISmbus
         return bytes.AsSpan(1, Math.Min(length, bytes.Length - 1)).ToArray();
     }
 
-    public void WriteByte(int address, byte command, byte value) => Transfer(address, Write, command, ByteData, [value], 0);
+    public void WriteByte(int address, byte command, byte value) => Transfer(address, Write, command, ByteData, [value], 1); // the module wants an output buffer even for writes
+
+    /// <summary>A send-byte (one byte, no command): how an I2C bus switch (PCA954x) takes its channel mask.</summary>
+    public void SendByte(int address, byte value) => Transfer(address, Write, value, Byte, [value], 1); // the value goes as the command; the module still wants a data word
 
     /// <summary>A receive-byte (no command): what i2cdetect -r uses to find devices without writing anything.</summary>
     public byte ReceiveByte(int address) => (byte)Transfer(address, Read, 0, Byte, [], 1)[0];

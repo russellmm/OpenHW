@@ -39,6 +39,7 @@ internal static class WindowsHelper
             case ["--ipmi-check"]: return IpmiCheck();
             case ["--hsmp-check"]: return HsmpCheck();
             case ["--smbus-scan"]: return SmbusScan();
+            case ["--smbus-switch"]: return SmbusSwitch();
             case ["--install"]: return Install();
             case ["--uninstall"]: return Uninstall();
             case ["--once", .. var command] when command.Length > 0:
@@ -309,6 +310,50 @@ internal static class WindowsHelper
                 if (a is >= 0x48 and <= 0x4F) Console.WriteLine($"  0x{a:x2} PMIC vendor = {Try(() => $"{bus.ReadByte(a, 0x3C):x2}{bus.ReadByte(a, 0x3D):x2}")}");
                 if (a == 0x20) Console.WriteLine($"  0x20 IC_DEVICE_ID = {Try(() => Convert.ToHexString(bus.ReadBlock(a, 0xAD)))}");
             }
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Owner-approved (2026-11-18): the device at port 1 address 0x73, probably a PCA954x I2C switch in front of the
+    /// other DIMMs. Reads its channel mask, then for each single channel writes that mask, lists what answers in the
+    /// DIMM ranges (thermal sensors 0x10–0x17, PMICs 0x48–0x4F, hubs 0x50–0x57) with each hub's MR0–MR7, and finally
+    /// writes the original mask back. The port-1 baseline (switch untouched) comes first.
+    /// </summary>
+    private static int SmbusSwitch()
+    {
+        using var buses = WindowsSmbusProvider.Open(out var reason);
+        if (buses is null) { Console.WriteLine(reason); return 1; }
+        var bus = (WindowsSmbus)buses.Open(1);
+        string Try(Func<string> read) { try { return read(); } catch (IOException ex) { return "(" + ex.Message + ")"; } }
+        void Dimms(string title)
+        {
+            var found = new List<int>();
+            foreach (var a in Enumerable.Range(0x10, 8).Concat(Enumerable.Range(0x48, 16)))
+                try { bus.ReceiveByte(a); found.Add(a); } catch (IOException) { }
+            Console.WriteLine($"{title}: {(found.Count == 0 ? "nothing" : string.Join(' ', found.Select(a => a.ToString("x2"))))}");
+            foreach (var a in found.Where(a => a is >= 0x50 and <= 0x57 or >= 0x10 and <= 0x17))
+                Console.WriteLine($"  0x{a:x2} MR0-7 = {Try(() => string.Join(' ', Enumerable.Range(0, 8).Select(r => bus.ReadByte(a, (byte)r).ToString("x2"))))}");
+        }
+        Dimms("port 1, switch untouched");
+        byte original;
+        try { original = bus.ReceiveByte(0x73); }
+        catch (IOException ex) { Console.WriteLine("0x73 doesn't answer a read: " + ex.Message); return 1; }
+        Console.WriteLine($"0x73 channel mask now = 0x{original:x2}");
+        try
+        {
+            for (var channel = 0; channel < 8; channel++)
+            {
+                var mask = (byte)(1 << channel);
+                try { bus.SendByte(0x73, mask); }
+                catch (IOException ex) { Console.WriteLine($"channel {channel}: refused ({ex.Message})"); continue; }
+                Dimms($"channel {channel} (mask 0x{mask:x2}, reads back 0x{Try(() => bus.ReceiveByte(0x73).ToString("x2"))})");
+            }
+        }
+        finally
+        {
+            bus.SendByte(0x73, original);
+            Console.WriteLine($"0x73 restored to 0x{original:x2}, reads back 0x{Try(() => bus.ReceiveByte(0x73).ToString("x2"))}");
         }
         return 0;
     }

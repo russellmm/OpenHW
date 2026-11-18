@@ -164,6 +164,14 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   thermal sensors 0x12/13/16/17, hubs 0x52/53/56/57 (MR0 0x8E), 0x73 (probably a bus switch). Hardware Check on
   Windows now shows the BIOS version and memory size, and Windows notes instead of Linux commands.
 
+- **Port 1 bus switch (owner-approved, 2026-11-18, `openhw-helper --smbus-switch`):** 0x73 is a 4-channel switch
+  (masks 0x10–0x80 read back 0), left by the BMC at **0x04** and restored to it. Channel 0 and 2: devices at
+  0x12/13/16/17 + 0x52/53/56/57; channel 1: 0x12/13 + 0x52/53; channel 3: nothing. On every channel every register of
+  every device reads one repeating word (ch0 `03 00`, ch1 `90 DC`, ch2 `8E DC`): the devices answer their address but
+  not the register pointer — likely 2-byte addressing (SPD5118 MR11) or I3C mode set by the BMC. Reading them would
+  need a write to each hub's mode register on a bus the BMC uses: not done; needs research and the owner's go-ahead.
+  PawnIO's `ioctl_smbus_xfer` wants an output buffer and a data word even for writes (else 0x8007007A).
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
