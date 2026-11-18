@@ -196,6 +196,8 @@ public static partial class SensorExplanations
         R(@"Physical Memory Used|Physical Memory Available|Physical Memory Load", "RAM in use by programs and the kernel " +
             "(cache that can be freed counts as available)."),
         R(@"Swap Used|Swap Total|Swap Load", "Swap space on disk. Heavy swap use means RAM ran short and things slow down."),
+        R(@"Page File Usage", "Share of the Windows page file in use. High use means RAM ran short and Windows moved memory to disk."),
+        R(@"Virtual Memory Load", "Committed memory as a share of the commit limit (RAM plus page file). Near 100 % new allocations start to fail."),
         R(@"Virtual Memory Committed|Virtual Memory Commit Limit", "Memory programs have reserved, against how much the " +
             "kernel will promise (RAM plus swap)."),
         R(@"CPU Pressure.*|Memory Pressure.*|I/O Pressure.*", "Linux pressure stall information: share of time tasks " +
@@ -228,6 +230,7 @@ public static partial class SensorExplanations
         R(@"PCIe Link Speed|PCIe Link Width", "The negotiated PCIe link. Idle cards drop to a lower speed to save power."),
         // ── Drives ─────────────────────────────────────────────────────────────────────────────────────────────
         R(@"Drive Temperature", "The SSD's temperature. NVMe drives throttle around 70–80 °C."),
+        R(@"Drive Temperature \d", "One of the drive's own temperature sensors (NVMe sensor 1–8). Which part it measures — controller or flash — is up to the maker; the plain Drive Temperature is the one the drive throttles by."),
         R(@"Available Spare", "Spare flash blocks left for replacing worn ones, from 100 %. Below the Spare Warning " +
             "Threshold the drive reports a warning."),
         R(@"Spare Warning Threshold", "The Available Spare level at which the drive raises a warning."),

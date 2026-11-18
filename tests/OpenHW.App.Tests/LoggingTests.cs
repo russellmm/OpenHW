@@ -21,7 +21,8 @@ public sealed class LoggingTests
             logger.Append(new DateTime(2026, 10, 23, 21, 5, 11), id => id == "a" ? 44 : double.NaN);
             Assert.Equal(2, logger.Rows);
             // Flushed every row: readable while logging continues.
-            Assert.Equal(3, File.ReadAllLines(path).Length);
+            using (var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
+                Assert.Equal(3, reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
         }
         var lines = File.ReadAllLines(path);
         Assert.Equal("Date,Time,\"CPU [#0]: AMD Ryzen: Enhanced: CPU (Tctl/Tdie) [°C]\",\"Memory \"\"used\"\" [MB]\",Missing".Replace("\"CPU", "CPU").Replace("[°C]\"", "[°C]"), lines[0]);
@@ -46,7 +47,7 @@ public sealed class LoggingTests
 
 public sealed class LogColumnTests
 {
-    [Fact]
+    [LinuxFact]
     public void OnlyChosenSensorsBecomeColumnsInWindowOrder()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-logcols-").FullName);

@@ -44,7 +44,7 @@ public sealed class LendingSetupTests : IDisposable
         }
     }
 
-    [Fact]
+    [LinuxFact]
     public void InstallingPutsEverythingInPlaceAndReplacesRtxinvmsRuleAndHook()
     {
         var changes = Setup().Apply(installed: true, Card);
@@ -68,7 +68,7 @@ public sealed class LendingSetupTests : IDisposable
         Assert.Empty(_ran);
     }
 
-    [Fact]
+    [LinuxFact]
     public void UninstallingTakesItAllOutAndInstallingBringsTheHookBack()
     {
         Setup().Apply(installed: true, Card);
@@ -86,7 +86,7 @@ public sealed class LendingSetupTests : IDisposable
         Assert.Equal(All, Setup().Check(Card));
     }
 
-    [Fact]
+    [LinuxFact]
     public void AnotherCardRewritesTheRuleAndNoCardLeavesNothingToIgnore()
     {
         Setup().Apply(true, Card);
@@ -103,7 +103,7 @@ public sealed class LendingSetupTests : IDisposable
     private CardFilter Filter() => new(Path.Combine(Etc, "openhw", "card-filter.json"), Path.Combine(_root, "run", "now.json"),
         Path.Combine(_root, "bpf"), Path.Combine(_root, "cgroup"), Path.Combine(_root, "proc"), Path.Combine(_root, "sys"), setup: Setup());
 
-    [Fact]
+    [LinuxFact]
     public void UninstallKeepsTheChoicesAndRefusesTheFilterUntilInstalledAgain()
     {
         using (var filter = Filter())
@@ -133,7 +133,7 @@ public sealed class LendingSetupTests : IDisposable
         }
     }
 
-    [Fact]
+    [LinuxFact]
     public void OpenHwsLauncherUnderItsOldNameIsReplacedNotKept()
     {
         // 0.33.0–0.33.1 wrote OpenHW's launcher as 50-windows-gpu: two launchers would run the handoff twice.
@@ -145,7 +145,7 @@ public sealed class LendingSetupTests : IDisposable
         Assert.Contains(changes, c => c.Contains("old name", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [LinuxFact]
     public void WirePlumberNamesTheCardsAudioFunction()
     {
         Assert.Equal("alsa_card.pci-0000_c1_00.1", LendingSetup.AudioDeviceName("0000:C1:00.0"));

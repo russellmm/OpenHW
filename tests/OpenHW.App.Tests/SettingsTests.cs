@@ -49,14 +49,14 @@ public sealed class SettingsTests
         settings.StartAtLogin = true;
         settings.StartInTray = true;
         settings.Save();
-        var entry = File.ReadAllText(AppSettings.AutostartPath);
+        var entry = TestSetup.AutostartEntry()!;
         Assert.Contains("--tray", entry);
-        Assert.Contains("Type=Application", entry);
+        if (!OperatingSystem.IsWindows()) Assert.Contains("Type=Application", entry);
         Assert.True(AppSettings.Load().StartAtLogin);
 
         settings.StartAtLogin = false;
         settings.Save();
-        Assert.False(File.Exists(AppSettings.AutostartPath));
+        Assert.Null(TestSetup.AutostartEntry());
     }
 
     [Theory]
@@ -101,7 +101,7 @@ public sealed class SettingsTests
 
 public sealed class SettingsWindowTests
 {
-    [Avalonia.Headless.XUnit.AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void ShowsTrayIconsAndOffersEverySensor()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-settings-ui-").FullName);
@@ -137,7 +137,7 @@ public sealed class SensorSearchTests
     public void EveryWordMustMatch(string label, string query, bool expected) =>
         Assert.Equal(expected, TrayIconsWindow.Matches(label, query));
 
-    [Avalonia.Headless.XUnit.AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void TypingNarrowsTheList()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-search-").FullName);
@@ -203,7 +203,7 @@ public sealed class ColorTests
 
 public sealed class TrayDuplicateTests
 {
-    [Avalonia.Headless.XUnit.AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void SensorsInTheTrayAreGrayedAndCantBeAddedTwice()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-dupes-").FullName);
@@ -442,7 +442,7 @@ public sealed class ForeignAutostartTests
         File.WriteAllText(AppSettings.AutostartPath, entry);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AnotherLaunchersEntryIsKeptOnEverySave()
     {
         Isolate(Rtxgpu);
@@ -457,7 +457,7 @@ public sealed class ForeignAutostartTests
         Assert.Equal(before, File.GetLastWriteTimeUtc(AppSettings.AutostartPath));
     }
 
-    [Fact]
+    [LinuxFact]
     public void TurningLoginStartOffAndOnKeepsTheOtherLaunchersCommand()
     {
         Isolate(Rtxgpu);
@@ -478,7 +478,7 @@ public sealed class ForeignAutostartTests
         Assert.True(AppSettings.Load().StartAtLogin);
     }
 
-    [Fact]
+    [LinuxFact]
     public void OpenHwsOwnEntryIsStillItsToRewrite()
     {
         Isolate("[Desktop Entry]\nExec=\"/usr/bin/openhw\" --tray\n");
@@ -489,7 +489,7 @@ public sealed class ForeignAutostartTests
         Assert.DoesNotContain("--tray", File.ReadAllText(AppSettings.AutostartPath));
     }
 
-    [Avalonia.Headless.XUnit.AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void SettingsSaysWhoStartsOpenHwAtLogin()
     {
         Isolate(Rtxgpu);

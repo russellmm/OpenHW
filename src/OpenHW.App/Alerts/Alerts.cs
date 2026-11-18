@@ -60,9 +60,7 @@ public sealed class AlertStore
     public event Action? Changed;
 
     private static string DefaultPath => System.IO.Path.Combine(
-        Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-            ? config
-            : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"),
+        OpenHW.Hardware.OsFiles.ConfigHome,
         "openhw", "alerts.json");
 
     public static AlertStore Load()

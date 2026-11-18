@@ -1,7 +1,40 @@
 # Porting OpenHW to Windows 11 (to replace HWiNFO)
 
-Status: **plan**, written 2026-11-17 against OpenHW 0.38.2. Nothing is ported yet. This is the working document for the
-port: what moves as is, what needs a Windows implementation, the order to do it in, and what to check first.
+Status: written 2026-11-17 against OpenHW 0.38.2 as a plan; **phase 0 done and most of phase 1 done on 2026-11-17**
+(on the owner's Windows 11 Pro install of the same workstation). This is the working document for the port: what
+moves as is, what needs a Windows implementation, the order to do it in, and what to check first.
+
+## Progress (2026-11-17)
+
+Rule from the owner: **the Linux features stay exactly as they are** — every Windows change is behind
+`OperatingSystem.IsWindows()` / `IsLinux()`, Linux keeps its code paths and call order. GPU Lending isn't wanted on
+Windows.
+
+- **Phase 0 — done.** The assembly-wide `[SupportedOSPlatform("linux")]` is gone; Windows code is in
+  `OpenHW.Hardware/Windows/` and marked per class. `OsFiles` (Hardware): config root (`%APPDATA%\openhw`; XDG on Linux),
+  owner-only files (0600 on Linux, a private ACL on Windows). Single instance: a per-user named pipe on Windows.
+  `SensorHub` picks engines per platform. CPU Frequency, Power Limits, power profiles and GPU Lending are hidden on
+  Windows (menus, tray menu, startup). Tests: 297 pass on Windows; 69 Linux-only ones (`[LinuxFact]`,
+  `[LinuxAvaloniaFact]`: lending, card filter, sysfs fakes with ':' names, tests needing Tctl/FCLK) are skipped there.
+- **Phase 1 — mostly done, all without elevation:**
+  - System (`WindowsSystemEngine`): memory/commit/page file (GetPerformanceInfo, PDH), per-core clocks
+    (Processor Frequency × % Processor Performance), per-thread usage, C1/C2/C3 residency. Same ids as Linux.
+  - NVIDIA: NVML read in the app (`nvml.dll` mapped by a DllImport resolver), all three cards with every extra row.
+  - **NVMe (`WindowsNvmeEngine`)**: a query-only handle answers the SMART/Health log, Identify Controller and
+    IOCTL_DISK_PERFORMANCE unelevated (checked on all 8 drives) → SMART rows, composite + sensor temperatures, activity.
+    Drive identity = SHA-256(PCI address + model + serial) exactly as Linux (serial from Identify Controller, PCI
+    address from the controller's device node) — **to confirm on Linux** that the ids match (compare a drive's
+    `nvme-health:<id>` there with the Windows `--dump`/settings).
+  - Network (`WindowsNetworkEngine`): GetIfTable2, hardware interfaces with a connector, not-present adapters dropped.
+  - Tray (`Win32TrayIcon`): Shell_NotifyIcon v4, one icon per sensor, tile rendered at the taskbar's exact icon size,
+    native tooltip (≤127 chars), native right-click menu from the same `TrayMenuItem`s, Explorer-restart re-add.
+    Windows 11 puts new icons in the hidden-icons flyout until the user drags them out.
+  - Alerts (`WindowsNotifier`): balloons on a tray icon, shown as toasts by Windows 11 (no buttons; click = default).
+  - Start at login: `HKCU\…\Run` "OpenHW" (respects Task Manager's Startup apps disable). Tests use a scratch key.
+  - CSV logging works as is (Windows opens the file shared so it can be read while logging).
+  - **Not yet**: WireView in the app (COM port), UPS checked live (NUT client is portable), WHEA error count.
+- Next: phase 2 (helper as a Windows service on a named pipe, `WmiIpmiTransport`, BMC sensors/fans) — needs an
+  elevated install; then the kernel-access decision (open questions below).
 
 ## Goal and scope (owner, 2026-11-16)
 

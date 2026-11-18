@@ -23,9 +23,8 @@ public sealed record BmcLogin(string User, string Password)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var stream = OsFiles.CreatePrivate(temp))
         {
-            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             JsonSerializer.Serialize(stream, this);
         }
         File.Move(temp, path, overwrite: true);

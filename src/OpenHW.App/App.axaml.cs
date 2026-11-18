@@ -31,7 +31,7 @@ public sealed class App : Application
     private readonly DispatcherTimer _holderTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly HelperGpuPowerLimits _gpuPower = new(); // read by the helper: the app never opens a card
     private readonly AppSettings _settings = AppSettings.Load();
-    private readonly List<(TraySensor Config, StatusNotifierItem Icon)> _trayIcons = [];
+    private readonly List<(TraySensor Config, ITrayIcon Icon)> _trayIcons = [];
     private List<TrayMenuItem> _trayMenu = [];
     private SettingsWindow? _settingsWindow;
     private SensorSettingsWindow? _sensorSettingsWindow;
@@ -39,7 +39,7 @@ public sealed class App : Application
     private LayoutWindow? _layoutWindow;
     private readonly Dictionary<string, SensorGraphWindow> _graphs = new(StringComparer.Ordinal);
     private readonly AlertMonitor _alerts = new(AlertStore.Load());
-    private readonly DesktopNotifier _notifier = new();
+    private readonly IDesktopNotifier _notifier = OperatingSystem.IsWindows() ? new WindowsNotifier() : new DesktopNotifier();
     private readonly System.Diagnostics.Stopwatch _alertClock = System.Diagnostics.Stopwatch.StartNew();
     private AlertsWindow? _alertsWindow;
     private readonly Dictionary<string, AlertDialog> _alertDialogs = new(StringComparer.Ordinal);
@@ -66,7 +66,7 @@ public sealed class App : Application
             _window = new MainWindow(_hub, _power, new WindowCommands(ShowCpuFrequency, ShowPowerLimits, ShowSettings, () => lifetime.Shutdown())
             {
                 TrayStateOf = TrayStateOf, AddToTray = AddToTray, RemoveFromTray = RemoveFromTray, ShowGraph = ShowGraph,
-                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = ShowGpuLending, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowBiosSettings = ShowBiosSettings, ShowBiosSetup = ShowBiosSetup, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
+                ShowTrayIcons = ShowTrayIcons, ShowSensorSettings = ShowSensorSettings, ShowGpuLending = OperatingSystem.IsLinux() ? ShowGpuLending : null, ShowFanControl = ShowFanControl, ShowHardwareCheck = ShowHardwareCheck, ShowBmcLog = ShowBmcLog, ShowBiosSettings = ShowBiosSettings, ShowBiosSetup = ShowBiosSetup, ShowAlerts = ShowAlerts, AlertSettings = ShowAlertSettings, ShowLayout = ShowLayout,
                 Alerting = () => _alerts.AlertingSensors,
                 IsLogging = () => _logger is not null, StartLogging = () => _ = StartLoggingAsync(), StopLogging = StopLogging,
             }) { PauseWhenHidden = _settings.PauseWhenHidden };
@@ -107,6 +107,32 @@ public sealed class App : Application
                     }, TaskScheduler.Default);
                 }));
 
+            if (OperatingSystem.IsLinux()) StartLinuxServices();
+
+            _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
+            SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
+            _alerts.Store.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // re-pins the watched sensors
+            if (OperatingSystem.IsLinux()) _ = _power.StartAsync(); // power profiles and CPU caps: Linux only
+
+            _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => { RemapRenumbered(); _window?.RebuildTree(); });
+            var period = TimeSpan.FromSeconds(_settings.PollSeconds); // 2 s by default, HWiNFO's polling period
+            _poll = new Timer(_ => Poll(), null, period, period);
+            BuildTrayMenu(lifetime);
+            _ = RebuildTrayAsync();
+            _hardwareCheckTimer.Tick += (_, _) => { _hardwareCheckTimer.Stop(); _ = StartupHardwareCheckAsync(); };
+            _hardwareCheckTimer.Start();
+        }
+
+        base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// GPU Lending's watchers, unchanged from before the Windows port: Linux only (the Windows build leaves GPU Lending
+    /// out, docs/windows-port.md).
+    /// </summary>
+    private void StartLinuxServices()
+    {
+        {
             _lendFollow.Tick += (_, _) =>
             {
                 if (_lend.Current is null) return;
@@ -121,22 +147,7 @@ public sealed class App : Application
                 _settings, new HolderNotifications(this));
             _holderTimer.Tick += (_, _) => { var watch = _holderWatch; _ = Task.Run(() => watch?.Check()); };
             _holderTimer.Start();
-
-            _power.Changed += () => Dispatcher.UIThread.Post(PowerChanged);
-            SensorCustomizations.Current.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // a rename shows in the tray menus
-            _alerts.Store.Changed += () => Dispatcher.UIThread.Post(UpdateTray); // re-pins the watched sensors
-            _ = _power.StartAsync();
-
-            _hub.InventoryChanged += () => Dispatcher.UIThread.Post(() => { RemapRenumbered(); _window?.RebuildTree(); });
-            var period = TimeSpan.FromSeconds(_settings.PollSeconds); // 2 s by default, HWiNFO's polling period
-            _poll = new Timer(_ => Poll(), null, period, period);
-            BuildTrayMenu(lifetime);
-            _ = RebuildTrayAsync();
-            _hardwareCheckTimer.Tick += (_, _) => { _hardwareCheckTimer.Stop(); _ = StartupHardwareCheckAsync(); };
-            _hardwareCheckTimer.Start();
         }
-
-        base.OnFrameworkInitializationCompleted();
     }
 
     /// <summary>
@@ -174,10 +185,11 @@ public sealed class App : Application
                 DynamicLabel = () => $"Remove unexpected CPU cap ({PowerModeController.Ghz(_power.UnexpectedCapKHz ?? 0)})",
                 Visible = () => _power.UnexpectedCapKHz is not null,
             },
-            new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)),
-            new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)),
+            // CPU caps, power limits and GPU Lending are Linux only (not part of the Windows port).
+            new("CPU Frequency…", () => Dispatcher.UIThread.Post(ShowCpuFrequency)) { Visible = OperatingSystem.IsLinux },
+            new("Power Limits…", () => Dispatcher.UIThread.Post(ShowPowerLimits)) { Visible = OperatingSystem.IsLinux },
             new("Fan Control…", () => Dispatcher.UIThread.Post(ShowFanControl)),
-            new("GPU Lending…", () => Dispatcher.UIThread.Post(ShowGpuLending)),
+            new("GPU Lending…", () => Dispatcher.UIThread.Post(ShowGpuLending)) { Visible = OperatingSystem.IsLinux },
             TrayMenuItem.Separator,
             new("Tray Icons…", () => Dispatcher.UIThread.Post(ShowTrayIcons)),
             new("Settings…", () => Dispatcher.UIThread.Post(ShowSettings)),
@@ -203,8 +215,10 @@ public sealed class App : Application
             var config = _settings.TrayIcons[index];
             try
             {
-                var icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index}", "OpenHW",
-                    [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu]);
+                IReadOnlyList<TrayMenuItem> menu = [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu];
+                ITrayIcon icon = OperatingSystem.IsWindows()
+                    ? Win32TrayIcon.Create(index, menu)
+                    : await StatusNotifierItem.CreateAsync($"openhw-tray-{index}", "OpenHW", menu);
                 if (generation != _trayGeneration)
                 {
                     icon.Dispose();
@@ -484,17 +498,20 @@ public sealed class App : Application
             var digits = TrayText(value) + (unit == "°" ? "°" : "");
             var small = unit == "°" ? "" : unit;
             string tile = "";
-            if (_settings.TrayLargeTiles)
+            if (_settings.TrayLargeTiles && !OperatingSystem.IsWindows()) // GNOME's wide SVG tiles; Windows trays are square
                 try { tile = TrayTileSvg.Write(TileKey(config), digits, small, config.Colour); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { tile = ""; } // falls back to the square pixmaps
-            icon.Update(TrayIconRenderer.Render(digits, config.Colour, small), "OpenHW · " + info[0], _trayInfo[config].Tooltip, tile);
+            var pixmaps = OperatingSystem.IsWindows()
+                ? TrayIconRenderer.Render(digits, config.Colour, small, [Win32TrayIcon.IconSize]) // the one size the taskbar draws
+                : TrayIconRenderer.Render(digits, config.Colour, small);
+            icon.Update(pixmaps, "OpenHW · " + info[0], _trayInfo[config].Tooltip, tile);
             // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
             // place, so a menu or submenu the user has open stays open; a different number: rebuild the layout.
             var old = before.TryGetValue(config, out var o) ? o.Lines : [];
             if (old.Count != info.Count) icon.RefreshMenu();
             else if (!old.SequenceEqual(info)) icon.RefreshMenuItems(Enumerable.Range(1, InfoLines));
         }
-        if (_settings.TrayLargeTiles) TrayTileSvg.Prune(_trayIcons.Select(t => TileKey(t.Config)));
+        if (_settings.TrayLargeTiles && !OperatingSystem.IsWindows()) TrayTileSvg.Prune(_trayIcons.Select(t => TileKey(t.Config)));
     }
 
     /// <summary>A tray icon's tile-file key: stable for as long as the icon exists (its settings object), whatever the order.</summary>

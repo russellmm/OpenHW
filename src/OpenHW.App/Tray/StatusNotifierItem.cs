@@ -13,7 +13,7 @@ public sealed record IconPixmap(int Width, int Height, byte[] Argb);
 /// Each item owns its own session-bus connection: watchers identify items by bus name and every item lives at
 /// /StatusNotifierItem, so one connection per icon is how several sensors get several icons.
 /// </summary>
-public sealed class StatusNotifierItem : DBusObject, IDisposable
+public sealed class StatusNotifierItem : DBusObject, ITrayIcon
 {
     private const string ItemPath = "/StatusNotifierItem";
     private const string ItemInterface = "org.kde.StatusNotifierItem";

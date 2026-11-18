@@ -54,7 +54,7 @@ public sealed class LayoutAndValuesTests
         Assert.Null(CustomizeDialog.ParseNumber("1e999")); // not finite
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void CustomizedValuesShowEverywhereAndReset()
     {
         var (hub, window, custom) = Open();
@@ -79,7 +79,7 @@ public sealed class LayoutAndValuesTests
         Assert.Null(custom.ValuesOf(row.Id));
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void CustomizeDialogValidatesPreviewsAndReturnsTheValues()
     {
         var (hub, window, _) = Open();
@@ -121,7 +121,7 @@ public sealed class LayoutAndValuesTests
         Assert.Equal(new ValueCustomization { Multiply = 1.8, Offset = 32, Unit = "°F" }, dialog.Outcome.Values);
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void AnEmptiedUnitShowsNoneAndYesNoSensorsCantBeCustomized()
     {
         var (hub, window, custom) = Open();

@@ -37,7 +37,7 @@ public sealed class BootPowerLimitTests : IDisposable
 
     public void Dispose() => Directory.Delete(_etc, recursive: true);
 
-    [Fact]
+    [LinuxFact]
     public void ReadsTheBootServicesValues()
     {
         var boot = new BootPowerLimits(_etc);
@@ -47,7 +47,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), gpus[Pro2]);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AGpuBootLimitNamesTheCardNotItsSlot()
     {
         var boot = new BootPowerLimits(_etc);
@@ -63,7 +63,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Throws<ArgumentException>(() => boot.SetGpu(Gpu1, 200)); // never by slot again
     }
 
-    [Fact]
+    [LinuxFact]
     public void AfterABoardSwapOpenHWsLimitsFollowTheCardsAndTheUnitsGoBySlot()
     {
         var boot = new BootPowerLimits(_etc);
@@ -76,7 +76,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Equal(3, boot.SlotLines().Count);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AnOldSlotDropInIsReplacedAtTheNextWrite()
     {
         File.WriteAllText(DropIn, $"[Service]\nExecStart=\nExecStart=/usr/bin/nvidia-smi -i {Gpu1} -pl 300\n");
@@ -88,7 +88,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Equal(280, boot.CardLines()[Pro2]);
     }
 
-    [Fact]
+    [LinuxFact]
     public void BackToTheUnitsValueRemovesTheDropIn()
     {
         var boot = new BootPowerLimits(_etc);
@@ -101,7 +101,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Equal(new BootLimit(250_000, BootLimitSource.BootService), boot.GpuBoot(Trx50)[Pro1]);
     }
 
-    [Fact]
+    [LinuxFact]
     public void WithoutTheBootServiceNothingIsWritten()
     {
         File.Delete(Path.Combine(Units, "nvidia-power-limit.service"));
@@ -113,7 +113,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.Equal(250_000, boot.CpuBootMW());
     }
 
-    [Theory]
+    [LinuxTheory]
     [InlineData("cpupptboot 0")]
     [InlineData("cpupptboot 350000")]
     [InlineData("cpupptboot ../ppt_mw")]
@@ -129,7 +129,7 @@ public sealed class BootPowerLimitTests : IDisposable
         Assert.False(File.Exists(DropIn));
     }
 
-    [Fact]
+    [LinuxFact]
     public void HelperSetsTheCpuBootLimit()
     {
         var session = new HelperSession(new NoSmart(), boot: new BootPowerLimits(_etc));

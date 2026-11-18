@@ -43,7 +43,7 @@ public sealed class LendingHookTests : IDisposable
         return (p.ExitCode, err);
     }
 
-    [Fact]
+    [LinuxFact]
     public void TheChosenCardIsMatchedWhereverItSits()
     {
         if (Environment.UserName == "root") return; // the root check is what proves the match
@@ -61,7 +61,7 @@ public sealed class LendingHookTests : IDisposable
         Assert.Equal((0, ""), Run(Xml("0xc1"), "W", "start", "begin"));      // a phase the hook doesn't handle
     }
 
-    [Fact]
+    [LinuxFact]
     public void WithoutASetUpCardTheHookLeavesEveryVmAlone()
     {
         Assert.Equal((0, ""), Run(Xml("0xc1"), "W", "prepare", "begin"));    // no settings file

@@ -301,14 +301,18 @@ public sealed partial class SystemEngine : ISensorEngine
         {
             var line = File.ReadLines("/proc/cpuinfo").FirstOrDefault(l => l.StartsWith("model name", StringComparison.Ordinal));
             // HWiNFO drops the marketing core count suffix ("… 9970X 32-Cores").
-            return CoreCountSuffix().Replace(line?.Split(':', 2)[1].Trim() ?? "CPU", "");
+            return TrimCpuModel(line?.Split(':', 2)[1].Trim() ?? "CPU");
         }
         catch (IOException) { return "CPU"; }
     }
 
+    /// <summary>HWiNFO drops the marketing core-count suffix ("… 9975WX 32-Cores" → "… 9975WX").</summary>
+    public static string TrimCpuModel(string model) => model.Length == 0 ? "CPU" : CoreCountSuffix().Replace(model, "");
+
     private static IReadOnlyList<(int Core, IReadOnlyList<int> Threads)> ReadTopology()
     {
         var threads = new List<(int Core, int Cpu)>();
+        if (!Directory.Exists("/sys/devices/system/cpu")) return [];
         foreach (var dir in Directory.EnumerateDirectories("/sys/devices/system/cpu", "cpu*"))
         {
             if (!int.TryParse(Path.GetFileName(dir).AsSpan(3), out var cpu)) continue;

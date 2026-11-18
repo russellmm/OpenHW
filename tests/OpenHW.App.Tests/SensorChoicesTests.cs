@@ -42,7 +42,7 @@ public sealed class SensorChoicesTests
         Assert.Contains(Rows(window), r => r.Id == target.Id);
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void ARenameShowsEverywhereAndKeepsTheExplanation()
     {
         var (hub, window, custom) = Open();

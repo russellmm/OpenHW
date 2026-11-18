@@ -29,6 +29,7 @@ internal static class Program
         // Settings → "Draw the window in software": no OpenGL context, so no GPU driver mappings in this process.
         if (settings.SoftwareRendering) x11.RenderingMode = [X11RenderingMode.Software];
         builder = builder.With(x11);
+        if (settings.SoftwareRendering) builder = builder.With(new Win32PlatformOptions { RenderingMode = [Win32RenderingMode.Software] });
         var exit = builder.StartWithClassicDesktopLifetime(args);
         if (RestartRequested) Restart(args);
         return exit;
@@ -48,7 +49,7 @@ internal static class Program
         // Started as a systemd user service (e.g. RTXinVM's `rtxgpu --app openhw`, which runs OpenHW in its GPU
         // slice): when this process exits, systemd stops the unit and kills everything left in it, a child included.
         // So a small waiter outside the unit starts it again, same name and slice, once this one has finished.
-        var start = SystemdRestart(File.ReadAllText("/proc/self/cgroup"), command, Description) is { } waiter
+        var start = OperatingSystem.IsLinux() && SystemdRestart(File.ReadAllText("/proc/self/cgroup"), command, Description) is { } waiter
             ? new System.Diagnostics.ProcessStartInfo("systemd-run", waiter)
             : new System.Diagnostics.ProcessStartInfo(command[0], command.Skip(1));
         start.UseShellExecute = false;
@@ -102,7 +103,7 @@ internal static class Program
     private static void Gen0Budget(string[] args)
     {
         const string Variable = "DOTNET_GCgen0size";
-        if (Environment.GetEnvironmentVariable(Variable) is not null) return;
+        if (!OperatingSystem.IsLinux() || Environment.GetEnvironmentVariable(Variable) is not null) return;
         if (Environment.ProcessPath is not { } exe || Path.GetFileName(exe) != "openhw") return;
         Environment.SetEnvironmentVariable(Variable, "0x400000");
         var argv = new[] { exe }.Concat(args).Append(null).ToArray();

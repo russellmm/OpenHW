@@ -126,9 +126,7 @@ public sealed class AppSettings
     /// <summary>What the Hardware Check showed when the user last closed it (its signature): it reopens by itself only for something new.</summary>
     public string HardwareCheckSeen { get; set; } = "";
 
-    private static string ConfigHome => Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-        ? config
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+    private static string ConfigHome => OpenHW.Hardware.OsFiles.ConfigHome;
 
     /// <summary>~/.config/openhw: settings and OpenHW's other per-user files.</summary>
     public static string ConfigDir => Path.Combine(ConfigHome, "openhw");
@@ -205,6 +203,7 @@ public sealed class AppSettings
     /// </summary>
     public static string? ForeignAutostart()
     {
+        if (OperatingSystem.IsWindows()) return null; // Windows: OpenHW's own Run entry only
         string[] lines;
         try { lines = File.ReadAllLines(AutostartPath); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
@@ -216,6 +215,7 @@ public sealed class AppSettings
     // GNOME skips an entry with Hidden=true or X-GNOME-Autostart-enabled=false.
     private static bool AutostartEnabled()
     {
+        if (OperatingSystem.IsWindows()) return WindowsAutostart.Enabled;
         try
         {
             var lines = File.ReadAllLines(AutostartPath);
@@ -226,6 +226,11 @@ public sealed class AppSettings
 
     private void WriteAutostart()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            WindowsAutostart.Set(StartAtLogin, StartInTray);
+            return;
+        }
         // Another launcher's entry (e.g. RTXinVM's rtxgpu, which starts OpenHW in its GPU slice) is kept: turning
         // login start off disables it in place and turning it on re-enables it, so its command is never lost.
         if (ForeignAutostart() is not null)

@@ -25,7 +25,10 @@ public sealed class SensorLogger : IDisposable
         Path = path;
         _columns = columns;
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
-        _writer = new StreamWriter(path, append: false, new UTF8Encoding(false));
+        // Windows: others may open it (sharing writes) while logging continues; Linux keeps its plain writer.
+        _writer = OperatingSystem.IsWindows()
+            ? new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(false))
+            : new StreamWriter(path, append: false, new UTF8Encoding(false));
         _writer.WriteLine(string.Join(",", new[] { "Date", "Time" }.Concat(columns.Select(c => Quote(c.Header)))));
         _writer.Flush();
     }

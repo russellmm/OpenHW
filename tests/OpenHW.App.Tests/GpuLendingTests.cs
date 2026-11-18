@@ -326,7 +326,7 @@ public sealed class CardHolderWatchTests
         Assert.Empty(notify.Asked);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AnAppSplitAcrossTwoScopesIsOneQuestionAndOneAnswer()
     {
         using var tree = new ChromeTree();
@@ -347,7 +347,7 @@ public sealed class CardHolderWatchTests
         Assert.Empty(earlier.Asked);
     }
 
-    [Fact]
+    [LinuxFact]
     public void TheCoordinatorClosesEveryScopeOfALaunchAndOpensItOnce()
     {
         using var tree = new ChromeTree();
@@ -368,7 +368,7 @@ public sealed class CardHolderWatchTests
         Assert.Matches(@"--unit=app-com\.google\.Chrome-\d+\.scope --working-directory=/home/russellm -- /opt/google/chrome/chrome$", reopen);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AppsStartedByAnotherAppArentPartOfItsLaunch()
     {
         using var tree = new ChromeTree();

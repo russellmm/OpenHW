@@ -24,7 +24,7 @@ public sealed class DimmingTests
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), name));
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void ExpandedRowsStayGrayUntilTheyAreReadAgain()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-view-").FullName);

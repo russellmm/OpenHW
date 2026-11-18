@@ -87,7 +87,7 @@ public sealed class SensorSettingsTests
         }
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void EntryListsShowTheRealSensorsAndSelectionEnablesTheControls()
     {
         Isolate();
@@ -266,7 +266,7 @@ public sealed class SensorSettingsTests
 
         main.AutoStartBox.IsChecked = true;
         Assert.True(settings.StartAtLogin);
-        Assert.True(File.Exists(AppSettings.AutostartPath));
+        Assert.NotNull(TestSetup.AutostartEntry());
         Assert.True(startAtLogin.IsChecked);
         Assert.True(main.StartMinimizedBox.IsEnabled);
 

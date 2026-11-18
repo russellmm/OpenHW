@@ -34,7 +34,7 @@ public sealed class CardFilterTests : IDisposable
 
     private string SettingsJson => File.ReadAllText(Path.Combine(_root, "etc", "card-filter.json"));
 
-    [Fact]
+    [LinuxFact]
     public void TheChosenCardIsFollowedByIdentityToItsNewSlot()
     {
         using (var filter = Filter()) filter.SelectCard("0000:e1:00.0");
@@ -46,7 +46,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Contains(Pro2, after.Status().Cards.Single(c => c.Pci == "0000:c1:00.0").Uuid);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AMissingCardsFilterDoesntBlockChoosingAgain()
     {
         Directory.CreateDirectory(Path.Combine(_root, "etc"));
@@ -60,7 +60,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Contains(Pro2, SettingsJson);
     }
 
-    [Fact]
+    [LinuxFact]
     public void APresentCardsFilterMustBeTurnedOffFirst()
     {
         Directory.CreateDirectory(Path.Combine(_root, "etc"));
@@ -69,7 +69,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Throws<ArgumentException>(() => filter.SelectCard("0000:e1:00.0"));
     }
 
-    [Fact]
+    [LinuxFact]
     public void OldSettingsAdoptTheCardsIdentityAndNeverFilterAnotherCardInItsSlot()
     {
         Directory.CreateDirectory(Path.Combine(_root, "etc"));
@@ -89,7 +89,7 @@ public sealed class CardFilterTests : IDisposable
     private CardFilter Filter() => new(Path.Combine(_root, "etc", "card-filter.json"), Path.Combine(_root, "run", "now.json"),
         Path.Combine(_root, "bpf"), Path.Combine(_root, "cgroup"), Path.Combine(_root, "proc"), Path.Combine(_root, "sys"));
 
-    [Theory]
+    [LinuxTheory]
     [InlineData("app.slice/app-com.google.Chrome-14950.scope", "app-com.google.Chrome-*.scope")]
     [InlineData("app.slice/app-gnome-openoutlook-19910.scope", "app-gnome-openoutlook-*.scope")]
     [InlineData("app.slice/vte-spawn-0c2e8f2a-5f0e-4f3b-9a64-3f2a1c9b7d10.scope", "vte-spawn-*.scope")]
@@ -100,14 +100,14 @@ public sealed class CardFilterTests : IDisposable
     public void SuggestsTheEntryThatCoversAProcess(string cgroup, string expected) =>
         Assert.Equal(expected, CardPatterns.Suggest("user-1000.slice/user@1000.service/" + cgroup, gdmUid: 975));
 
-    [Fact]
+    [LinuxFact]
     public void TheLoginScreenIsTheGdmUsersSlice()
     {
         Assert.Equal("user-975.slice", CardPatterns.Suggest("user-975.slice/session-c1.scope", 975));
         Assert.Null(CardPatterns.Suggest("user-1000.slice", 975)); // nothing to list
     }
 
-    [Fact]
+    [LinuxFact]
     public void PatternsAreUnitNamesWithWildcards()
     {
         Assert.True(CardPatterns.IsValid("app-com.google.Chrome-*.scope"));
@@ -123,7 +123,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.False(CardPatterns.Matches("app-*openhw*.scope", "app-gnome-openfan-1.scope"));
     }
 
-    [Fact]
+    [LinuxFact]
     public void OnlyLeafUnitsAreAllowedSoNewCgroupsAreRefusedUntilSeen()
     {
         string[] hidden = ["session.slice", "app-com.google.Chrome-*.scope"];
@@ -137,7 +137,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Null(V("user-1000.slice/user@1000.service", leaf: true));            // the user manager, even empty
     }
 
-    [Fact]
+    [LinuxFact]
     public void ChoosingACardStartsTheListWithTheDesktopLoginScreenAndOpenHw()
     {
         var filter = Filter();
@@ -151,7 +151,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Throws<ArgumentException>(() => filter.SelectCard("0000:aa:00.0"));
     }
 
-    [Fact]
+    [LinuxFact]
     public void HideNowAndHideFromBootAreSeparate()
     {
         var filter = Filter();
@@ -169,7 +169,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.False(rebooted["app-com.google.Chrome-*.scope"].HiddenNow);
     }
 
-    [Fact]
+    [LinuxFact]
     public void HelperCommandsValidateEverything()
     {
         var session = new HelperSession(new NoSmart(), card: Filter());
@@ -185,7 +185,7 @@ public sealed class CardFilterTests : IDisposable
         Assert.Equal("err unknown command", session.HandleLine("cardfilter maybe"));
     }
 
-    [Fact]
+    [LinuxFact]
     public void TheProgramAssemblesWithEveryJumpResolved()
     {
         var code = Bpf.Program(7, 8);
@@ -201,7 +201,7 @@ public sealed class CardFilterTests : IDisposable
         public void Dispose() { }
     }
 
-    [Fact]
+    [LinuxFact]
     public void AtBootTheFilterWaitsForTheCardsNodesButNotForALentOrMissingCard()
     {
         // The card is on the bus with the NVIDIA driver bound, but nvidia_drm hasn't made card/renderD yet.

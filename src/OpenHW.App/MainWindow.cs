@@ -748,8 +748,9 @@ public sealed class MainWindow : Window
             _fixCapItem = Item("Remove Unexpected CPU Cap", () => _ = _power.RestoreCapsAsync());
             _fixCapItem.IsVisible = false;
             _powerMenu.Items.Add(new Separator());
-            _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
-            _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L"));
+            // CPU caps and power limits are Linux-only (not part of the Windows port, docs/windows-port.md).
+            if (OperatingSystem.IsLinux()) _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
+            if (OperatingSystem.IsLinux()) _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L"));
             if (commands.ShowFanControl is { } fanControl) _powerMenu.Items.Add(Item("Fan _Control…", fanControl));
             if (commands.ShowGpuLending is { } lending) _powerMenu.Items.Add(Item("GPU Le_nding…", lending));
             _powerMenu.Items.Add(_fixCapItem);

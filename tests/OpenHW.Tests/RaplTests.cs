@@ -25,7 +25,7 @@ public sealed class RaplTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    [Fact]
+    [LinuxFact]
     public void ReadsPackageAndCoreOnly()
     {
         var counters = new RaplReader(_root).Read();
@@ -33,7 +33,7 @@ public sealed class RaplTests : IDisposable
         Assert.Equal(counters, RaplReader.Parse(RaplReader.Format(counters)));
     }
 
-    [Fact]
+    [LinuxFact]
     public void HelperServesTheCountersAndTakesNoArguments()
     {
         var session = new HelperSession(new NoSmart(), rapl: new RaplReader(_root));
@@ -42,7 +42,7 @@ public sealed class RaplTests : IDisposable
         Assert.StartsWith("err", new HelperSession(new NoSmart()).HandleLine("rapl"));
     }
 
-    [Fact]
+    [LinuxFact]
     public void PowerIsEnergyOverTimeIncludingAWrap()
     {
         var replies = new Queue<string>(["package-0 900000000 1000000000;core 100 1000000000",
@@ -63,7 +63,7 @@ public sealed class RaplTests : IDisposable
         Assert.InRange(r["rapl:package"]!.Value, 60 / 0.5, 60 / 0.15); // wrapped: 50 J to the top + 10 J after
     }
 
-    [Fact]
+    [LinuxFact]
     public void NoHelperMeansNoRows()
     {
         var engine = new RaplEngine(() => throw new IOException("no helper"));

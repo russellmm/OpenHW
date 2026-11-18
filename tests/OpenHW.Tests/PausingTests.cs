@@ -59,7 +59,7 @@ public sealed class PausingTests
         }
     }
 
-    [Fact]
+    [LinuxFact]
     public void SystemEngineSkipsSectionsWithNothingRequested()
     {
         using var engine = new SystemEngine();

@@ -42,7 +42,7 @@ public sealed class MenuAndPowerLimitsTests
 
         var menu = window.GetVisualDescendants().OfType<Menu>().Single();
         Assert.Equal(["_File", "_View", "_Power", "_Help"], menu.Items.OfType<MenuItem>().Select(m => (string)m.Header!));
-        Assert.Contains(window.KeyBindings, k => k.Gesture.ToString() == "Ctrl+L");
+        if (OperatingSystem.IsLinux()) Assert.Contains(window.KeyBindings, k => k.Gesture.ToString() == "Ctrl+L"); // Power Limits: Linux only
     }
 
     [AvaloniaFact]

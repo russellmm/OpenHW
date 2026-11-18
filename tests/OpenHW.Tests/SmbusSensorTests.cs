@@ -85,7 +85,7 @@ public sealed class SmbusSensorTests : IDisposable
 
     private Ddr5Reader Reader() => new(_buses, _sys, adcSettle: TimeSpan.Zero, cacheFor: TimeSpan.Zero);
 
-    [Fact]
+    [LinuxFact]
     public void ReadsEachDimmAndWritesOnlyTheAdcSelectWhichItRestores()
     {
         var samples = Reader().Read();
@@ -100,7 +100,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Equal(samples, Ddr5Reader.Parse(Ddr5Reader.Format(samples)), new SampleComparer());
     }
 
-    [Fact]
+    [LinuxFact]
     public void APmicTheSpdDoesNotDeclareIsNeverWritten()
     {
         _buses.Bus(0).Set(0x48, 0x3C, 0x80); // a different vendor than the SPD's 8A 8C
@@ -108,7 +108,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Empty(_buses.Bus(0).Writes);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AModuleWithoutAPmicIsLeftAlone()
     {
         File.WriteAllBytes(Path.Combine(_sys, "bus", "i2c", "devices", "0-0050", "eeprom"), Spd(pmicType: 0x00));
@@ -118,7 +118,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Empty(_buses.Bus(0).Writes);
     }
 
-    [Fact]
+    [LinuxFact]
     public void DecodesTheRailsAsHwinfoShowedThem()
     {
         Assert.Equal(47.0, Ddr5Decode.Temperature(0x02F0));
@@ -130,7 +130,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Equal(2.625, Ddr5Decode.Meter(0x15));
     }
 
-    [Fact]
+    [LinuxFact]
     public void TheDimmEngineGroupsEachModuleWithItsHubTemperature()
     {
         var reply = Ddr5Reader.Format(Reader().Read());
@@ -150,7 +150,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Equal("DDR5 DIMM [#0]: Kingston KF556R28-32 (AMDI0010:01 / 0x50)", DimmEngine.Title(DimmEngine.GroupKey(hub.Identity), _sys));
     }
 
-    [Fact]
+    [LinuxFact]
     public void PerRailMetersWhenThePmicIsNotSetToTotalPower()
     {
         foreach (var bus in new[] { 0, 1 }) _buses.Bus(bus).Set(0x48 | (bus == 0 ? 0 : 2), 0x1B, 0x05); // current mode
@@ -160,7 +160,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.DoesNotContain("Total Power", names);
     }
 
-    [Fact]
+    [LinuxFact]
     public void TheVrIsConfirmedByItsDeviceIdAndDecodesLikeHwinfo()
     {
         var vr = BoardVrs.For("ASUSTeK COMPUTER INC.", "Pro WS TRX50-SAGE WIFI A");
@@ -176,7 +176,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Equal(100, values["efficiency"]); // POUT 11.25 W over PIN 9.875 W at light load: capped
     }
 
-    [Fact]
+    [LinuxFact]
     public void ADifferentChipAtTheVrAddressIsNotRead()
     {
         Xdpe(page: 1, deviceId: [0x02, 0x22]);
@@ -185,7 +185,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Equal([(0x20, (byte)0xAD)], _buses.Bus(4).Reads); // only the identity check
     }
 
-    [Fact]
+    [LinuxFact]
     public void VrReadingsAreBlankWhileAnotherPageIsSelected()
     {
         Xdpe(page: 0);
@@ -198,7 +198,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.All(readings.Values, Assert.Null);
     }
 
-    [Fact]
+    [LinuxFact]
     public void PmbusFormats()
     {
         Assert.Equal(-0.5, Pmbus.Linear11(0xFFFF)); // exponent -1, mantissa -1
@@ -206,7 +206,7 @@ public sealed class SmbusSensorTests : IDisposable
         Assert.Null(Pmbus.Linear16(0x015A, 0x40)); // direct mode: not decoded
     }
 
-    [Fact]
+    [LinuxFact]
     public void HelperServesBothCommandsWithoutArguments()
     {
         var vr = BoardVrs.For("ASUSTeK COMPUTER INC.", "Pro WS TRX50-SAGE WIFI A");

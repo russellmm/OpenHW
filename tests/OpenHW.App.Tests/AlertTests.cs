@@ -88,7 +88,7 @@ public sealed class AlertTests
         Assert.Contains("\"Below\"", File.ReadAllText(store.Path)); // readable in the file
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void TheDialogAddsARuleForItsSensor()
     {
         var store = Store();

@@ -32,9 +32,7 @@ public sealed class SensorCustomizations
     private static string? _currentPath;
 
     private static string FilePath => Path.Combine(
-        Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-            ? config
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"),
+        OpenHW.Hardware.OsFiles.ConfigHome,
         "openhw", "sensors.json");
 
     /// <summary>The one instance for this config directory (tests point XDG_CONFIG_HOME elsewhere and get their own).</summary>

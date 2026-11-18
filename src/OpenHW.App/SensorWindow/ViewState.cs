@@ -23,9 +23,7 @@ public sealed class ViewState
     public bool Maximized { get; set; }
 
     private static string FilePath => Path.Combine(
-        Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-            ? config
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"),
+        OpenHW.Hardware.OsFiles.ConfigHome,
         "openhw", "view.json");
 
     public static ViewState Load()

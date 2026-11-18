@@ -42,7 +42,7 @@ public sealed class CardLendingTests : IDisposable
         throw new TimeoutException("lend/return didn't finish");
     }
 
-    [Fact]
+    [LinuxFact]
     public void SaysWhatStandsInTheWayAndWhatWouldBePaused()
     {
         _machine.Hold(300, "chrome", "/user.slice/user-1000.slice/user@1000.service/app.slice/app-com.google.Chrome-1.scope");
@@ -59,7 +59,7 @@ public sealed class CardLendingTests : IDisposable
         Assert.Contains(Lending().Status().Problems, p => p.StartsWith("A monitor is plugged into the card", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [LinuxFact]
     public void LendsInTheRightOrderAndReturns()
     {
         _machine.Release(200); // OpenHW's window has stopped the user's service already
@@ -92,7 +92,7 @@ public sealed class CardLendingTests : IDisposable
         Assert.Equal(2, _resumes); // a fresh NVML session sees the returned card
     }
 
-    [Fact]
+    [LinuxFact]
     public void AFailedStartPutsEverythingBack()
     {
         _machine.Release(200);
@@ -108,7 +108,7 @@ public sealed class CardLendingTests : IDisposable
         Assert.False(s.Lent);
     }
 
-    [Fact]
+    [LinuxFact]
     public void AShutdownFromInsideTheVmIsNoticed()
     {
         _machine.Release(200);
@@ -121,7 +121,7 @@ public sealed class CardLendingTests : IDisposable
         Assert.Contains("systemctl restart openfan-helper.service", _machine.Actions);
     }
 
-    [Fact]
+    [LinuxFact]
     public void OnlyVmsWithTheCardCanBeChosen()
     {
         var lending = Lending();

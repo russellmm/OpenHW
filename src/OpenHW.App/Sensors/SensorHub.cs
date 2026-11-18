@@ -8,11 +8,12 @@ namespace OpenHW.App.Sensors;
 /// </summary>
 public sealed class SensorHub : IDisposable
 {
-    private readonly HwmonEngine _hwmon = new();
-    // GPUs come from openhw-helper: the app never opens a card (see HelperGpuEngine).
-    private readonly ISensorEngine _nvidia = new HelperGpuEngine();
-    private readonly NvmeEngine _nvme = new();
-    private readonly SystemEngine _system = new();
+    private readonly HwmonEngine? _hwmon;
+    // GPUs come from openhw-helper on Linux: the app never opens a card (see HelperGpuEngine), so the card filter can
+    // hide it from the app while it's lent. Windows has no card filter: the app reads NVML (nvml.dll) itself.
+    private readonly ISensorEngine _nvidia = OperatingSystem.IsWindows() ? new NvidiaEngine() : new HelperGpuEngine();
+    private readonly NvmeEngine? _nvme;
+    private readonly OpenHW.Hardware.Windows.WindowsNvmeEngine? _windowsNvme;
     private readonly ISensorEngine[] _engines;
     private readonly InventoryRefreshCadence _inventoryCadence = new(TimeSpan.FromSeconds(5));
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
@@ -23,7 +24,17 @@ public sealed class SensorHub : IDisposable
 
     public SensorHub()
     {
-        _engines = [_system, _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), Bmc, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia, WireView, new NutEngine()];
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows (docs/windows-port.md): user-mode readers so far. The BMC and the WireView come back with the
+            // helper service; Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
+            _windowsNvme = new OpenHW.Hardware.Windows.WindowsNvmeEngine();
+            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, new NutEngine()];
+            return;
+        }
+        _hwmon = new HwmonEngine();
+        _nvme = new NvmeEngine();
+        _engines = [new SystemEngine(), _hwmon, new HsmpEngine(), new RaplEngine(), new DimmEngine(), new BoardVrEngine(), Bmc, new EdacEngine(), _nvme, new NetworkEngine(), _nvidia, WireView, new NutEngine()];
     }
 
     /// <summary>The board management controller (IPMI through the helper); the hardware check reads its full sensor list.</summary>
@@ -45,13 +56,15 @@ public sealed class SensorHub : IDisposable
         _engines.SelectMany(e => e.Children).ToDictionary(kv => kv.Key, kv => kv.Value);
 
     /// <summary>Board, CPU and drive identity used for group titles; read once.</summary>
-    public SensorPresentation.MachineInfo Machine => _machine ??= new(
-        SysFs.ReadText("/sys/class/dmi/id/board_vendor"), SysFs.ReadText("/sys/class/dmi/id/board_name"),
-        SystemEngine.CpuModel(), _nvme.Devices);
+    public SensorPresentation.MachineInfo Machine => _machine ??= OperatingSystem.IsWindows()
+        ? new(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName,
+            SystemEngine.TrimCpuModel(OpenHW.Hardware.Windows.WindowsMachine.CpuBrand), _windowsNvme?.Devices ?? [])
+        : new(SysFs.ReadText("/sys/class/dmi/id/board_vendor"), SysFs.ReadText("/sys/class/dmi/id/board_name"),
+            SystemEngine.CpuModel(), _nvme?.Devices ?? []);
     private SensorPresentation.MachineInfo? _machine;
 
     /// <summary>"libsensors" or the sysfs fallback, for the status line.</summary>
-    public string ReaderDescription => _hwmon.ReaderDescription;
+    public string ReaderDescription => _hwmon?.ReaderDescription ?? "Windows";
 
     /// <summary>Raised on the sampling thread after <see cref="Sample"/> when discovery changed the inventory.</summary>
     public event Action? InventoryChanged;

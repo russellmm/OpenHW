@@ -8,7 +8,7 @@ namespace OpenHW.App.Alerts;
 /// Failures (no notification daemon) are logged, never thrown. A notification can carry buttons (actions): a click
 /// comes back through the ActionInvoked signal and runs the handler given with it ("default" = the bubble itself).
 /// </summary>
-public sealed class DesktopNotifier : IDisposable
+public sealed class DesktopNotifier : IDesktopNotifier
 {
     private const string Service = "org.freedesktop.Notifications";
     private const string ObjectPath = "/org/freedesktop/Notifications";

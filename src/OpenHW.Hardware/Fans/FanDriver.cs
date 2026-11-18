@@ -276,9 +276,8 @@ public sealed partial class FanDriver : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_savedOriginalsPath)!);
         var temp = _savedOriginalsPath + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var stream = OsFiles.CreatePrivate(temp))
         {
-            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             JsonSerializer.Serialize(stream, new Journal(_identity, _savedOriginals));
             stream.Flush(flushToDisk: true);
         }
@@ -460,9 +459,8 @@ public sealed partial class FanDriver : IDisposable
         }
         Directory.CreateDirectory(Path.GetDirectoryName(_journalPath)!);
         var temp = _journalPath + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var stream = OsFiles.CreatePrivate(temp))
         {
-            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             JsonSerializer.Serialize(stream, new Journal(_identity, _original));
             stream.Flush(flushToDisk: true);
         }

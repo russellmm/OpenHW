@@ -15,9 +15,7 @@ public sealed class CpuCaps
     public bool KeepAfterReboot { get; set; }
 
     private static string FilePath => Path.Combine(
-        Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-            ? config
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"),
+        OpenHW.Hardware.OsFiles.ConfigHome,
         "openhw", "cpufreq-caps.json");
 
     private static string CurrentBootId() => Hardware.SysFs.ReadText("/proc/sys/kernel/random/boot_id");

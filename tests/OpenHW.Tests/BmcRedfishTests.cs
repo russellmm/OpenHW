@@ -162,7 +162,7 @@ public sealed class BmcRedfishTests : IDisposable
         Assert.False(File.Exists(path));
         var stored = helper.HandleLine($"bmclogin {B64("openhw")} {B64("correct-horse")}");
         Assert.Equal("ok openhw", stored);
-        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        if (!OperatingSystem.IsWindows()) Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
         Assert.Equal(Login, BmcLogin.Load(path));
         Assert.DoesNotContain("correct-horse", helper.HandleLine("bmclogin"));
         Assert.Equal("err a BMC user is 1–32 characters and its password 8–20", helper.HandleLine($"bmclogin {B64("openhw")} {B64("short")}"));

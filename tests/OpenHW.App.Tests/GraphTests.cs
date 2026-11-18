@@ -20,7 +20,7 @@ public sealed class GraphTests
         Assert.Empty(history.Get("never"));  // never read
     }
 
-    [AvaloniaFact]
+    [LinuxAvaloniaFact]
     public void AGraphShowsTheSensorsReadings()
     {
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateTempSubdirectory("openhw-graph-").FullName);

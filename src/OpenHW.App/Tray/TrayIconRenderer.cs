@@ -20,11 +20,14 @@ public static class TrayIconRenderer
     /// <summary>The unit's size relative to the digits: readable at 22 px, while the digits stay the main thing.</summary>
     private const double UnitScale = 0.6;
 
-    public static IconPixmap[] Render(string text, string backgroundHex, string unit = "")
+    public static IconPixmap[] Render(string text, string backgroundHex, string unit = "") => Render(text, backgroundHex, unit, Sizes);
+
+    /// <summary>At these sizes only (Windows: the one size its taskbar draws at this DPI).</summary>
+    public static IconPixmap[] Render(string text, string backgroundHex, string unit, IReadOnlyList<int> sizes)
     {
         var background = Color.Parse(backgroundHex);
         var foreground = TextColorFor(background); // readable on any tile colour
-        return Sizes.Select(size => RenderOne(text, unit, background, foreground, size)).ToArray();
+        return sizes.Select(size => RenderOne(text, unit, background, foreground, size)).ToArray();
     }
 
     private static IconPixmap RenderOne(string text, string unit, Color background, Color foreground, int size)
@@ -36,13 +39,13 @@ public static class TrayIconRenderer
             var (digits, small, gap) = FitText(text, unit, size, foreground);
             // Centre the glyph outlines, not the line box: digits have no descenders, so line-box centring sits them high.
             var ink = Ink(digits);
-            var width = ink.Width + (small is null ? 0 : gap + Ink(small).Width);
+            var width = ink.Width + (small is null ? 0 : gap + UnitInk(small).Width);
             var left = Math.Round((size - width) / 2);
             var bottom = Math.Round((size + ink.Height) / 2); // the digits' baseline, shared by the unit
             context.DrawText(digits, new Point(left - ink.X, bottom - ink.Bottom));
             if (small is not null)
             {
-                var unitInk = Ink(small);
+                var unitInk = UnitInk(small);
                 context.DrawText(small, new Point(left + ink.Width + gap - unitInk.X, bottom - unitInk.Bottom));
             }
         }
@@ -69,7 +72,7 @@ public static class TrayIconRenderer
 
     // A narrow bold face fits more digit height into a square tile ("250" is three digits wide); the default font is
     // the fallback where it isn't installed.
-    private static readonly FontFamily Narrow = new("Liberation Sans Narrow, Nimbus Sans Narrow, " + FontFamily.Default.Name);
+    private static readonly FontFamily Narrow = new("Liberation Sans Narrow, Nimbus Sans Narrow, Arial Narrow, Bahnschrift SemiCondensed, " + FontFamily.Default.Name);
 
     // Largest size whose glyph outlines (not the font's line box or advance widths) fit the tile with a 1 px margin
     // across and ~6 % top and bottom, so "45" fills the tile and "5.3k" still fits. With a unit, digits + gap + unit
@@ -85,9 +88,23 @@ public static class TrayIconRenderer
             var digits = Text(text, em);
             var small = unit.Length > 0 ? Text(unit, em * UnitScale) : null;
             var ink = Ink(digits);
-            var width = ink.Width + (small is null ? 0 : gap + Ink(small).Width);
-            if (width <= size - 2 && ink.Height <= size * 0.88 || em <= 4) return (digits, small, gap);
+            var width = ink.Width + (small is null ? 0 : gap + UnitInk(small).Width);
+            if (width <= size - Margin && ink.Height <= size * 0.88 || em <= 4) return (digits, small, gap);
         }
+    }
+
+    // Pixels kept free across the tile. Windows hints glyphs onto the pixel grid, which draws them up to a pixel wider
+    // than their outlines at small sizes, so it gets one more.
+    private static readonly int Margin = OperatingSystem.IsWindows() ? 3 : 2;
+
+    // The unit's extent. On Windows a glyph like "%" is drawn wider than its outline geometry reports (seen at 48 px:
+    // "87%" ran off the tile), so there the advance width counts too, which never under-measures.
+    private static Rect UnitInk(FormattedText text)
+    {
+        var ink = Ink(text);
+        if (!OperatingSystem.IsWindows()) return ink;
+        var left = Math.Min(ink.X, 0);
+        return new Rect(left, ink.Y, Math.Max(ink.Right, text.WidthIncludingTrailingWhitespace) - left, ink.Height);
     }
 
     private static Rect Ink(FormattedText text) =>
