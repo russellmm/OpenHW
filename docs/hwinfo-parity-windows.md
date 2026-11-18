@@ -37,8 +37,10 @@ left out.
 - **DIMM inventory** (`openhw-helper --redfish-memory`, read-only): `/redfish/v1/Systems/Self/Memory` lists all 8 —
   Kingston KF556R28-32, DDR5, 32 GiB, 2 ranks, 5,200 MT/s running (4,800 allowed), health OK, serial present; no
   MemoryMetrics (no temperatures, voltages or power). The BMC numbers them Channel 0–3 × Slot 0/1 (every locator
-  "DIMM 0"), which needs mapping to DIMMA1–H1 before labeling rows. Usable for: DIMM group titles (part / size /
-  speed), Hardware Check's memory line, a per-DIMM health row.
+  "DIMM 0"), which can't be mapped to DIMMA1–H1 (identical modules), so no row claims a slot. **Used since the same
+  day**: the service's `dimms` command (one Redfish login for all members, cached 12 h, no serials) feeds a Windows
+  "DDR5 DIMMs: 8 × Kingston KF556R28-32 (32 GiB, 5,200 MT/s)" group — DIMMs Installed, DIMMs Healthy (alertable),
+  Total Memory, Memory Speed, each module's details in the tooltip — and Hardware Check's memory line.
 
 **Left, and why**: Memory Timings — the UMC timing registers' SMN offsets for Zen 5 aren't documented to us (no guessing at
 SMN reads); the configured timings show in BIOS Setup. EC VRM Vcore voltage / current — the WRX90E EC's register

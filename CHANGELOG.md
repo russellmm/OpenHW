@@ -18,6 +18,9 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
   and VID (Zen 5 P-state MSR); GPU power limit rated/max, % of TDP, memory usage, PCIe replays, per-engine usage and
   D3D memory; UPS battery voltage and charging state; WireView fault rows. Linux unchanged.
 - Windows: the Nuvoton NCT6798D Super I/O (voltages, fans, SYSTIN) through PawnIO's LpcIO, named as on Linux.
+- Windows: the BMC's DIMM inventory (Redfish) as a "DDR5 DIMMs" group — installed, healthy, total, speed — and in
+  Hardware Check's memory line.
+- Windows: a sensor row's tooltip closes when the sensor window loses focus.
 - OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
   (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
   toasts, single instance, start at login.
