@@ -21,7 +21,7 @@ public interface IDesktopNotifier : IDisposable
 [SupportedOSPlatform("windows")]
 public sealed class WindowsNotifier : IDesktopNotifier
 {
-    private const int OwnSlot = 999; // the notifier's own icon, after any sensor's
+    private const uint OwnSlot = 0xFFF0; // the notifier's own icon: outside the sensors' uIDs (Win32TrayIcon.IdFor)
     private Win32TrayIcon? _own;
     private DispatcherTimer? _removeOwn;
 

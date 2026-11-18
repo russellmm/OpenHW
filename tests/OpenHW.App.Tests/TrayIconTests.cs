@@ -48,6 +48,18 @@ public sealed class TrayIconTests
         }
     }
 
+    // Windows remembers where the user dragged an icon by its uID: it must come from the sensor, not the list position.
+    [Fact]
+    public void OnWindowsAnIconsIdFollowsItsSensor()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var a = Win32TrayIcon.IdFor("nvml:GPU-x:temp:core#1", new HashSet<uint>());
+        Assert.Equal(a, Win32TrayIcon.IdFor("nvml:GPU-x:temp:core#1", new HashSet<uint> { 0x100, 0x2000 }.Where(i => i != a).ToHashSet()));
+        Assert.InRange(a, 0x100u, 0xFEFFu); // 16 bits (version 4 notifications), clear of old slot ids and the notifier's
+        Assert.NotEqual(a, Win32TrayIcon.IdFor("nvml:GPU-x:temp:core#2", new HashSet<uint>()));
+        Assert.NotEqual(a, Win32TrayIcon.IdFor("nvml:GPU-x:temp:core#1", new HashSet<uint> { a })); // a clash moves on
+    }
+
     // Rows with ink on them (any pixel well away from the tile colour).
     private static int InkRows(IconPixmap icon) =>
         Enumerable.Range(0, icon.Height).Count(y => Enumerable.Range(0, icon.Width).Any(x =>

@@ -15,6 +15,8 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - **Power → Power Limits on Windows**: the CPU socket limit through AMD's own HSMP driver and each NVIDIA card's limit,
   live and kept (applied when the service starts).
 - `packaging\windows\build.ps1` (self-contained win-x64, mirrored to `C:\StandAlone\OpenHW`) and `install.ps1`.
+- **Windows tray icons stay where you drag them**: each icon's id comes from its sensor, and changing one icon no
+  longer removes and re-adds the others. Move left/right are hidden on Windows (drag instead).
 - **Larger tray digits on Windows**: they fill the 24 px tile (narrowed rather than shrunk), unit smaller and dropped
   after three characters, no colour fringes. Whole numbers only, as before.
 - **One fan configuration for Linux and Windows** (the BMC keeps whatever the last OS wrote): `fan-curves.json` and

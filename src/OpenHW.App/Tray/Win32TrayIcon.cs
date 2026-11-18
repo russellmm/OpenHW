@@ -7,8 +7,10 @@ namespace OpenHW.App.Tray;
 /// A Windows notification-area icon (Shell_NotifyIcon, version 4): one per tray sensor, with a native tooltip (HWiNFO's
 /// hover text), a native right-click menu built from the same <see cref="TrayMenuItem"/>s as on Linux, and balloon
 /// notifications (shown by Windows 11 as toasts). All icons share one hidden window that receives their messages;
-/// it lives on the UI thread, whose message loop (Avalonia's) delivers them. Icons are told apart by their uID — the
-/// position in the tray list — which is also how Windows remembers whether the user pinned each one to the taskbar.
+/// it lives on the UI thread, whose message loop (Avalonia's) delivers them. Icons are told apart by their uID, which
+/// is also how Windows remembers each one (shown on the taskbar or not, and where the user dragged it): the uID comes
+/// from the sensor (<see cref="IdFor"/>, as HWiNFO does), so adding, removing or recolouring another icon never
+/// moves this one.
 /// Explorer restarting (TaskbarCreated) re-adds every icon.
 /// </summary>
 [SupportedOSPlatform("windows")]
@@ -26,7 +28,7 @@ public sealed class Win32TrayIcon : ITrayIcon
     private static readonly Dictionary<uint, Win32TrayIcon> Icons = [];
 
     private readonly uint _id;
-    private readonly IReadOnlyList<TrayMenuItem> _menu;
+    private IReadOnlyList<TrayMenuItem> _menu;
     private nint _icon;
     private byte[]? _pixels;
     private string _tip = "OpenHW";
@@ -54,11 +56,27 @@ public sealed class Win32TrayIcon : ITrayIcon
         }
     }
 
-    /// <summary>Must run on the UI thread. <paramref name="slot"/> is the icon's position in the tray list.</summary>
-    public static Win32TrayIcon Create(int slot, IReadOnlyList<TrayMenuItem> menu)
+    /// <summary>The icon's uID (<see cref="IdFor"/>).</summary>
+    public uint Id => _id;
+
+    /// <summary>
+    /// A stable uID for a tray icon's key (its sensor, and which copy of it): a 16-bit hash, because version 4
+    /// notifications carry the uID in 16 bits. <paramref name="taken"/> = uIDs already given out; a clash moves on to
+    /// the next free one.
+    /// </summary>
+    public static uint IdFor(string key, ISet<uint> taken)
+    {
+        uint hash = 2166136261;
+        foreach (var c in key) { hash ^= c; hash *= 16777619; }
+        var id = 0x100 + (hash ^ (hash >> 16)) % 0xFE00; // 0x100..0xFEFF: clear of the 1..n slot ids older builds used
+        while (taken.Contains(id)) id = id >= 0xFEFF ? 0x100 : id + 1;
+        return id;
+    }
+
+    /// <summary>Must run on the UI thread. <paramref name="id"/> comes from <see cref="IdFor"/>.</summary>
+    public static Win32TrayIcon Create(uint id, IReadOnlyList<TrayMenuItem> menu)
     {
         EnsureWindow();
-        var id = (uint)slot + 1;
         if (Icons.Remove(id, out var old)) old.Dispose();
         var icon = new Win32TrayIcon(id, menu);
         Icons[id] = icon;
@@ -102,6 +120,9 @@ public sealed class Win32TrayIcon : ITrayIcon
 
     // The menu is built when it opens, so labels, ticks and visibility are always current.
     public void RefreshMenu() { }
+
+    /// <summary>A kept icon's menu, rebuilt for its (possibly new) settings entry.</summary>
+    public void SetMenu(IReadOnlyList<TrayMenuItem> menu) => _menu = menu;
     public void RefreshMenuItems(IEnumerable<int> ids) { }
 
     /// <summary>A balloon on this icon (a toast on Windows 11). <paramref name="clicked"/> runs if the user clicks it.</summary>

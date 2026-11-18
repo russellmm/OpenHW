@@ -208,6 +208,7 @@ public sealed class App : Application
     private async Task RebuildTrayAsync()
     {
         var generation = ++_trayGeneration;
+        if (OperatingSystem.IsWindows()) { RebuildWindowsTray(); return; }
         foreach (var (_, icon) in _trayIcons) icon.Dispose();
         _trayIcons.Clear();
         for (var index = _settings.TrayIcons.Count - 1; index >= 0; index--)
@@ -216,9 +217,7 @@ public sealed class App : Application
             try
             {
                 IReadOnlyList<TrayMenuItem> menu = [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu];
-                ITrayIcon icon = OperatingSystem.IsWindows()
-                    ? Win32TrayIcon.Create(index, menu)
-                    : await StatusNotifierItem.CreateAsync($"openhw-tray-{index}", "OpenHW", menu);
+                ITrayIcon icon = await StatusNotifierItem.CreateAsync($"openhw-tray-{index}", "OpenHW", menu); // Windows: RebuildWindowsTray
                 if (generation != _trayGeneration)
                 {
                     icon.Dispose();
@@ -237,6 +236,35 @@ public sealed class App : Application
                 break;
             }
         }
+        UpdateTray();
+    }
+
+    /// <summary>
+    /// Windows: Explorer places the icons and remembers where the user dragged each one by its uID, so each icon's uID
+    /// comes from its sensor, and icons that are still configured are kept as they are (deleting and adding one again
+    /// would lose its place); only removed ones go and new ones come.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private void RebuildWindowsTray()
+    {
+        var existing = _trayIcons.Where(t => t.Icon is Win32TrayIcon).ToDictionary(t => ((Win32TrayIcon)t.Icon).Id, t => (Win32TrayIcon)t.Icon);
+        var taken = new HashSet<uint>();
+        var next = new List<(TraySensor, ITrayIcon)>();
+        var copies = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var config in _settings.TrayIcons)
+        {
+            var copy = copies[config.SensorId] = copies.GetValueOrDefault(config.SensorId) + 1; // the same sensor twice: 2nd copy
+            var id = Win32TrayIcon.IdFor(config.SensorId + "#" + copy.ToString(System.Globalization.CultureInfo.InvariantCulture), taken);
+            taken.Add(id);
+            IReadOnlyList<TrayMenuItem> menu = [.. SensorInfoItems(config), TrayMenuItem.Separator, .. IconItems(config), TrayMenuItem.Separator, .. _trayMenu];
+            if (existing.Remove(id, out var kept)) { kept.SetMenu(menu); next.Add((config, kept)); continue; }
+            var icon = Win32TrayIcon.Create(id, menu);
+            icon.Activated += () => Dispatcher.UIThread.Post(ToggleWindow);
+            next.Add((config, icon));
+        }
+        foreach (var gone in existing.Values) gone.Dispose();
+        _trayIcons.Clear();
+        _trayIcons.AddRange(next);
         UpdateTray();
     }
 
@@ -395,11 +423,11 @@ public sealed class App : Application
     [
         new("Move left", () => Dispatcher.UIThread.Post(() => MoveTrayIcon(config, -1)))
         {
-            Visible = () => _settings.TrayIcons.IndexOf(config) > 0,
+            Visible = () => !OperatingSystem.IsWindows() && _settings.TrayIcons.IndexOf(config) > 0, // Windows: drag the icon
         },
         new("Move right", () => Dispatcher.UIThread.Post(() => MoveTrayIcon(config, 1)))
         {
-            Visible = () => _settings.TrayIcons.IndexOf(config) is var i && i >= 0 && i < _settings.TrayIcons.Count - 1,
+            Visible = () => !OperatingSystem.IsWindows() && _settings.TrayIcons.IndexOf(config) is var i && i >= 0 && i < _settings.TrayIcons.Count - 1,
         },
         new("Remove from tray", () => Dispatcher.UIThread.Post(() => RemoveTrayIcon(config))),
         new("Color", null)

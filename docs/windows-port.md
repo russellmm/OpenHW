@@ -87,6 +87,12 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
     characters) before being made smaller, the unit smaller and raised, dropped after three characters ("100", "250";
     the tooltip has it), greyscale anti-aliasing (ClearType fringes on a solid tile). Whole numbers only, as on Linux
     (`TrayText`: up to 9999, then "13k").
+  - **Icons keep the place the user drags them to**: Explorer remembers each icon (shown or hidden, position) by
+    exe path + uID (`HKCU\Control Panel\NotifyIconSettings`). The uIDs were list positions and every tray change
+    deleted and re-added all icons, so drags didn't stick. Now the uID is a 16-bit hash of the sensor id + copy number
+    (`Win32TrayIcon.IdFor`, 0x100–0xFEFF; the notifier's own icon is 0xFFF0) and `RebuildWindowsTray` keeps icons that
+    are still configured (new menu only), removing/adding just the changed ones. Move left/right are hidden on
+    Windows (drag instead). Old slot-numbered entries stay in Explorer's list as stale "other tray icons".
 - **Phase 2 — service and BMC:**
   - `WmiIpmiTransport` (`Microsoft_IPMI.RequestResponse`, in-box `ipmidrv.sys`, Administrator only): `ResponseData`
     starts with the completion code (Get Device ID `00 20 81 02 01 02 BF 3F 0A 00 93 11 22 00 00 00`, AST2600 fw 2.01).
