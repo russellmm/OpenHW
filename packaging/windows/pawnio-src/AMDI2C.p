@@ -85,6 +85,23 @@ new const fch_i2c_bases[] = [0xFEDC2000, 0xFEDC3000, 0xFEDC4000, 0xFEDC5000, 0xF
 
 new bus_va[FCH_I2C_COUNT];
 
+/// Maps a controller the first time it's used, if it identifies as DesignWare. Nothing is touched at load and no
+/// other controller is ever read: only the one a caller asks for (gentle on boards where some are absent).
+NTSTATUS:dw_map(bus) {
+    if (bus_va[bus] != 0)
+        return STATUS_SUCCESS;
+    new VA:va = io_space_map(fch_i2c_bases[bus], DW_IC_MAP_SIZE);
+    if (va == NULL)
+        return STATUS_NO_MEMORY;
+    new comp_type;
+    if (NT_SUCCESS(virtual_read_dword(VA:(_:va + DW_IC_COMP_TYPE), comp_type)) && comp_type == DW_IC_COMP_TYPE_VALUE) {
+        bus_va[bus] = _:va;
+        return STATUS_SUCCESS;
+    }
+    io_space_unmap(va, DW_IC_MAP_SIZE);
+    return STATUS_NOT_SUPPORTED;
+}
+
 NTSTATUS:rd(bus, offset, &value) {
     return virtual_read_dword(VA:(bus_va[bus] + offset), value);
 }
@@ -193,7 +210,7 @@ restore:
 ///
 /// @param in Unused
 /// @param in_size Unused
-/// @param out [0] = Bit mask of usable controllers (bit n = I2Cn), [1] = 6 (controller count)
+/// @param out [0] = Bit mask of controllers mapped so far (bit n = I2Cn; mapped on first use), [1] = 6 (count)
 /// @param out_size Must be 2
 /// @return An NTSTATUS
 DEFINE_IOCTL_SIZED(ioctl_identity, 0, 2) {
@@ -223,7 +240,7 @@ DEFINE_IOCTL_SIZED(ioctl_i2c_xfer, 6, 1) {
     new protocol = in[4];
     new data = in[5];
 
-    if (bus < 0 || bus >= FCH_I2C_COUNT || bus_va[bus] == 0)
+    if (bus < 0 || bus >= FCH_I2C_COUNT)
         return STATUS_INVALID_PARAMETER;
     if (address < 0 || address > I2C_SMBUS_ADDR_MAX)
         return STATUS_INVALID_PARAMETER;
@@ -248,9 +265,13 @@ DEFINE_IOCTL_SIZED(ioctl_i2c_xfer, 6, 1) {
         return STATUS_NOT_SUPPORTED;
     }
 
+    new NTSTATUS:status = dw_map(bus);
+    if (!NT_SUCCESS(status))
+        return status;
+
     new rx[2];
     new nrx;
-    new NTSTATUS:status = dw_transfer(bus, address, cmds, ncmds, rx, nrx);
+    status = dw_transfer(bus, address, cmds, ncmds, rx, nrx);
     if (!NT_SUCCESS(status))
         return status;
 
@@ -275,22 +296,10 @@ NTSTATUS:main() {
     if (!NT_SUCCESS(status) || vid != PCI_VENDOR_ID_AMD)
         return STATUS_NOT_SUPPORTED;
 
-    // Map each FCH I2C controller that identifies as DesignWare; leave the others alone.
-    new found = 0;
-    for (new i = 0; i < FCH_I2C_COUNT; i++) {
+    // Controllers are mapped on first use (dw_map), never probed here.
+    for (new i = 0; i < FCH_I2C_COUNT; i++)
         bus_va[i] = 0;
-        new VA:va = io_space_map(fch_i2c_bases[i], DW_IC_MAP_SIZE);
-        if (va == NULL)
-            continue;
-        new comp_type;
-        if (NT_SUCCESS(virtual_read_dword(VA:(_:va + DW_IC_COMP_TYPE), comp_type)) && comp_type == DW_IC_COMP_TYPE_VALUE) {
-            bus_va[i] = _:va;
-            found++;
-        } else {
-            io_space_unmap(va, DW_IC_MAP_SIZE);
-        }
-    }
-    return found > 0 ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+    return STATUS_SUCCESS;
 }
 
 public NTSTATUS:unload() {
