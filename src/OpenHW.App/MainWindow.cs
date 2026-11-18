@@ -126,6 +126,14 @@ public sealed class MainWindow : Window
         Background = Palette.Window;
         Foreground = Palette.Text;
         FontSize = 12.5;
+        // Windows: a row's tooltip stayed on screen over the next window opened (Hardware Check, 2026-11-18) — its popup
+        // outlives the pointer leaving. Close any open one when this window loses focus.
+        if (OperatingSystem.IsWindows())
+            Deactivated += (_, _) =>
+            {
+                foreach (var control in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this).OfType<Control>().Where(ToolTip.GetIsOpen).ToList())
+                    ToolTip.SetIsOpen(control, false);
+            };
 
         _list = new ListBox
         {
