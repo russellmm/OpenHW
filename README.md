@@ -515,6 +515,7 @@ thresholds; 0.25.0–0.35.0), the BMC's status sensors and event log (0.34.0), a
 screen with this machine's settings, planning changes without writing the firmware (0.37.0), and the **WireView
 Pro II** power meter and **UPS** (through NUT) as their own sensor groups (0.38.0).
 Ships as a .deb (see [Install](#install)). Planned work is in [ROADMAP.md](ROADMAP.md). A **Windows 11 port** is under
-way (sensors, tray, BMC through a helper service, CPU/GPU power limits; built with `packaging\windows\build.ps1`) —
+way (most sensor groups incl. CPU temperatures, HSMP, RAPL, board VR, ASUS EC, WireView and UPS; tray; BMC and fan
+control through a helper service; CPU/GPU power limits; built with `packaging\windows\build.ps1`) —
 status and next steps in [docs/windows-port.md](docs/windows-port.md). Every window and dialog opens
 centred on the primary monitor the first time, then where it was last moved.

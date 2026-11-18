@@ -132,11 +132,12 @@ readback, menu entry first.
 ## Windows 11 — under way (owner, 2026-11-16; started 2026-11-17)
 
 **Working document: [docs/windows-port.md](docs/windows-port.md)** — status table, install layout, findings, next steps.
-Done 2026-11-17: phases 0–1 (builds/tests on Windows; System, NVIDIA, NVMe, network readers; Win32 tray, alerts,
-autostart), phase 2 core (the **OpenHW Helper** service on a named pipe; BMC over WMI IPMI; Redfish over the BMC's LAN
-address, bypassing Tailscale), and **CPU + GPU power limits** (CPU through AMD's own HSMP driver, write tested). Scope
-grew 2026-11-17: OpenHW replaces **OpenFan** on Windows too, so power limits are in. Next: live fan-control and GPU
-limit tests, BIOS Setup values, WireView, then kernel access (PawnIO), installer, parity with HWiNFO.
+Done by 2026-11-18: phases 0–2 (builds/tests on Windows; System, NVIDIA, NVMe, network readers; Win32 tray, alerts,
+autostart; the **OpenHW Helper** service; BMC over WMI IPMI; Redfish over the LAN, never Tailscale), **CPU + GPU power
+limits**, a fan configuration **shared with Linux**, and most of phase 3 with PawnIO's signed modules (CPU Tctl/CCD,
+HSMP group, RAPL, effective clocks, board VR, ASUS EC) plus WireView, UPS (HID) and WHEA counts. Next: the DIMM
+module's one-boot test (then submitting it to PawnIO.Modules), live fan-control and GPU-limit tests, retiring OpenFan,
+BIOS Setup values, installer, parity with HWiNFO.
 
 The text below is the 2026-11-16 starting point, kept for its reasoning:
 

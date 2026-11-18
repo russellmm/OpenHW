@@ -1,9 +1,9 @@
 # Porting OpenHW to Windows 11 (to replace HWiNFO and OpenFan)
 
-Status (2026-11-17, end of day): **phases 0 and 1 done, phase 2 core done, CPU and GPU power limits done** on the
-owner's Windows 11 Pro install of the same workstation. Not released: no version bump, the Windows build is installed
-by script (below). Written as a plan the same day against 0.38.2; the plan sections further down are kept, with what
-changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
+Status (2026-11-18): **phases 0–2 done, phase 3 (kernel access) largely done with PawnIO's signed modules, CPU and
+GPU power limits done** on the owner's Windows 11 Pro install of the same workstation. Not released: no version bump,
+the Windows build is installed by script (below). Written as a plan on 2026-11-17 against 0.38.2; the plan sections
+further down are kept, with what changed marked. Commits: 41db191 (phases 0–1) … afd9f4b and later.
 
 **Owner's rules for the port** (2026-11-17):
 - **The Linux features stay exactly as they are.** Every Windows change is behind `OperatingSystem.IsWindows()` /
@@ -21,7 +21,7 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | Area | Windows status | How |
 |---|---|---|
 | Window, layout, graphs, Customize, logging, alerts, single instance, start at login | **done** | Avalonia as is; `%APPDATA%\openhw`; named pipe; `HKCU\…\Run`; balloon/toast alerts |
-| Tray icons | **done** (registered, tooltips; not seen on screen yet) | `Win32TrayIcon` (Shell_NotifyIcon v4) |
+| Tray icons | **done** (on screen; digits fill the 24 px tile; positions kept, uID from the sensor) | `Win32TrayIcon` (Shell_NotifyIcon v4), `TrayIconRenderer.DrawTall` |
 | System: memory, page file, per-core clocks/usage, C-states | **done** | `WindowsSystemEngine` (PDH, GetPerformanceInfo) |
 | NVIDIA GPUs (all rows) | **done** | NVML in the app (`nvml.dll`) |
 | NVMe: SMART, temperatures, activity (8 drives) | **done**, unelevated | `WindowsNvmeEngine` (query-only IOCTLs); ids = Linux's (to confirm on Linux) |
@@ -31,7 +31,7 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | CPU Enhanced (HSMP: package power, PPT limit, FCLK/MCLK, frequency limit + sources, C0, DRAM bandwidth, PROCHOT) | **done** | `WindowsHsmpSensors` (service, `hsmpread`) → `WindowsHsmpEngine`, Linux's `hsmp:*` ids |
 | Fan configuration | **shared with Linux** (`C:\StandAlone\OpenHW\configs` = `/mnt/DriveC/StandAlone/OpenHW/configs`) | `OsFiles.SharedConfigDir`, `FanCurveStore` |
 | BMC fan zones, curves, alarm thresholds | **available, not written yet** | same `FanDriver` over WMI IPMI |
-| Redfish (fan sources, BIOS settings, access check) | **reachable; login saved** (2026-11-17) | BMC LAN address from IPMI, bound to the wired port |
+| Redfish (fan sources, BIOS settings, access check) | **working; login saved**; sources read once per service run | BMC LAN address from IPMI, bound to whichever wired port reaches it (never Tailscale) |
 | CPU power limit (PPT) | **done, write tested** | AMD's own HSMP driver (`WindowsHsmp`) |
 | GPU power limits | **done, not written yet** | NVML in the service, kept by UUID |
 | NVIDIA fan control | **running** (both RTX PRO 6000 on their shared curves since 21:35) | `GpuFanDriver` (NVML) |
@@ -40,7 +40,7 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | UPS | **done** (USB HID, CyberPower CP2000PFCRM2U) | `WindowsHidUps` answers NUT's LIST UPS/VAR for `NutEngine` |
 | Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
 | Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far) | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
-| DIMM SPD hub/PMIC | **next** | port 1 has 4 DIMMs (hubs 0x52/53/56/57 answer MR0 = 0x8E, not 0x51 — to understand); the other 4 are likely behind a switch at 0x73 (shared with the BMC: owner's go-ahead first) |
+| DIMM SPD hub/PMIC | **waiting on a test boot** | on the FCH DesignWare I2C controllers (AMDI0010), not the SMBus: OpenHW's module `AMDI2C` is written and compiles; the official PawnIO won't load it until its author signs it; a test build of the driver is ready |
 | RAPL package + cores power | **done** | `WindowsRapl` (AMDFamily17 MSRs) → Linux's `RaplEngine` rows |
 | Effective clocks per core + average | **done** | `WindowsEffectiveClocks` (APERF per logical CPU) → `WindowsEffectiveClockEngine` |
 | ASUS EC: VRM1, VRM2, USB thermistor | **done** (WRX90E only) | `AsusEc` (LpcACPIEC, registers 0x34/0x33/0x42 from OpenFan) as hwmon chip `asusec` |
@@ -214,32 +214,38 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 
 ## Next steps
 
-In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
+In order; anything that writes to the BMC, the CPU, the GPUs or a bus device only with the owner's go-ahead and with
+the owner present. **Never sweep** firmware mailboxes, MSRs, EC/Super I/O registers or bus addresses (the 2026-11-18
+crash): one documented value at a time, and commit before any hardware test.
 
-1. **On Linux next boot**: run both test suites (expected unchanged), and compare a drive's `nvme-health:<id>` there
-   with the Windows ids (`openhw.exe --dump` lists drives; settings keep ids) — confirms layouts carry across.
-2. **Redfish on Windows**: the `openhw` login is saved (owner, 2026-11-17). Next: `fansources`, BIOS Settings from the BMC and the Hardware Check's BMC access line.
+1. **On the next Linux boot**: run both test suites (expected unchanged — every Windows change is gated); check OpenHW
+   there loads the shared fan configuration `/mnt/DriveC/StandAlone/OpenHW/configs` (Fan Control's title shows
+   `fans.json`); compare a drive's `nvme-health:<id>` with the Windows ids.
+2. **DIMMs — the one-boot test (owner)**: Memory Integrity off (Windows Security → Core isolation) and restart; restart
+   into Startup Settings and press 7 (driver signature enforcement off for that boot); then elevated
+   `packaging\windows\pawnio-test\test-dimm-read.ps1 install`, `read` (I2C1 0x50 MR0/MR1 — expect `51 18`), `remove`;
+   Memory Integrity back on, normal restart. If it reads: Windows DIMM discovery (hubs 0x50–0x57 on I2C1/I2C2, SPD
+   header via the MR11 page select Linux's spd5118 uses), the per-DIMM rows through `Ddr5Reader`, then submit
+   `packaging/windows/pawnio-src/AMDI2C.p` to PawnIO.Modules for signing.
 3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
-   one alarm threshold and restore — same flash-write rules as Linux. The configuration is **shared with Linux** (decided
-   2026-11-17); on the next Linux boot check OpenHW there loads `/mnt/DriveC/StandAlone/OpenHW/configs`.
+   one alarm threshold and restore — the same flash-write rules as Linux.
 4. **GPU power limit live**: one card, Apply then Default; "Apply and keep" then a service restart to see it reapplied.
-5. **NVIDIA fan control**: running from the shared curves; check **OpenFan (Windows) isn't also driving GPU fans** —
-   `GpuFanDriver`'s OpenFan guard looks for OpenFan's Linux socket only (Windows guard to add).
-6. **Tray on screen**: drag OpenHW's icons out of the hidden-icons flyout and check tiles, tooltips, menu; check an
-   alert toast.
-7. **BIOS Setup values**: UEFI variables through the service (`uefivars` command, SeSystemEnvironmentPrivilege).
-8. **WireView Pro II**: COM port by VID/PID 0483:5740, `SerialPort`, reuse `WireViewSample.Parse` (in the app; no
-   admin needed).
-9. **UPS** (NUT on 127.0.0.1:3493 or another host) and the **WHEA** corrected-error count.
-10. **HWiNFO coexistence**: re-check BMC reads with HWiNFO running (retries); otherwise turn HWiNFO's IPMI sensors off
-    for the parity phase.
-11. **Phase 3, kernel access**: PawnIO (already installed by OpenFan; its `AMDFamily17` module reads SMN) for
-    Tctl/CCD temperatures, then Super I/O NCT6798 (WRX90E profile), effective clocks / RAPL (MSRs), SMBus. The HSMP
-    driver can also give FCLK/MCLK/DRAM bandwidth (Linux's HSMP extras) without PawnIO.
-12. **Phase 4, installer** (Inno Setup is installed): app to StandAlone or Program Files, service, group, autostart;
-    uninstall gives fans back.
-13. **Phase 5, parity with HWiNFO**, then uninstall HWiNFO; retire OpenFan on Windows once fan control and GPU limits
-    are confirmed.
+5. **OpenFan vs OpenHW on Windows**: OpenFan is still running and OpenHW drives both RTX PRO 6000 cards' fans — confirm
+   OpenFan isn't also driving them (`GpuFanDriver`'s OpenFan guard only knows OpenFan's Linux socket); retire OpenFan
+   once 3–4 are confirmed.
+6. **Fan Control's service calls off the UI thread**: it asks the service on its window thread, so any slow answer
+   shows as lag (seen 2026-11-18 while Redfish timed out).
+7. **BIOS Setup values**: UEFI variables through the service (`uefivars`, SeSystemEnvironmentPrivilege).
+8. **Super I/O NCT6798D** through PawnIO's LpcIO (Linux's nct6775 decoding + the WRX90E board profile) — low value here,
+   the BMC reads the rails, temperatures and fans.
+9. **HWiNFO coexistence**: re-check BMC, SMBus and EC reads with HWiNFO running (the shared mutexes, the IPMI retries).
+10. **Phase 4, installer** (Inno Setup is installed): the app to StandAlone or Program Files, the service (start/stop
+    rights for OpenHW Users), the group, autostart, a PawnIO check; uninstall gives fans back.
+11. **Phase 5, parity with HWiNFO**, then uninstall HWiNFO; retire OpenFan on Windows.
+
+Not reachable with signed modules (left unless a module appears): the chipset (xHCI) temperature, SVI3 telemetry and
+per-core/L3 temperatures (the SMU's PM table — the RyzenSMU module works through the SMU mailbox; only with AMD/PawnIO
+documentation for this CPU and the owner present).
 
 ## Goal and scope (owner, 2026-11-16)
 
