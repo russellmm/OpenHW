@@ -262,7 +262,21 @@ crash): one documented value at a time, and commit before any hardware test.
    - **WireView grouping (owner, 2026-11-18)**: on Windows the group takes HWiNFO's order and names: Temperature In/Out, "GPU 12VHPWR Connector Voltages/Currents/Powers" (the six wires' average; expand for Pin 1–6), Average Pin Voltage, Total Current, Total Power, Fan Duty, Faults (Status)/(Log), then OpenHW's extras (Current Imbalance, PSU limit, supply). Ids unchanged; Linux keeps its flat list.
 8. **Super I/O NCT6798D** through PawnIO's LpcIO (Linux's nct6775 decoding + the WRX90E board profile) — low value here,
    the BMC reads the rails, temperatures and fans.
-9. **HWiNFO coexistence**: re-check BMC, SMBus and EC reads with HWiNFO running (the shared mutexes, the IPMI retries).
+9. **HWiNFO coexistence — deferred, optional (owner, 2026-11-18)**: the plan is not to run OpenHW and HWiNFO
+   together, so this is a test to do later if ever needed. Read-only (the only write is OpenHW's existing VR page
+   select); the owner starts and closes HWiNFO (admin prompt).
+   - **Shared hardware and the risk**: SMBus (VR + PIIX4 port select; both use `Global\Access_SMBUS.HTP.Method`, but
+     HWiNFO also switches the VR's PAGE — if it doesn't hold the mutex across its switch, one tool reads the other's
+     page); ASUS EC (`Global\Access_EC`) and k10temp/SMN (`Global\Access_PCI`) — a mixed-up read shows as a spike;
+     BMC over IPMI (no shared lock: interleaved requests time out, OpenHW's BMC group drops after its 30 s grace);
+     HSMP (AMD's driver serializes OpenHW, HWiNFO may use the mailbox directly); **WireView COM port (exclusive: one
+     of the two loses it)**; NVML, NVMe SMART and the HID UPS are safe to share.
+   - **Method**: ~10 min OpenHW alone logging VR/EC/CPU/HSMP/BMC/WireView each second plus the service's errors and
+     group dropouts; ~10 min with HWiNFO (sensors-only, defaults), same log plus HWiNFO's values from its shared memory
+     (`tools/loadgen/hwinfo_shm.py`); compare dropouts, spikes, errors and the VR page.
+   - **Likely fixes if it shows up**: drop page-0 VR replies instead of blanking; WireView "in use by another program"
+     with retry; BMC retry/spacing; a "Running alongside HWiNFO" section (which HWiNFO options to turn off — likely
+     its WireView support).
 10. **Phase 4, installer** (Inno Setup is installed): the app to StandAlone or Program Files, the service (start/stop
     rights for OpenHW Users), the group, autostart, a PawnIO check; uninstall gives fans back.
 11. **Phase 5, parity with HWiNFO**, then uninstall HWiNFO; retire OpenFan on Windows.
