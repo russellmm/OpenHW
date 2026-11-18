@@ -97,7 +97,7 @@ public sealed class WireViewTests
         {
             new("208E31635445", "WireView Pro II", "TG-WV-PRO2-FW_20260430_1838", "/dev/ttyACM0", WireViewSample.Parse(Frame()), null),
         });
-        using var engine = new WireViewEngine(_ => reply);
+        using var engine = new WireViewEngine(_ => reply, hwinfoLayout: false); // Linux's flat layout
         var items = engine.Discover();
         Assert.All(items, i => Assert.Equal("wireview:208E31635445", i.Group));
         Assert.Equal(2 + 18 + 4 + 3 + 2, items.Count); // 2 connector temps (no probes), 6 × V/A/W, 3 totals + imbalance, PSU + 2 fault counts, vdd + fan
@@ -113,6 +113,29 @@ public sealed class WireViewTests
         // An old helper (no `wireview`): no group, no exception.
         using var old = new WireViewEngine(_ => throw new IOException("openhw-helper: err unknown command"));
         Assert.Empty(old.Discover());
+    }
+
+    [Fact]
+    public void WindowsUsesHwinfosLayout()
+    {
+        var reply = GpuWire.Encode(new List<WireViewDevice>
+        {
+            new("208E31635445", "WireView Pro II", "TG-WV-PRO2-FW_20260430_1838", "/dev/ttyACM0", WireViewSample.Parse(Frame()), null),
+        });
+        using var engine = new WireViewEngine(_ => reply, hwinfoLayout: true);
+        var items = engine.Discover();
+        const string p = "wireview:208E31635445:";
+        // HWiNFO's order for the top-level rows (the pins sit under their connector row); the ids are Linux's.
+        var top = items.Where(i => !engine.Children.Values.SelectMany(c => c).Contains(i.Id)).Select(i => i.Name).ToList();
+        Assert.Equal(["Temperature In", "Temperature Out", "GPU 12VHPWR Connector Voltages", "Average Pin Voltage",
+            "GPU 12VHPWR Connector Currents", "Total Current", "GPU 12VHPWR Connector Powers", "Total Power", "Fan Duty",
+            "Faults (Status)", "Faults (Log)", "Current Imbalance", "PSU Power Limit (Sense Pins)", "WireView Supply Voltage"], top);
+        Assert.Equal(Enumerable.Range(1, 6).Select(i => $"{p}pin{i}:a").ToList(), engine.Children[p + "pins:a"]);
+        Assert.Equal("Pin 5 Power", items.Single(i => i.Id == p + "pin5:w").Name);
+        var readings = new Dictionary<string, double?>();
+        engine.ReadInto(readings, null);
+        Assert.Equal(22.99, readings[p + "total:w"]);
+        Assert.Equal(Enumerable.Range(1, 6).Average(i => readings[$"{p}pin{i}:w"]!.Value), readings[p + "pins:w"]!.Value, 6);
     }
 
     [Fact]

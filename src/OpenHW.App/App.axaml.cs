@@ -776,12 +776,26 @@ public sealed class App : Application
                 Console.Error.WriteLine("openhw: no BIOS data (Bios/Data/bios-*.json) next to the app");
                 return;
             }
-            var machine = new LinuxFirmwareVariables();
             var state = Bios.BiosModel.DefaultStateDir;
-            var platform = File.Exists(Path.Combine(state, "platform.json"))
-                ? Bios.BiosModel.LoadPlatform(state)
-                : Bios.BiosPlatform.Probe(Bios.BiosModel.LoadPlatform(state), machine);
-            var model = new Bios.BiosModel(Bios.BiosData.Load(data), machine.Available ? machine : null, state, platform);
+            Bios.BiosModel model;
+            if (OperatingSystem.IsWindows())
+            {
+                // Windows: the variables come from the OpenHW Helper service (SeSystemEnvironmentPrivilege), read-only.
+                var machine = new OpenHW.Hardware.Windows.HelperFirmwareVariables();
+                var available = machine.Available;
+                var platform = File.Exists(Path.Combine(state, "platform.json"))
+                    ? Bios.BiosModel.LoadPlatform(state)
+                    : Bios.BiosPlatform.ProbeWindows(Bios.BiosModel.LoadPlatform(state), available ? machine : null);
+                model = new Bios.BiosModel(Bios.BiosData.Load(data), available ? machine : null, state, platform);
+            }
+            else
+            {
+                var machine = new LinuxFirmwareVariables();
+                var platform = File.Exists(Path.Combine(state, "platform.json"))
+                    ? Bios.BiosModel.LoadPlatform(state)
+                    : Bios.BiosPlatform.Probe(Bios.BiosModel.LoadPlatform(state), machine);
+                model = new Bios.BiosModel(Bios.BiosData.Load(data), machine.Available ? machine : null, state, platform);
+            }
             WindowPlaces.Track(_biosSetup = new Bios.BiosWindow(model, id => _hub.Get(id).Current), "bios-setup");
             _biosSetup.Closed += (_, _) => _biosSetup = null;
         }

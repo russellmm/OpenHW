@@ -46,4 +46,36 @@ public sealed class WindowsSensorTests
         Assert.Equal(1, readings["hsmp:limit:opn-max"]);   // bit 4
         Assert.Equal(0, readings["hsmp:limit:ppt-limit"]); // bit 3
     }
+
+    // BIOS Setup on Windows: the service's uefivar command and the app's client (read-only).
+    [WindowsFact]
+    public void UefiVariablesComeThroughTheService()
+    {
+        var session = new WindowsHelperSession(new HelperSession(new NoSmart()), null, null);
+        Assert.StartsWith("err expected", session.HandleLine("uefivar ../x 8be4df61-93ca-11d2-aa0d-00e098032b8c"));
+        Assert.StartsWith("err expected", session.HandleLine("uefivar BootOrder not-a-guid"));
+        Assert.True(WindowsUefi.ValidName("VARSTORE_OCMR_SETTINGS_NAME"));
+
+        const string global = "8be4df61-93ca-11d2-aa0d-00e098032b8c";
+        // Boot0001 "Windows Boot Manager" (EFI_LOAD_OPTION: attributes, path length, UCS-2 description).
+        var option = new byte[] { 1, 0, 0, 0, 0, 0 }.Concat(System.Text.Encoding.Unicode.GetBytes("Windows Boot Manager\0")).ToArray();
+        var vars = new Dictionary<string, byte[]> { ["BootOrder"] = [1, 0], ["Boot0001"] = option, ["Setup"] = [7, 8, 9] };
+        var machine = new HelperFirmwareVariables(line =>
+        {
+            var parts = line.Split(' ');
+            Assert.Equal("uefivar", parts[0]);
+            return vars.TryGetValue(parts[1], out var b) ? "ok " + Convert.ToBase64String(b) : "ok none";
+        });
+        Assert.True(machine.Available);
+        Assert.Equal(new byte[] { 7, 8, 9 }, machine.Read("Setup", "ec87d643-eba4-4bb5-a1e5-3f3e36b20da9"));
+        Assert.Null(machine.Read("Missing", global));
+        Assert.Equal(["Windows Boot Manager"], machine.BootEntries());
+        Assert.False(new HelperFirmwareVariables(_ => throw new IOException("no service")).Available);
+    }
+
+    private sealed class NoSmart : INvmeSmartReader
+    {
+        public byte[] Read(string controller, string identity) => throw new IOException("none");
+        public void Dispose() { }
+    }
 }

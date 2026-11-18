@@ -7,9 +7,18 @@ namespace OpenHW.Hardware;
 /// one group per device — keyed by its USB serial, not by the GPU it sits on, so moving it to another card changes
 /// nothing — with each 12V-2x6 wire's voltage, current and power, the totals, the connector temperatures, the PSU's
 /// signalled limit, its fan and its fault bits.
+/// On Windows the rows take HWiNFO's layout (owner, 2026-11-18): its names and order, with each wire's voltage,
+/// current and power under a "GPU 12VHPWR Connector …" row (the six wires' average, as HWiNFO shows). The ids are the
+/// same on both systems; Linux keeps its own names and flat order.
 /// </summary>
-public sealed class WireViewEngine(Func<int, string>? request = null) : ISensorEngine
+public sealed class WireViewEngine(Func<int, string>? request = null, bool? hwinfoLayout = null) : ISensorEngine
 {
+    private readonly bool _hwinfo = hwinfoLayout ?? OperatingSystem.IsWindows();
+    private Dictionary<string, IReadOnlyList<string>> _children = [];
+
+    /// <summary>HWiNFO layout only: the three "GPU 12VHPWR Connector …" rows and their six pins each.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Children => _children;
+
     public const string IdPrefix = "wireview:";
     public const string GroupPrefix = "wireview:";
 
@@ -27,7 +36,50 @@ public sealed class WireViewEngine(Func<int, string>? request = null) : ISensorE
 
     private sealed record Row(string Key, string Name, HardwareKind Kind, string Unit, Func<WireViewSample, double?> Value);
 
-    private static IEnumerable<Row> Rows(WireViewSample s)
+    private static readonly (string Key, string Name, HardwareKind Kind, string Unit, Func<WireViewSample, double[]> Pins)[] PinSets =
+    [
+        ("v", "Voltage", HardwareKind.Voltage, "V", x => x.PinVolts),
+        ("a", "Current", HardwareKind.Current, "A", x => x.PinAmps),
+        ("w", "Power", HardwareKind.Power, "W", x => x.PinWatts),
+    ];
+
+    /// <summary>HWiNFO's WireView Pro II rows, in its order; OpenHW's extra rows (imbalance, PSU limit, supply) after.</summary>
+    private static IEnumerable<Row> HwinfoRows(WireViewSample s)
+    {
+        yield return new Row("temp:0", "Temperature In", HardwareKind.Temperature, "°C", x => x.Temperatures[0]);
+        yield return new Row("temp:1", "Temperature Out", HardwareKind.Temperature, "°C", x => x.Temperatures[1]);
+        for (var i = 2; i < 4; i++)
+        {
+            var n = i;
+            if (s.Temperatures[i] is not null)
+                yield return new Row($"temp:{i}", $"External Temperature {i - 1}", HardwareKind.Temperature, "°C", x => x.Temperatures[n]);
+        }
+        foreach (var (key, name, kind, unit, pins) in PinSets)
+        {
+            yield return new Row($"pins:{key}", $"GPU 12VHPWR Connector {name}s", kind, unit, x => pins(x).Average());
+            for (var i = 0; i < 6; i++)
+            {
+                var n = i;
+                yield return new Row($"pin{i + 1}:{key}", $"Pin {i + 1} {name}", kind, unit, x => pins(x)[n]);
+            }
+            yield return key switch
+            {
+                "v" => new Row("avg:v", "Average Pin Voltage", HardwareKind.Voltage, "V", x => x.AverageVolts),
+                "a" => new Row("total:a", "Total Current", HardwareKind.Current, "A", x => x.TotalAmps),
+                _ => new Row("total:w", "Total Power", HardwareKind.Power, "W", x => x.TotalWatts),
+            };
+        }
+        yield return new Row("fan", "Fan Duty", HardwareKind.Load, "%", x => x.FanPercent);
+        yield return new Row("faults:now", "Faults (Status)", HardwareKind.Counter, "", x => BitCount(x.FaultStatus));
+        yield return new Row("faults:log", "Faults (Log)", HardwareKind.Counter, "", x => BitCount(x.FaultLog));
+        yield return new Row("imbalance", "Current Imbalance", HardwareKind.Load, "%", x => Imbalance(x.PinAmps));
+        yield return new Row("psu:limit", "PSU Power Limit (Sense Pins)", HardwareKind.Power, "W", x => x.PsuCapabilityWatts);
+        yield return new Row("vdd", "WireView Supply Voltage", HardwareKind.Voltage, "V", x => x.SupplyVolts);
+    }
+
+    private IEnumerable<Row> Rows(WireViewSample s) => _hwinfo ? HwinfoRows(s) : LinuxRows(s);
+
+    private static IEnumerable<Row> LinuxRows(WireViewSample s)
     {
         string[] probes = ["Connector Temperature (In)", "Connector Temperature (Out)", "External Temperature 1", "External Temperature 2"];
         for (var i = 0; i < 4; i++)
@@ -79,9 +131,13 @@ public sealed class WireViewEngine(Func<int, string>? request = null) : ISensorE
         var devices = Fetch();
         if (devices is null) return [];
         var items = new List<HardwareItem>();
+        var children = new Dictionary<string, IReadOnlyList<string>>();
         foreach (var d in devices.Where(d => d.Sample is not null))
         {
             var key = Key(d);
+            if (_hwinfo)
+                foreach (var set in PinSets)
+                    children[$"{IdPrefix}{key}:pins:{set.Key}"] = Enumerable.Range(1, 6).Select(i => $"{IdPrefix}{key}:pin{i}:{set.Key}").ToList();
             foreach (var r in Rows(d.Sample!))
                 items.Add(new HardwareItem
                 {
@@ -90,6 +146,7 @@ public sealed class WireViewEngine(Func<int, string>? request = null) : ISensorE
                     Details = $"{d.Product} · {d.Firmware} · USB serial {d.Serial} · {d.Port} (openhw-helper)",
                 });
         }
+        _children = children;
         return items;
     }
 

@@ -46,6 +46,31 @@ public static class BiosPlatform
         return p;
     }
 
+    /// <summary>
+    /// <see cref="Probe"/>'s Windows counterpart: the same facts from the registry, the processor topology and the
+    /// network adapters (Windows has no /proc or /sys); the boot entries come from the UEFI variables via the service.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public static JsonObject ProbeWindows(JsonObject template, IFirmwareVariables? machine)
+    {
+        var p = (JsonObject)template.DeepClone();
+        var cpu = p["cpu"] as JsonObject ?? (JsonObject)(p["cpu"] = new JsonObject());
+        var model = OpenHW.Hardware.Windows.WindowsPlatformFacts.CpuBrand();
+        if (model is { Length: > 0 }) cpu["brand"] = model;
+        if (OpenHW.Hardware.Windows.WindowsPlatformFacts.Cores() is > 0 and var cores) cpu["cores"] = cores;
+        if (OpenHW.Hardware.Windows.WindowsPlatformFacts.Ccds() is > 0 and var ccds) cpu["ccds"] = ccds;
+        if (OpenHW.Hardware.Windows.WindowsPlatformFacts.BaseMhz() is { } mhz) cpu["speed_mhz"] = mhz;
+        if (model is { } m && m.Contains("PRO 9", StringComparison.Ordinal)) p["variant"] = "SHP";
+        else if (model is { } m7 && m7.Contains("PRO 7", StringComparison.Ordinal)) p["variant"] = "STP";
+        if (machine?.BootEntries() is { Count: > 0 } boot) p["boot_options"] = new JsonArray(boot.Select(b => (JsonNode)JsonValue.Create(b)!).ToArray());
+        var text = p["text"] as JsonObject ?? (JsonObject)(p["text"] = new JsonObject());
+        var x710 = OpenHW.Hardware.Windows.WindowsPlatformFacts.Macs("X710");
+        for (var i = 0; i < Math.Min(2, x710.Count); i++) text[$"Main|Intel X710 LAN{i + 1} MAC"] = x710[i];
+        p["source"] = "probed";
+        p["profile_name"] = $"This machine ({cpu["brand"]?.GetValue<string>() ?? "unknown CPU"})";
+        return p;
+    }
+
     /// <summary>MAC addresses of the network ports a driver runs, by interface name, in BIOS style (AA-BB-…).</summary>
     private static List<string> Macs(string sys, string driver)
     {

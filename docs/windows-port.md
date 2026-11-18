@@ -35,8 +35,8 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
 | CPU power limit (PPT) | **done, write tested** | AMD's own HSMP driver (`WindowsHsmp`) |
 | GPU power limits | **done, tested live by the owner (2026-11-18)** | NVML in the service, kept by UUID |
 | NVIDIA fan control | **running** (both RTX PRO 6000 on their shared curves since 21:35) | `GpuFanDriver` (NVML) |
-| BIOS Setup values (UEFI variables) | to do | `GetFirmwareEnvironmentVariableExW` in the service |
-| WireView Pro II | **done** (in the app, COM port) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
+| BIOS Setup values (UEFI variables) | **done 2026-11-18** (read-only; 34 of 76 variables, the same 34 as Linux) | `WindowsUefi` in the service (`uefivar`), `HelperFirmwareVariables` in the app |
+| WireView Pro II | **done** (in the app, COM port; HWiNFO's grouping and names on Windows) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
 | UPS | **done** (USB HID, CyberPower CP2000PFCRM2U) | `WindowsHidUps` answers NUT's LIST UPS/VAR for `NutEngine` |
 | Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
 | Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far) | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
@@ -238,7 +238,8 @@ crash): one documented value at a time, and commit before any hardware test.
    while one runs is folded into it. Only the first one, when the window opens, waits. The BMC writes themselves (Apply,
    Restore original, Apply all) stay on the window thread: each is one confirmed write and they edit the curve store
    the window also edits.
-7. **BIOS Setup values**: UEFI variables through the service (`uefivars`, SeSystemEnvironmentPrivilege).
+7. ~~**BIOS Setup values**~~ — **done 2026-11-18**: the service reads one variable per `uefivar <name> <guid>` (GetFirmwareEnvironmentVariableExW after switching on SeSystemEnvironmentPrivilege; names limited to letters, digits, `_` and `-`; never writes), the app's `HelperFirmwareVariables` feeds BiosModel, and `BiosPlatform.ProbeWindows` fills the CPU, cores, CCDs (L3 caches), base clock, boot entries and X710 MACs. 34 of the 76 variables in the BIOS data match in size, as on Linux (Setup, Ai Tweaker, AMD CBS…); the rest aren't visible to an OS. Not yet opened and checked on screen.
+   - **WireView grouping (owner, 2026-11-18)**: on Windows the group takes HWiNFO's order and names: Temperature In/Out, "GPU 12VHPWR Connector Voltages/Currents/Powers" (the six wires' average; expand for Pin 1–6), Average Pin Voltage, Total Current, Total Power, Fan Duty, Faults (Status)/(Log), then OpenHW's extras (Current Imbalance, PSU limit, supply). Ids unchanged; Linux keeps its flat list.
 8. **Super I/O NCT6798D** through PawnIO's LpcIO (Linux's nct6775 decoding + the WRX90E board profile) — low value here,
    the BMC reads the rails, temperatures and fans.
 9. **HWiNFO coexistence**: re-check BMC, SMBus and EC reads with HWiNFO running (the shared mutexes, the IPMI retries).

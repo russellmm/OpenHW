@@ -291,8 +291,34 @@ public static partial class SensorExplanations
     ];
 
     /// <summary>What the row measures, in plain words; null when nothing better than the name is known.</summary>
+    /// <summary>
+    /// The WireView's rows under HWiNFO's names (Windows): checked first, and only for WireView rows, since names like
+    /// "Total Power" or "Pin 1 Voltage" mean something else in other groups.
+    /// </summary>
+    private static readonly Rule[] WireViewRules =
+    [
+        R(@"GPU 12VHPWR Connector Voltages", "Average voltage of the six 12 V wires of the GPU's 12V-2x6 (12VHPWR) cable at the card's connector; expand for each wire."),
+        R(@"GPU 12VHPWR Connector Currents", "Average current of the six 12 V wires; expand for each wire. One wire carrying much more than the others points at a poor contact."),
+        R(@"GPU 12VHPWR Connector Powers", "Average power of the six 12 V wires; expand for each wire."),
+        R(@"Pin \d Voltage", "Voltage on one of the six 12 V wires of the GPU's 12V-2x6 cable, measured by the WireView Pro II at the card's connector."),
+        R(@"Pin \d Current", "Current through one of the six 12 V wires (at 600 W each carries about 8.3 A). One wire carrying much more than the others points at a poor contact."),
+        R(@"Pin \d Power", "Power delivered through one of the six 12 V wires (its voltage × current)."),
+        R(@"Average Pin Voltage", "Average voltage of the six 12 V wires at the card, as the WireView computes it."),
+        R(@"Total Current", "Current through all six 12 V wires together."),
+        R(@"Total Power", "Power the GPU draws through its 12V-2x6 cable (all six wires). It doesn't include up to ~66 W the card can take from the PCIe slot."),
+        R(@"Temperature In", "Temperature at the WireView's input side, where the PSU cable plugs in."),
+        R(@"Temperature Out", "Temperature at the WireView's output side, the connector on the graphics card."),
+        R(@"Fan Duty", "Duty of the WireView's own small fan."),
+        R(@"Faults \(Status\)", "How many WireView faults are active now (over-temperature, over-current, wire over-current, over-power, current imbalance)."),
+        R(@"Faults \(Log\)", "How many kinds of fault the WireView has logged since its log was last cleared (in its own app or on the device)."),
+        R(@"Current Imbalance", "How far the busiest wire is above the six wires' average current (blank at near-idle current). High values mean the load isn't shared evenly — check the connector is fully seated."),
+    ];
+
     public static string Explain(HardwareItem item, string displayName)
     {
+        if (item.Id.StartsWith(WireViewEngine.IdPrefix, StringComparison.Ordinal))
+            foreach (var rule in WireViewRules)
+                if (rule.Name.IsMatch(displayName)) return rule.Text;
         foreach (var rule in Rules)
             if ((rule.Kind is null || rule.Kind == item.Kind) && rule.Name.IsMatch(displayName)) return rule.Text;
         return item.Kind switch

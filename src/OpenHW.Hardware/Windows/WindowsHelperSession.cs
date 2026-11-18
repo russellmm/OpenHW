@@ -119,6 +119,10 @@ public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerL
                 return clocks.Read() is { } mhz ? "ok " + GpuWire.Encode(mhz) : "err " + (clocks.Error ?? "effective clocks unavailable");
             case ["rapl"] when rapl is not null: // read-only: RAPL energy, Linux's reply format (WindowsRapl)
                 return rapl.Read() is { } counters ? "ok " + RaplReader.Format(counters) : "err " + (rapl.Error ?? "RAPL unavailable");
+            case ["uefivar", var name, var guid]: // read-only: one UEFI variable for BIOS Setup (WindowsUefi), base64
+                if (!WindowsUefi.ValidName(name) || !Guid.TryParse(guid, out var vendor)) return "err expected uefivar <name> <guid>";
+                try { return WindowsUefi.Read(name, vendor) is { } bytes ? "ok " + Convert.ToBase64String(bytes) : "ok none"; }
+                catch (IOException ex) { return "err " + ex.Message; }
             case ["kernel"]: // read-only: PawnIO readings as hwmon-style chips (WindowsKernelSensors)
                 if (kernel is null) return "err kernel access unavailable";
                 return "ok " + GpuWire.Encode(kernel.Read());
