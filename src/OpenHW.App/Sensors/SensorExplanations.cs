@@ -196,7 +196,9 @@ public static partial class SensorExplanations
         R(@"Physical Memory Used|Physical Memory Available|Physical Memory Load", "RAM in use by programs and the kernel " +
             "(cache that can be freed counts as available)."),
         R(@"Swap Used|Swap Total|Swap Load", "Swap space on disk. Heavy swap use means RAM ran short and things slow down."),
-        R(@"Page File Usage", "Share of the Windows page file in use. High use means RAM ran short and Windows moved memory to disk."),
+        R(@"VRM1|VRM2", "A thermistor on the CPU voltage regulator's power stages (ASUS embedded controller). Under 90 °C is comfortable; the VRM heatsink fans speed up as it rises."),
+        R(@"USB Thermistor", "A thermistor near the board's USB controllers (ASUS embedded controller): board temperature in that corner, not a USB device's."),
+        R(@"Page File Usage","Share of the Windows page file in use. High use means RAM ran short and Windows moved memory to disk."),
         R(@"Virtual Memory Load", "Committed memory as a share of the commit limit (RAM plus page file). Near 100 % new allocations start to fail."),
         R(@"Virtual Memory Committed|Virtual Memory Commit Limit", "Memory programs have reserved, against how much the " +
             "kernel will promise (RAM plus swap)."),
