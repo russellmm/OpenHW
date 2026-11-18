@@ -45,7 +45,7 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
 | Effective clocks per core + average | **done** | `WindowsEffectiveClocks` (APERF per logical CPU) → `WindowsEffectiveClockEngine` |
 | ASUS EC: VRM1, VRM2, USB thermistor | **done** (WRX90E only) | `AsusEc` (LpcACPIEC, registers 0x34/0x33/0x42 from OpenFan) as hwmon chip `asusec` |
 | Hardware errors (WHEA: corrected since boot / 30 days, fatal 30 days) | **done** (user mode) | `WindowsWheaEngine` — Linux's EDAC counterpart |
-| Super I/O NCT6798D | to do (PawnIO LpcIO) | low value here: the BMC reads the rails, temperatures and fans |
+| Super I/O NCT6798D | **done 2026-11-18** (owner-approved) | `NuvotonSio` (PawnIO LpcIO) reported as Linux's nct6798 → the WRX90E board profile |
 | Chipset (xHCI) temperature, SVI3 telemetry, per-core/L3 temperatures | not reachable with signed modules | chipset MMIO / SMU PM table |
 | Installer | phase 4 | scripts for now; Inno Setup is on this PC |
 
@@ -260,8 +260,13 @@ crash): one documented value at a time, and commit before any hardware test.
    the window also edits.
 7. ~~**BIOS Setup values**~~ — **done 2026-11-18**: the service reads one variable per `uefivar <name> <guid>` (GetFirmwareEnvironmentVariableExW after switching on SeSystemEnvironmentPrivilege; names limited to letters, digits, `_` and `-`; never writes), the app's `HelperFirmwareVariables` feeds BiosModel, and `BiosPlatform.ProbeWindows` fills the CPU, cores, CCDs (L3 caches), base clock, boot entries and X710 MACs. 34 of the 76 variables in the BIOS data match in size, as on Linux (Setup, Ai Tweaker, AMD CBS…); the rest aren't visible to an OS. Not yet opened and checked on screen.
    - **WireView grouping (owner, 2026-11-18)**: on Windows the group takes HWiNFO's order and names: Temperature In/Out, "GPU 12VHPWR Connector Voltages/Currents/Powers" (the six wires' average; expand for Pin 1–6), Average Pin Voltage, Total Current, Total Power, Fan Duty, Faults (Status)/(Log), then OpenHW's extras (Current Imbalance, PSU limit, supply). Ids unchanged; Linux keeps its flat list.
-8. **Super I/O NCT6798D** through PawnIO's LpcIO (Linux's nct6775 decoding + the WRX90E board profile) — low value here,
-   the BMC reads the rails, temperatures and fans.
+8. ~~**Super I/O NCT6798D**~~ — **done 2026-11-18, owner-approved** (the module's ioctl_find_bars selects each logical
+   device to read its base registers — a loop of config writes, approved explicitly). A one-shot `--sio-dump` (chip
+   D42B, monitor at 0x290) was decoded against HWiNFO; `NuvotonSio` reports the chip as Linux's nct6798 (in0–in14 in
+   volts with the driver's ×2 on in2/3/7–11, fan1–7 from NCT6779_REG_FAN, temp1 SYSTIN) so the existing WRX90E board
+   profile names and scales it: +VCORE_0/1, +5V 5.12, +12V 12.0, +3.3V, +VDDIO 1.101, +VSOC 0.897, CHA_FAN1–5,
+   CPU_FAN, W_PUMP+ — all within an ADC step of HWiNFO. Not read (registers not confirmed): HWiNFO's Temp2/5/9,
+   "CPU", "CPU (Weighted Value)", VIN9, VHIF.
 9. **HWiNFO coexistence — deferred, optional (owner, 2026-11-18)**: the plan is not to run OpenHW and HWiNFO
    together, so this is a test to do later if ever needed. Read-only (the only write is OpenHW's existing VR page
    select); the owner starts and closes HWiNFO (admin prompt).
@@ -283,7 +288,7 @@ crash): one documented value at a time, and commit before any hardware test.
     memory, against `openhw --dump`): [hwinfo-parity-windows.md](hwinfo-parity-windows.md) has every group, what is
     covered, what differs only by name, the gaps and a suggested order. **Gaps closed the same day** (system, CPU
     utility / per-thread effective clocks / Core Ratio and VID, GPU limits, engines and D3D memory, UPS, WireView
-    faults — 03bc3d0). Left: Super I/O (needs Super I/O writes: owner's go-ahead), Memory Timings and EC VRM Vcore
+    faults — 03bc3d0; Super I/O — 2079199). Left: Memory Timings and EC VRM Vcore
     (undocumented offsets), DIMMs (#2), and what signed modules / NVML can't reach. Then uninstall HWiNFO; retire OpenFan.
 
 Not reachable with signed modules (left unless a module appears): the chipset (xHCI) temperature, SVI3 telemetry and

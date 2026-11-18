@@ -82,7 +82,7 @@ public static class Coverage
                       "comparing readings with HWiNFO on this board (docs/board-profiles.md)."
                     : "A profile needs a session comparing readings with HWiNFO on this board (docs/board-profiles.md)."));
         else if (superIo is null && OperatingSystem.IsWindows())
-            notes.Add(new("Motherboard", "The Super I/O chip isn't read on Windows yet (PawnIO, in progress)." +
+            notes.Add(new("Motherboard", "No Super I/O read on Windows: OpenHW reads the Nuvoton NCT6798D (through PawnIO's LpcIO), not this board's chip." +
                 (now.Bmc.Length > 0 ? " The BMC group reads this board's rails, temperatures and fans." : "")));
         else if (superIo is null && !now.Board.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
             notes.Add(new("Motherboard", "No Super I/O sensor chip found (no nct67xx/it87 hwmon).",

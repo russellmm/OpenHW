@@ -21,9 +21,11 @@ left out.
 - **HSMP**: nothing to add — CPU Package Power (HSMP) is HWiNFO's CPU PPT, the "Frequency Limited by …" rows cover the
   throttle flags; HSMP gives neither UCLK nor the read/write bandwidth split.
 
-**Left, and why**: Super I/O NCT6798D — reachable with PawnIO's LpcIO, but it means Super I/O writes (config-mode key,
-device select, bank select on every read), so it waits for the owner's go-ahead; the BMC already reads its rails and
-fans. Memory Timings — the UMC timing registers' SMN offsets for Zen 5 aren't documented to us (no guessing at
+- **Super I/O NCT6798D** (2079199, owner-approved): voltages, fans and SYSTIN, named by the WRX90E board profile as on
+  Linux; within an ADC step of HWiNFO. HWiNFO's Temp2/5/9, CPU, CPU (Weighted Value), VIN9 and VHIF aren't read
+  (registers not confirmed).
+
+**Left, and why**: Memory Timings — the UMC timing registers' SMN offsets for Zen 5 aren't documented to us (no guessing at
 SMN reads); the configured timings show in BIOS Setup. EC VRM Vcore voltage / current — the WRX90E EC's register
 offsets aren't documented to us. DIMMs — the AMDI2C one-boot test. Not reachable with signed modules or NVML: the
 PM-table rows, the chipset temperature, NVIDIA's private-API rows. PresentMon — out of scope.
