@@ -41,7 +41,12 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
 | Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far) | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
 | DIMM SPD hub/PMIC | **next** | port 1 has 4 DIMMs (hubs 0x52/53/56/57 answer MR0 = 0x8E, not 0x51 — to understand); the other 4 are likely behind a switch at 0x73 (shared with the BMC: owner's go-ahead first) |
-| Super I/O NCT6798D, ASUS EC, RAPL, chipset (xHCI) temperature | to do (PawnIO) | `LpcIO`, `LpcACPIEC`, `AMDFamily17` MSRs |
+| RAPL package + cores power | **done** | `WindowsRapl` (AMDFamily17 MSRs) → Linux's `RaplEngine` rows |
+| Effective clocks per core + average | **done** | `WindowsEffectiveClocks` (APERF per logical CPU) → `WindowsEffectiveClockEngine` |
+| ASUS EC: VRM1, VRM2, USB thermistor | **done** (WRX90E only) | `AsusEc` (LpcACPIEC, registers 0x34/0x33/0x42 from OpenFan) as hwmon chip `asusec` |
+| Hardware errors (WHEA: corrected since boot / 30 days, fatal 30 days) | **done** (user mode) | `WindowsWheaEngine` — Linux's EDAC counterpart |
+| Super I/O NCT6798D | to do (PawnIO LpcIO) | low value here: the BMC reads the rails, temperatures and fans |
+| Chipset (xHCI) temperature, SVI3 telemetry, per-core/L3 temperatures | not reachable with signed modules | chipset MMIO / SMU PM table |
 | Installer | phase 4 | scripts for now; Inno Setup is on this PC |
 
 ## How it's installed on this PC
@@ -201,6 +206,11 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   2 s. `LanBinding` now tries every wired port on the BMC's subnet (2 s connect limit, last good first — never the
   Tailscale route, which Chrome uses), and `FanSourcesCache` keeps a failure 60 s. Fan Control still calls the
   service on its UI thread — a slow service shows as lag there (to move off the UI thread).
+
+- **More sensors without new drivers (2026-11-18):** RAPL (package 58.8 W vs HSMP 56.5 W), effective clocks (idle
+  2–700 MHz per core, ~49 MHz average), the ASUS EC's VRM1/VRM2/USB thermistor (39/36/46 °C vs HWiNFO's 38/35/45; three
+  known registers only, ACPI EC read command, median of three, every 5 s; M.2/USB4 fans and T_Sensor are already in the
+  BMC group), and WHEA counts (0 since boot, 2 corrected in 30 days, 1 fatal — the 10:15 crash).
 
 ## Next steps
 

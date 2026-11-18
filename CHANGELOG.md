@@ -17,6 +17,8 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - `packaging\windows\build.ps1` (self-contained win-x64, mirrored to `C:\StandAlone\OpenHW`) and `install.ps1`.
 - **Windows sensors**: CPU Tctl and CCD temperatures (PawnIO, k10temp's registers), the CPU Enhanced group (HSMP),
   WireView Pro II (COM port) and the UPS (USB HID), each in the same rows as on Linux.
+- **Windows: effective clocks, ASUS EC temperatures, hardware error counts**: per-core and average effective clocks
+  (APERF), the WRX90E's VRM1/VRM2/USB thermistor from its embedded controller, and WHEA corrected/fatal counts.
 - **Windows: CPU package and cores power (RAPL)** through PawnIO's signed AMDFamily17, Linux's rows.
 - **Windows: Fan Control no longer freezes** when the BMC answers on another wired port: every port on its subnet is
   tried (never Tailscale), and a failed fan-source read is kept a minute instead of retried every 2 s.
