@@ -27,7 +27,7 @@ internal static class LanBinding
         handler.ConnectCallback = async (context, token) =>
         {
             Exception? last = null;
-            foreach (var local in good is { } g ? candidates.OrderBy(c => c.Equals(g) ? 0 : 1) : candidates)
+            foreach (var local in good is { } g ? candidates.OrderBy(c => c.Equals(g) ? 0 : 1) : (IEnumerable<IPAddress>)candidates)
             {
                 var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                 try
