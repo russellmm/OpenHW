@@ -241,9 +241,10 @@ crash): one documented value at a time, and commit before any hardware test.
 3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
    one alarm threshold and restore — the same flash-write rules as Linux.
 4. ~~**GPU power limit live**~~ — **confirmed by the owner 2026-11-18**.
-5. **OpenFan vs OpenHW on Windows**: OpenFan is still running and OpenHW drives both RTX PRO 6000 cards' fans — confirm
-   OpenFan isn't also driving them (`GpuFanDriver`'s OpenFan guard only knows OpenFan's Linux socket); retire OpenFan
-   once 3 is confirmed.
+5. ~~**OpenFan vs OpenHW on Windows**~~ — **checked 2026-11-18**: OpenFan isn't running (no process, service,
+   scheduled task or Run entry; it is still installed at `C:\StandAlone\OpenFan` with a Start-menu shortcut). OpenHW
+   alone drives both RTX PRO 6000 cards' fans (`gpufans`: owned, 30 %); the 5060 Ti and every BMC zone run on their
+   own curves. Retire OpenFan (delete the folder and shortcut, owner's call) once 3 is confirmed.
 6. ~~**Fan Control's service calls off the UI thread**~~ — **done 2026-11-18**: the 6-second status poll (fans, GPU
    fans, BMC fan sources, BMC login) runs in the background and is applied on the window thread (Windows only; Linux keeps the synchronous refresh); a refresh asked for
    while one runs is folded into it. Only the first one, when the window opens, waits. The BMC writes themselves (Apply,
