@@ -42,6 +42,7 @@ internal static class WindowsHelper
             case ["--smbus-switch"]: return SmbusSwitch();
             case ["--vr-page-test"]: return VrPageTest();
             case ["--sio-dump"]: return SioDump();
+            case ["--redfish-memory"]: return RedfishMemory();
             case ["--spd-scan", var port] when int.TryParse(port, out var p) && p is >= 0 and <= 4: return SpdScan(p);
             case ["--i2c-read", var c, var a, var r] when int.TryParse(c, out var controller) && TryHex(a, out var address) && TryHex(r, out var register):
                 return I2cRead(controller, address, register);
@@ -114,6 +115,9 @@ internal static class WindowsHelper
         }
 
         private static string LoginPath => Path.Combine(StateDir, "bmc-login");
+
+        /// <summary>The service's Redfish connection (LAN binding, pinned certificate, stored login), for diagnostics.</summary>
+        public BmcRedfish? Redfish => _redfish;
 
         // Redfish: Windows has no driver for the BMC's USB host-interface NIC, so 169.254.0.17 is unreachable. The BMC's
         // LAN address instead: %ProgramData%\OpenHW\bmc-url if the owner set one ("https://10.0.0.200"), else the
@@ -433,6 +437,36 @@ internal static class WindowsHelper
             Console.WriteLine($"bank restored to {savedBank}");
             return 0;
         });
+    }
+
+    /// <summary>
+    /// Read-only (2026-11-18): does the BMC publish a DIMM inventory? GET /redfish/v1/Systems/Self/Memory and each member;
+    /// prints the inventory fields (serial numbers only as present / absent) and whether a MemoryMetrics page exists.
+    /// </summary>
+    private static int RedfishMemory()
+    {
+        using var host = new Host(oneShot: "redfishmemory");
+        if (host.Redfish is not { } redfish) { Console.WriteLine("no Redfish connection"); return 1; }
+        try
+        {
+            var list = redfish.Get("/redfish/v1/Systems/Self/Memory");
+            var members = (list["Members"] as System.Text.Json.Nodes.JsonArray)?.Select(m => m?["@odata.id"]?.GetValue<string>()).OfType<string>().ToList() ?? [];
+            Console.WriteLine($"Memory collection: {members.Count} members");
+            string F(System.Text.Json.Nodes.JsonNode? n) => n is null ? "-" : n.ToJsonString().Trim('"');
+            foreach (var path in members)
+            {
+                var m = redfish.Get(path);
+                Console.WriteLine($"{path}: name={F(m["Name"])} locator={F(m["DeviceLocator"])} location={F(m["MemoryLocation"])} " +
+                    $"type={F(m["MemoryDeviceType"])} capacityMiB={F(m["CapacityMiB"])} speedMHz={F(m["OperatingSpeedMhz"])} " +
+                    $"allowedMHz={F(m["AllowedSpeedsMHz"])} ranks={F(m["RankCount"])} width={F(m["DataWidthBits"])} " +
+                    $"mfr={F(m["Manufacturer"])} part={F(m["PartNumber"])} serial={(m["SerialNumber"] is null ? "absent" : "present")} " +
+                    $"status={F(m["Status"])} metrics={F(m["Metrics"])} oem={(m["Oem"] is null ? "none" : "present")}");
+                if (m["Metrics"]?["@odata.id"]?.GetValue<string>() is { } metrics)
+                    Console.WriteLine($"  metrics: {redfish.Get(metrics).ToJsonString()[..Math.Min(600, redfish.Get(metrics).ToJsonString().Length)]}");
+            }
+            return 0;
+        }
+        catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException) { Console.WriteLine("Redfish: " + ex.Message); return 1; }
     }
 
     private static int SmbusSwitch()

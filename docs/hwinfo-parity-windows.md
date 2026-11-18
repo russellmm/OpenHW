@@ -25,6 +25,21 @@ left out.
   Linux; within an ADC step of HWiNFO. HWiNFO's Temp2/5/9, CPU, CPU (Weighted Value), VIN9 and VHIF aren't read
   (registers not confirmed).
 
+## BIOS HII over Redfish and the BMC's DIMM inventory (checked 2026-11-18)
+
+- **"Publish HII Resources"** gives the BMC's Redfish BIOS page: 1,295 attributes (885 enumerations, 333 hex, 58
+  integers, 19 strings) — *configured* settings, never running values. AMD CBS's memory timings are all **Auto**
+  with placeholder numbers (Tcl 0x16 …); ASUS's **Ai Tweaker** (where EXPO and the 36-40-40-80 timings live) **isn't
+  published at all**. So no running memory timings from here; BIOS Setup already shows the configured ones from the
+  Ai Tweaker UEFI variable. For BIOS Setup itself Redfish adds nothing: none of the questions in the 42 settings
+  stores the OS can't read (Realtek LAN, HTTP boot, IPv4/6, RAID disks, boot/driver order) are published, and the
+  1,935 published ones are all in stores already read directly.
+- **DIMM inventory** (`openhw-helper --redfish-memory`, read-only): `/redfish/v1/Systems/Self/Memory` lists all 8 —
+  Kingston KF556R28-32, DDR5, 32 GiB, 2 ranks, 5,200 MT/s running (4,800 allowed), health OK, serial present; no
+  MemoryMetrics (no temperatures, voltages or power). The BMC numbers them Channel 0–3 × Slot 0/1 (every locator
+  "DIMM 0"), which needs mapping to DIMMA1–H1 before labeling rows. Usable for: DIMM group titles (part / size /
+  speed), Hardware Check's memory line, a per-DIMM health row.
+
 **Left, and why**: Memory Timings — the UMC timing registers' SMN offsets for Zen 5 aren't documented to us (no guessing at
 SMN reads); the configured timings show in BIOS Setup. EC VRM Vcore voltage / current — the WRX90E EC's register
 offsets aren't documented to us. DIMMs — the AMDI2C one-boot test. Not reachable with signed modules or NVML: the
