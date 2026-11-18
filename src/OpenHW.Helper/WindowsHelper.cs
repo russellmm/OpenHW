@@ -29,6 +29,11 @@ internal static class WindowsHelper
 
     public static int Run(string[] args)
     {
+        // Each pipe client is served on the thread pool and some requests block (IPMI through WMI, Redfish): with the
+        // default minimum, a few slow ones made the pool add threads one by one and quick requests ("bmc") waited
+        // seconds behind them. Threads up to this count start at once.
+        ThreadPool.GetMinThreads(out var workers, out var io);
+        ThreadPool.SetMinThreads(Math.Max(workers, 32), Math.Max(io, 32));
         switch (args)
         {
             case ["--ipmi-check"]: return IpmiCheck();
@@ -135,11 +140,16 @@ internal static class WindowsHelper
         private readonly SavedGpuPowerLimits _savedGpuPower = new();
         private readonly WindowsCpuPowerLimits _cpuPower = new(() => WindowsHsmp.Open(out _));
 
+        // Every request is a new pipe connection and so a new session: building one must not touch the BMC (it used to
+        // ask the fan driver for its status, which reads the zones over IPMI, just to decide whether to offer Redfish).
         public WindowsHelperSession Session() => new(
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
-                redfish: _fans?.Status(null).Available == true || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
+                redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans),
-            _gpuPower, _savedGpuPower, _cpuPower);
+            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null);
+
+        /// <summary>The fans' Redfish sources, read once and kept while the service runs (see <see cref="FanSourcesCache"/>).</summary>
+        private readonly FanSourcesCache _sources = new();
 
         public bool GroupAccess => _server?.GroupAccess ?? false;
 

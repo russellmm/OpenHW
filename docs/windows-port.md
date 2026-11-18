@@ -127,6 +127,23 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   NVIDIA UUID, so the file means the same thing on both. Effect on Windows: the app now drives both RTX PRO 6000
   cards' fans on their curves (30 % at idle); BMC zones are only written by Apply.
 
+- **BMC sensors disappearing while Fan Control was open (2026-11-18).** Fan Control asked the service for the fans'
+  Redfish sources every 2 s; on Windows each read is an HTTPS login + GET + logout over the LAN (~1 s), and the
+  service builds a session per request that also read the fan zones over IPMI. Under that load `bmc` replies took
+  1.5–3.2 s; the app's `BmcEngine` gives up at 2.5 s and then hid the whole group for a minute. Fixes (Windows only):
+  `FanSourcesCache` (sources read once per service run; cleared by `fansource`, `fanoriginal`, BMC login changes),
+  sessions no longer call `FanDriver.Status`, one process-wide lock for every `WmiIpmiTransport` (sensor reader, fan
+  control and the address lookup each open one — two requests on KCS at once fail like HWiNFO's), thread pool minimum
+  32 in the service, and `BmcEngine.WindowsGrace` (a failed request keeps the group 30 s and retries every poll).
+  Measured with Fan Control's request load for 3 minutes: 90/90 `bmc` replies, median 1 ms, slowest 15 ms, 36 sensors
+  every time; one HTTPS read in total.
+- **Why HTTPS stays for sources**: ASUS E26328 appendix A — IPMI `30 93` sets one byte per PWM (CPU temperature,
+  T-sensor, TR1–TR3, for 23 PWMs at once) and this firmware refuses to read it (0xC7). The owner's curves follow
+  DIMMA1–H1 and PCIE01/PCIE05, which only Redfish's sensor bitmask can express. So HTTPS is used once per service run
+  to read, and only when an Apply changes a fan's sensors to write. The owner's BMC_Control project (`F:\Claude\BMC_Control`,
+  reference only) confirmed the curve/mode commands over local IPMI; its finding that the BMC ignores stored curves
+  in **Generic** mode is noted: OpenHW's fan driver refuses a BMC not in Manual (it is in Manual now).
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.

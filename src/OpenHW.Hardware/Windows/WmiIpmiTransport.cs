@@ -15,7 +15,9 @@ public sealed class WmiIpmiTransport : IIpmiTransport
 {
     private const byte BmcAddress = 0x20;
     private readonly ManagementObject _ipmi;
-    private readonly object _gate = new();
+    // One request at a time across the whole process: the sensor reader, fan control and the Redfish address lookup
+    // each open their own transport, and two requests on the BMC's KCS interface at once fail like HWiNFO's did.
+    private static readonly object Gate = new();
 
     private WmiIpmiTransport(ManagementObject ipmi) => _ipmi = ipmi;
 
@@ -75,7 +77,7 @@ public sealed class WmiIpmiTransport : IIpmiTransport
 
     private byte[] SendOnce(byte netFn, byte command, byte lun, byte[] data)
     {
-        lock (_gate)
+        lock (Gate)
         {
             try
             {

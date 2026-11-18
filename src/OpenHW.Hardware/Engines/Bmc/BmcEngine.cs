@@ -16,6 +16,13 @@ public sealed class BmcEngine(Func<int, string>? request = null) : ISensorEngine
     private static readonly TimeSpan RetryAfterFailure = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan ReplyFresh = TimeSpan.FromMilliseconds(900);
 
+    /// <summary>
+    /// Windows: how long a failed request keeps the last reply (and the group) while every poll tries again. The path
+    /// there (named pipe → service → WMI → the in-box IPMI driver) has transient failures the Linux socket doesn't, and
+    /// dropping the whole group for a minute on one of them made it come and go.
+    /// </summary>
+    public static readonly TimeSpan WindowsGrace = TimeSpan.FromSeconds(30);
+
     private readonly Func<int, string> _request = request ?? (timeout =>
         HelperClient.Request("bmc", receiveTimeoutMs: timeout, maxReplyBytes: GpuWire.MaxReplyBytes));
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
@@ -104,6 +111,8 @@ public sealed class BmcEngine(Func<int, string>? request = null) : ISensorEngine
 
     private Task<BmcWireReply?>? _first;
 
+    private readonly TimeSpan Grace = OperatingSystem.IsWindows() ? WindowsGrace : TimeSpan.Zero; // Linux: as before
+
     private BmcWireReply? Request(int timeoutMs)
     {
         try { return GpuWire.Decode<BmcWireReply>(_request(timeoutMs)); }
@@ -115,6 +124,7 @@ public sealed class BmcEngine(Func<int, string>? request = null) : ISensorEngine
 
     private BmcWireReply? Store(BmcWireReply? reply)
     {
+        if (reply is null && _last is not null && _clock.Elapsed - _lastAt < Grace) return _last; // try again next poll
         _last = reply;
         if (reply is null) _failedAt = _clock.Elapsed; else _lastAt = _clock.Elapsed;
         return reply;

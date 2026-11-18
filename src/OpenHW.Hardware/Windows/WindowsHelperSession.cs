@@ -65,14 +65,51 @@ public sealed class SavedGpuPowerLimits(string? path = null)
 /// kept value), <c>cpuppt &lt;mW|boot&gt;</c> (as on Linux; "boot" = the kept value) and <c>cpupptsave &lt;W|none&gt;</c>.
 /// </summary>
 [SupportedOSPlatform("windows")]
+/// <summary>
+/// The fans' BMC sensor sources, kept for <see cref="Fresh"/> — in practice read once per service run. Only Redfish
+/// (HTTPS) can read or set which sensors a fan follows: IPMI's 30 93 offers just CPU / T-sensor / TR1–TR3 per PWM (ASUS
+/// E26328 appendix A) and this firmware refuses to read it (0xC7). On Windows Redfish goes over the LAN with a login per
+/// read (three HTTPS requests, about a second), and Fan Control asked every 2 s: that load slowed every other request
+/// to the service and the BMC itself, and the app dropped the BMC sensors (2026-11-17). Sources change only through
+/// OpenHW (cleared on every write, restore and login change) or the BMC's own web console (Fan Control shows the
+/// change after the service restarts or OpenHW writes a source).
+/// </summary>
+public sealed class FanSourcesCache(Func<DateTime>? now = null)
+{
+    public static readonly TimeSpan Fresh = TimeSpan.FromHours(12);
+    private readonly Func<DateTime> _now = now ?? (() => DateTime.UtcNow);
+    private readonly object _gate = new();
+    private string? _reply;
+    private DateTime _at;
+
+    public string Get(Func<string> read)
+    {
+        lock (_gate) // one read at a time; the others wait for it and share its answer
+        {
+            if (_reply is not null && _now() - _at < Fresh) return _reply;
+            var reply = read();
+            if (reply.StartsWith("ok ", StringComparison.Ordinal)) (_reply, _at) = (reply, _now());
+            return reply;
+        }
+    }
+
+    public void Clear() { lock (_gate) _reply = null; }
+}
+
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
-    WindowsCpuPowerLimits? cpuPower = null)
+    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null)
 {
     public string HandleLine(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         switch (parts)
         {
+            case ["fansources"] when sources is not null:
+                return sources.Get(() => shared.HandleLine(line));
+            case ["fansource", _, _] or ["fanoriginal", _] or ["bmclogin", _, _] or ["bmclogout"] when sources is not null:
+                sources.Clear(); // a source written, an original curve restored or another login: read again next time
+                try { return shared.HandleLine(line); }
+                finally { sources.Clear(); }
             case ["cpupptread"]:
                 if (cpuPower is null) return "err CPU power limit unavailable";
                 return cpuPower.Read() is { } now ? "ok " + GpuWire.Encode(now) : "err " + (cpuPower.Error ?? "CPU power limit unavailable");

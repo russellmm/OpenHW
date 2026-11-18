@@ -81,6 +81,30 @@ public sealed class WindowsHelperTests
         Assert.Contains("isn't running", error.Message);
     }
 
+    // Fan sources (Redfish, HTTPS) are read once and kept; a failed read isn't kept; anything that changes them clears it.
+    [Fact]
+    public void FanSourcesAreReadOnceAndReadAgainAfterAWrite()
+    {
+        var now = new DateTime(2026, 11, 18, 9, 0, 0, DateTimeKind.Utc);
+        var cache = new FanSourcesCache(() => now);
+        var reads = 0;
+        string Read() { reads++; return reads == 1 ? "err BMC Redfish unavailable" : "ok sources" + reads; }
+
+        Assert.StartsWith("err", cache.Get(Read)); // not kept
+        Assert.Equal("ok sources2", cache.Get(Read));
+        now += TimeSpan.FromHours(1);
+        Assert.Equal("ok sources2", cache.Get(Read)); // kept: no HTTPS while Fan Control polls
+        Assert.Equal(2, reads);
+        cache.Clear();
+        Assert.Equal("ok sources3", cache.Get(Read));
+
+        // Through the session: "fansources" uses the cache; a source write clears it.
+        var session = new WindowsHelperSession(new HelperSession(new NoSmart()), null, null, sources: cache);
+        Assert.Equal("ok sources3", session.HandleLine("fansources"));
+        session.HandleLine("fansource bmc:1 2048"); // no Redfish here: refused, but it still clears
+        Assert.Equal("ok sources4", cache.Get(Read));
+    }
+
     private sealed class NoSmart : INvmeSmartReader
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");

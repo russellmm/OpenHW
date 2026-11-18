@@ -209,6 +209,31 @@ public sealed class BmcTests
         Assert.Equal(("AST2600", "2.01"), engine.Controller);
     }
 
+    // Windows: one failed request (pipe, service or WMI hiccup) keeps the group, and the next poll asks again.
+    [WindowsFact]
+    public void OnWindowsAFailedRequestKeepsTheGroup()
+    {
+        using var reader = new BmcReader(() => new FakeBmc());
+        var line = new HelperSession(new NoSmart(), bmc: reader).HandleLine("bmc");
+        var fail = false;
+        var asked = 0;
+        using var engine = new BmcEngine(_ => { asked++; return fail ? throw new IOException("openhw-helper: no reply") : line[3..]; });
+        for (var i = 0; i < 50 && engine.Discover().Count == 0; i++) Thread.Sleep(20);
+        var count = engine.Discover().Count;
+        Assert.True(count > 0);
+
+        fail = true;
+        Thread.Sleep(1000); // past the fresh window: the next call asks the helper, which fails
+        var before = asked;
+        Assert.Equal(count, engine.Discover().Count);
+        Thread.Sleep(1000);
+        Assert.Equal(count, engine.Discover().Count);
+        Assert.Equal(before + 2, asked); // tried again on the next poll, not a minute later
+        fail = false;
+        Thread.Sleep(1000);
+        Assert.Equal(count, engine.Discover().Count);
+    }
+
     [Fact]
     public void WithoutAnIpmiDeviceTheHelperSaysSo()
     {
