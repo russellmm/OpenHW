@@ -40,6 +40,7 @@ internal static class WindowsHelper
             case ["--hsmp-check"]: return HsmpCheck();
             case ["--smbus-scan"]: return SmbusScan();
             case ["--smbus-switch"]: return SmbusSwitch();
+            case ["--vr-page-test"]: return VrPageTest();
             case ["--spd-scan", var port] when int.TryParse(port, out var p) && p is >= 0 and <= 4: return SpdScan(p);
             case ["--i2c-read", var c, var a, var r] when int.TryParse(c, out var controller) && TryHex(a, out var address) && TryHex(r, out var register):
                 return I2cRead(controller, address, register);
@@ -319,6 +320,47 @@ internal static class WindowsHelper
                 if (a is >= 0x48 and <= 0x4F) Console.WriteLine($"  0x{a:x2} PMIC vendor = {Try(() => $"{bus.ReadByte(a, 0x3C):x2}{bus.ReadByte(a, 0x3D):x2}")}");
                 if (a == 0x20) Console.WriteLine($"  0x20 IC_DEVICE_ID = {Try(() => Convert.ToHexString(bus.ReadBlock(a, 0xAD)))}");
             }
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Owner-approved one-shot (2026-11-18, owner present): the WRX90E's XDPE19283B (port 0, 0x20) is left on PAGE 0
+    /// (an unused loop, POWER_GOOD# set), so the memory rail on PAGE 1 never shows. Confirms IC_DEVICE_ID, reads PAGE
+    /// (stops unless it is 0), prints page 0, writes PAGE = 1 once, prints page 1, and always writes the original PAGE
+    /// back and reads it to confirm. One documented register, no other writes.
+    /// </summary>
+    private static int VrPageTest()
+    {
+        using var buses = WindowsSmbusProvider.Open(out var reason);
+        if (buses is null) { Console.WriteLine(reason); return 1; }
+        var vr = BoardVrs.WindowsKnown[0];
+        var bus = buses.Open(0);
+        const int a = 0x20;
+        var id = bus.ReadBlock(a, 0xAD);
+        Console.WriteLine($"IC_DEVICE_ID = {Convert.ToHexString(id)}");
+        if (!id.SequenceEqual(vr.DeviceId)) { Console.WriteLine("not the expected chip: stopping"); return 1; }
+        var original = bus.ReadByte(a, 0x00);
+        Console.WriteLine($"PAGE = {original}");
+        if (original != 0) { Console.WriteLine("PAGE isn't 0 as seen before: stopping without writing"); return 1; }
+        PmbusSample Sample() => new(vr.Slug, bus.ReadByte(a, 0x00), bus.ReadByte(a, 0x20),
+            bus.ReadWord(a, 0x88), bus.ReadWord(a, 0x89), bus.ReadWord(a, 0x8B), bus.ReadWord(a, 0x8C),
+            bus.ReadWord(a, 0x8D), bus.ReadWord(a, 0x8E), bus.ReadWord(a, 0x96), bus.ReadWord(a, 0x97), bus.ReadWord(a, 0x79));
+        void Print(string title, PmbusSample s)
+        {
+            Console.WriteLine($"{title}: {BoardVrReader.Format(s)}");
+            foreach (var (key, value) in BoardVrEngine.Values(s)) Console.WriteLine($"  {key,-10} {value?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "-"}");
+        }
+        Print("page 0", Sample());
+        try
+        {
+            bus.WriteByte(a, 0x00, 1);
+            Print("page 1", Sample());
+        }
+        finally
+        {
+            bus.WriteByte(a, 0x00, original);
+            Console.WriteLine($"PAGE restored to {bus.ReadByte(a, 0x00)}");
         }
         return 0;
     }
