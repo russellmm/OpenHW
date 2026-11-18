@@ -481,8 +481,13 @@ public sealed class App : Application
             var value = item is null ? null : _hub.Get(item.Id).Current is { } v ? SensorPresentation.Scale(item, v) : (double?)null;
             var info = CachedInfo(config);
             var unit = item is null || value is null || !_settings.TrayUnits ? "" : TrayUnit(SensorPresentation.DisplayUnit(item));
-            icon.Update(TrayIconRenderer.Render(TrayText(value) + (unit == "°" ? "°" : ""), config.Colour, unit == "°" ? "" : unit),
-                "OpenHW · " + info[0], _trayInfo[config].Tooltip);
+            var digits = TrayText(value) + (unit == "°" ? "°" : "");
+            var small = unit == "°" ? "" : unit;
+            string tile = "";
+            if (_settings.TrayLargeTiles)
+                try { tile = TrayTileSvg.Write(config.SensorId + "@" + _trayIcons.IndexOf((config, icon)), digits, small, config.Colour); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { tile = ""; } // falls back to the square pixmaps
+            icon.Update(TrayIconRenderer.Render(digits, config.Colour, small), "OpenHW · " + info[0], _trayInfo[config].Tooltip, tile);
             // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
             // place, so a menu or submenu the user has open stays open; a different number: rebuild the layout.
             var old = before.TryGetValue(config, out var o) ? o.Lines : [];

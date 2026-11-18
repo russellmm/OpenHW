@@ -81,6 +81,9 @@ public sealed class AppSettings
     /// <summary>Tray tiles show a short unit after the digits ("32°", "55W", "87%"); off = digits only, as before 0.8.0.</summary>
     public bool TrayUnits { get; set; } = true;
 
+    /// <summary>Large tiles: value in the panel's font on a wide coloured tile (GNOME AppIndicators), instead of a 22 px square.</summary>
+    public bool TrayLargeTiles { get; set; } = true;
+
     // Sensor Settings → General (HWiNFO's names). Defaults are what OpenHW did before these were switches.
 
     /// <summary>Row Shading: alternate black/gray sensor rows under each group heading.</summary>

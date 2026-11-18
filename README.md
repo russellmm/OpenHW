@@ -43,7 +43,9 @@ dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll
 icon is a picture we draw (value on a colored tile, like HWiNFO). GNOME shows them through the
 `ubuntu-appindicators` extension. Each icon has its own session-bus connection. Which sensors get icons, and their
 colors, are chosen in **File → Tray Icons…** (as many as you like; default one CPU-temperature icon on red); tray sensors stay
-live even inside collapsed groups. Digits are drawn in a narrow bold face sized to the tile, followed by a short
+live even inside collapsed groups. **Large tiles** (on by default, Tray Icons → "Large tiles") draw the value at panel
+text size on a wider tile in its color — written as small SVG files that GNOME's AppIndicators shows at their own
+size; turn it off for the classic 22 px squares. Digits are drawn in a narrow bold face sized to the tile, followed by a short
 unit when there is one — ° for temperatures (full size, "32°"), a small W, V, A or % ("55W", "87%"); other units
 (MHz, RPM, MB…) are left off because the values are already shortened ("4.5k"). **Show units on the tiles** in Tray
 Icons turns units off for all icons. Tiles stay square: GNOME's tray fits every pixmap icon into a square, so a wider
@@ -482,7 +484,7 @@ Headless: the helper protocol, its validation and the client/server socket round
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
 HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
-against a fake machine's UEFI variables. 374 tests (184 library + 190 headless UI) as of 0.38.2.
+against a fake machine's UEFI variables. 375 tests (184 library + 191 headless UI) as of 0.39.0.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.

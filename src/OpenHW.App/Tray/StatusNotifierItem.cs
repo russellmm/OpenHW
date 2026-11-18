@@ -31,6 +31,7 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
     private readonly DBusMenu _menu;
     private readonly object _gate = new();
     private IconPixmap[] _icon = [];
+    private string _iconName = "";
     private string _title;
     private string _tooltip = "";
     private IDisposable? _watcherMatch;
@@ -108,13 +109,15 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
     }
 
     /// <summary>Replace the picture and tooltip. Hosts only re-read on a signal, so unchanged values emit nothing.</summary>
-    public void Update(IconPixmap[] icon, string title, string tooltip)
+    /// <param name="iconName">An absolute path to a wide SVG tile (GNOME shows it at its own size), or "" for the pixmaps only.</param>
+    public void Update(IconPixmap[] icon, string title, string tooltip, string iconName = "")
     {
         if (_disposed) return;
         bool iconChanged, tooltipChanged;
         lock (_gate)
         {
-            iconChanged = !SamePixels(_icon, icon);
+            iconChanged = !SamePixels(_icon, icon) || _iconName != iconName;
+            _iconName = iconName;
             tooltipChanged = _title != title || _tooltip != tooltip;
             _icon = icon;
             _title = title;
@@ -182,6 +185,8 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
                 case "WindowId": writer.WriteVariantInt32(0); break;
                 case "ItemIsMenu": writer.WriteVariantBool(false); break;
                 case "Menu": writer.WriteVariantObjectPath(DBusMenu.MenuPath); break;
+                // A wide tile file when large tiles are on (hosts that prefer a name use it; others fall back to the pixmaps).
+                case "IconName": writer.WriteVariantString(_iconName); break;
                 case "IconPixmap":
                     writer.WriteSignature("a(iiay)");
                     WritePixmaps(ref writer, _icon);

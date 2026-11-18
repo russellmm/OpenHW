@@ -3,6 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.39.0 — 2026-11-17
+
+- **Large tray tiles** (Tray Icons → "Large tiles", on by default): each tray value is drawn at panel text size —
+  bold Ubuntu Sans, like an indicator's text label ("225 W") — on a wider rounded tile in its colour, instead of
+  being squeezed into a 22 px square. How: GNOME's AppIndicators extension shows an icon *file* in a user-writable
+  folder at its own size when it's at least 1.5× as wide as tall; OpenHW writes each tile as an SVG under
+  `$XDG_RUNTIME_DIR/openhw/tray-<pid>/` (sharp at 2× scale), sets the item's IconName to it, and writes a new file only
+  when the value, unit or colour changes. The square pixmaps stay for other tray hosts and when the switch is off.
+
 ## 0.38.2 — 2026-11-17
 
 - UPS rows show whole numbers ("248 W", "26 V", "32 min" instead of "248.000 W"). A sensor can now carry its own
