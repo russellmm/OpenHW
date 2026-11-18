@@ -41,6 +41,7 @@ internal static class WindowsHelper
             case ["--smbus-scan"]: return SmbusScan();
             case ["--smbus-switch"]: return SmbusSwitch();
             case ["--vr-page-test"]: return VrPageTest();
+            case ["--sio-dump"]: return SioDump();
             case ["--spd-scan", var port] when int.TryParse(port, out var p) && p is >= 0 and <= 4: return SpdScan(p);
             case ["--i2c-read", var c, var a, var r] when int.TryParse(c, out var controller) && TryHex(a, out var address) && TryHex(r, out var register):
                 return I2cRead(controller, address, register);
@@ -375,6 +376,65 @@ internal static class WindowsHelper
     /// DIMM ranges (thermal sensors 0x10–0x17, PMICs 0x48–0x4F, hubs 0x50–0x57) with each hub's MR0–MR7, and finally
     /// writes the original mask back. The port-1 baseline (switch untouched) comes first.
     /// </summary>
+    /// <summary>
+    /// Owner-approved one-shot (2026-11-18): the WRX90E's Nuvoton NCT6798D through PawnIO's signed LpcIO, the standard
+    /// Nuvoton sequence (as Linux's nct6775 and LibreHardwareMonitor): enter config mode (0x87 0x87 to 0x2E), read the
+    /// chip ID, select the hardware monitor (LDN 0x0B) and read its base, let LpcIO find the allowed ports
+    /// (ioctl_find_bars — it selects each logical device to read its base registers), leave config mode (0xAA). Then
+    /// the hardware monitor's documented registers only, through its index/data ports (base+5/+6) with the bank
+    /// register 0x4E saved first and put back last: vendor/chip ID (bank 0 0x4F/0x58), voltages (bank 4 0x80–0x8E),
+    /// fan counts (bank 4 0xC0–0xCF), temperatures (bank 0 0x27 and 0x73–0x7E), temperature sources (bank 6 0x21–0x26).
+    /// Prints raw bytes only.
+    /// </summary>
+    private static int SioDump()
+    {
+        using var pawn = PawnIo.Open("LpcIO", out var reason);
+        if (pawn is null) { Console.WriteLine(reason); return 1; }
+        return HardwareMutex.Hold(HardwareMutex.IsaBus, () =>
+        {
+            void Out(ulong port, ulong value) => pawn.Execute("ioctl_pio_outb", [port, value], 0);
+            ulong In(ulong port) => pawn.Execute("ioctl_pio_inb", [port], 1)[0];
+            ulong SioIn(ulong reg) => pawn.Execute("ioctl_superio_inb", [reg], 1)[0];
+
+            pawn.Execute("ioctl_select_slot", [0], 0); // 0x2E/0x2F
+            Out(0x2E, 0x87); Out(0x2E, 0x87);           // Nuvoton: enter extended function mode
+            ulong id, hwmBase;
+            try
+            {
+                id = SioIn(0x20) << 8 | SioIn(0x21);
+                Console.WriteLine($"chip id = {id:X4}");
+                if ((id & 0xFF00) != 0xD400) { Console.WriteLine("not a Nuvoton NCT67xx: stopping"); return 1; }
+                pawn.Execute("ioctl_superio_outb", [0x07, 0x0B], 0); // logical device 0x0B: hardware monitor
+                hwmBase = (SioIn(0x60) << 8 | SioIn(0x61)) & 0xFFF8;
+                Console.WriteLine($"hardware monitor base = {hwmBase:X4}");
+                pawn.Execute("ioctl_find_bars", [], 0);
+            }
+            finally { Out(0x2E, 0xAA); }                 // leave extended function mode
+            if (hwmBase is 0 or 0xFFF8) { Console.WriteLine("no hardware monitor base: stopping"); return 1; }
+
+            var (index, data) = (hwmBase + 5, hwmBase + 6);
+            ulong Read(int bank, int reg) { Out(index, 0x4E); Out(data, (ulong)bank); Out(index, (ulong)reg); return In(data); }
+            Out(index, 0x4E);
+            var savedBank = In(data);
+            try
+            {
+                void Dump(string title, int bank, int from, int to) =>
+                    Console.WriteLine($"{title} (bank {bank} 0x{from:X2}-0x{to:X2}): " +
+                        string.Join(' ', Enumerable.Range(from, to - from + 1).Select(r => Read(bank, r).ToString("X2"))));
+                Dump("vendor id", 0, 0x4F, 0x4F);
+                Dump("chip id", 0, 0x58, 0x58);
+                Dump("voltages", 4, 0x80, 0x8E);
+                Dump("fans", 4, 0xC0, 0xCF);
+                Dump("SYSTIN", 0, 0x27, 0x27);
+                Dump("temps", 0, 0x73, 0x7E);
+                Dump("temp sources", 6, 0x21, 0x26);
+            }
+            finally { Out(index, 0x4E); Out(data, savedBank); }
+            Console.WriteLine($"bank restored to {savedBank}");
+            return 0;
+        });
+    }
+
     private static int SmbusSwitch()
     {
         using var buses = WindowsSmbusProvider.Open(out var reason);
