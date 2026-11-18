@@ -188,8 +188,10 @@ public sealed class StatusNotifierItem : DBusObject, IDisposable
                 // A wide tile file when large tiles are on (hosts that prefer a name use it; others fall back to the pixmaps).
                 case "IconName": writer.WriteVariantString(_iconName); break;
                 case "IconPixmap":
+                    // With a tile file, no pixmaps: GNOME's AppIndicators draws a wide icon file itself and then still
+                    // falls through to the pixmap, which would replace it (0.39.0/0.39.1 showed only the squares).
                     writer.WriteSignature("a(iiay)");
-                    WritePixmaps(ref writer, _icon);
+                    WritePixmaps(ref writer, _iconName.Length > 0 ? [] : _icon);
                     break;
                 case "OverlayIconPixmap":
                 case "AttentionIconPixmap":

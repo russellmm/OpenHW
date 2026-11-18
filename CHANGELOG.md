@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.39.2 — 2026-11-17
+
+- **Large tray tiles actually show**: with a tile file the item now sends no pixmaps. GNOME's AppIndicators draws a
+  wide icon file itself and then still falls back to the pixmap, which replaced it — so in 0.39.0/0.39.1 the switch
+  changed nothing on the panel (owner's screenshots, switch on and off).
+
 ## 0.39.1 — 2026-11-17
 
 - Large tray tiles: each icon's tile files are keyed by the icon itself (not its position while the list is still
