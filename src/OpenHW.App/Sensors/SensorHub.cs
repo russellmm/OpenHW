@@ -29,7 +29,7 @@ public sealed class SensorHub : IDisposable
             // Windows (docs/windows-port.md): user-mode readers (the WireView on its COM port too), and the BMC through
             // the OpenHW Helper service. Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
             _windowsNvme = new OpenHW.Hardware.Windows.WindowsNvmeEngine();
-            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(),
+            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), new OpenHW.Hardware.Windows.WindowsEffectiveClockEngine(),
                 new HwmonEngine(new OpenHW.Hardware.Windows.WindowsKernelSensorsReader(), OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName),
                 new OpenHW.Hardware.Windows.WindowsHsmpEngine(), new RaplEngine(),
                 new BoardVrEngine(vr: BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID

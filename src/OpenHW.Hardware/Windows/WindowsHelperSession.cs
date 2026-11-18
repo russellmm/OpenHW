@@ -108,13 +108,15 @@ public sealed class FanSourcesCache(Func<DateTime>? now = null)
 }
 
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
-    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null, WindowsRapl? rapl = null)
+    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null, WindowsRapl? rapl = null, WindowsEffectiveClocks? clocks = null)
 {
     public string HandleLine(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         switch (parts)
         {
+            case ["effclock"] when clocks is not null: // read-only: effective clocks from APERF (WindowsEffectiveClocks)
+                return clocks.Read() is { } mhz ? "ok " + GpuWire.Encode(mhz) : "err " + (clocks.Error ?? "effective clocks unavailable");
             case ["rapl"] when rapl is not null: // read-only: RAPL energy, Linux's reply format (WindowsRapl)
                 return rapl.Read() is { } counters ? "ok " + RaplReader.Format(counters) : "err " + (rapl.Error ?? "RAPL unavailable");
             case ["kernel"]: // read-only: PawnIO readings as hwmon-style chips (WindowsKernelSensors)

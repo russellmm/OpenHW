@@ -64,7 +64,8 @@ public static class Coverage
             notes.Add(new("Memory", $"{now.DimmsBmc} DIMMs installed (BMC), {now.DimmsReadable} readable over the SPD sideband. " +
                 "The others' voltages and PMIC power aren't shown; their temperatures come from the BMC group.",
                 Fix: OperatingSystem.IsWindows()
-                    ? "Windows: OpenHW doesn't read the DIMMs' SPD hubs and PMICs over SMBus yet (PawnIO, in progress)."
+                    ? "Windows: on this board the DIMMs' SPD hubs and PMICs are on the chipset's I2C controllers, which need " +
+                      "OpenHW's AMDI2C PawnIO module; PawnIO's author hasn't signed it yet, so it isn't loaded."
                     : "Linux bound SPD hubs only on some of the board's memory buses. Attaching the spd5118 driver to the " +
                       "others needs a root scan of those buses, shared with the BMC — not done automatically."));
         else if (now.DimmsReadable == 0 && now.MemoryGiB > 0 && !OperatingSystem.IsWindows())
