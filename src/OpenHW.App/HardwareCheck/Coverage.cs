@@ -60,8 +60,12 @@ public static class Coverage
         }
 
         // ── DIMMs ──
+        // Windows: the BMC's DIMM inventory names the modules (WindowsDimmInventory's group title).
+        var modules = OperatingSystem.IsWindows()
+            ? inventory.FirstOrDefault(i => i.Group == OpenHW.Hardware.Windows.WindowsDimmInventory.Group)?.Source is { } title ? $" — {title}" : ""
+            : "";
         if (now.DimmsBmc > now.DimmsReadable)
-            notes.Add(new("Memory", $"{now.DimmsBmc} DIMMs installed (BMC), {now.DimmsReadable} readable over the SPD sideband. " +
+            notes.Add(new("Memory", $"{now.DimmsBmc} DIMMs installed (BMC){modules}, {now.DimmsReadable} readable over the SPD sideband. " +
                 "The others' voltages and PMIC power aren't shown; their temperatures come from the BMC group.",
                 Fix: OperatingSystem.IsWindows()
                     ? "Windows: on this board the DIMMs' SPD hubs and PMICs are on the chipset's I2C controllers, which need " +

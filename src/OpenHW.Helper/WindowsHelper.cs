@@ -157,7 +157,17 @@ internal static class WindowsHelper
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
                 redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans, vr: _vr),
-            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel, _rapl, _clocks, _vr);
+            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel, _rapl, _clocks, _vr,
+            _redfish is null ? null : () => _dimmInventory.Get(() =>
+            {
+                try { return "ok " + GpuWire.Encode(_redfish.ReadMemory()); }
+                catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException or TaskCanceledException or System.Text.Json.JsonException)
+                { return "err " + ex.Message; }
+            }));
+
+        // The DIMM inventory changes only when modules are swapped: one Redfish read per 12 h (FanSourcesCache's
+        // timing — a failure is kept 60 s), so the app can ask every few seconds.
+        private readonly FanSourcesCache _dimmInventory = new();
 
         private readonly WindowsEffectiveClocks _clocks = new(() => PawnIo.Open("AMDFamily17", out _));
 

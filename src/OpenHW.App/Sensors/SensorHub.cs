@@ -38,7 +38,7 @@ public sealed class SensorHub : IDisposable
             _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), new OpenHW.Hardware.Windows.WindowsEffectiveClockEngine(),
                 new HwmonEngine(new OpenHW.Hardware.Windows.WindowsKernelSensorsReader(), OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName),
                 new OpenHW.Hardware.Windows.WindowsHsmpEngine(), new RaplEngine(), new OpenHW.Hardware.Windows.WindowsWheaEngine(),
-                new BoardVrEngine(() => HelperClient.Request(VrPageSelect ? "vr page" : "vr"), BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
+                new BoardVrEngine(() => HelperClient.Request(VrPageSelect ? "vr page" : "vr"), BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query), new OpenHW.Hardware.Windows.WindowsDimmInventory()]; // no NUT server: the UPS over USB HID
             return;
         }
         _hwmon = new HwmonEngine();

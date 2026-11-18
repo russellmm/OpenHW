@@ -192,6 +192,28 @@ public sealed class WindowsSensorTests
         Assert.Equal(33, Value("SYSTIN"));
     }
 
+    // The BMC's DIMM inventory as read on 2026-11-18 (Redfish Systems/Self/Memory): eight identical Kingstons.
+    [Fact]
+    public void DimmInventoryBecomesAGroup()
+    {
+        var dimms = Enumerable.Range(0, 8).Select(i => new DimmInventory($"DevType2_DIMM{i}", i / 2, i % 2, "DDR5", 32768, 5200, 2,
+            "Kingston", "KF556R28-32", i == 5 ? "Warning" : "OK", "Enabled")).ToList();
+        var engine = new WindowsDimmInventory(() => GpuWire.Encode(dimms));
+        var items = engine.Discover();
+        Assert.Equal(["DIMMs Installed", "DIMMs Healthy", "Total Memory", "Memory Speed"], items.Select(i => i.Name).ToList());
+        Assert.Equal("DDR5 DIMMs: 8 × Kingston KF556R28-32 (32 GiB, 5,200 MT/s)", items[0].Source);
+        Assert.Contains("channel 2 slot 1: 32 GiB 2R 5200 MT/s, Warning", items[0].Details);
+        Assert.DoesNotContain("serial", items[0].Details, StringComparison.OrdinalIgnoreCase);
+        var readings = new Dictionary<string, double?>();
+        engine.ReadInto(readings, null);
+        Assert.Equal((8.0, 7.0, 256.0, 5200.0), (readings["openhw:dimms:installed"]!.Value, readings["openhw:dimms:healthy"]!.Value,
+            readings["openhw:dimms:total"]!.Value, readings["openhw:dimms:speed"]!.Value));
+        Assert.Equal("DDR5 DIMMs: 2 modules (4,800 MT/s)", WindowsDimmInventory.Title(
+            [dimms[0] with { SpeedMts = 4800 }, dimms[1] with { PartNumber = "OTHER", SpeedMts = 4800 }]));
+        // No BMC (or an old service): no group.
+        Assert.Empty(new WindowsDimmInventory(() => throw new IOException("openhw-helper: err unknown command")).Discover());
+    }
+
     private sealed class NoSmart : INvmeSmartReader
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");

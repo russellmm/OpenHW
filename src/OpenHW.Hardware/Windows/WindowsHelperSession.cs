@@ -108,7 +108,7 @@ public sealed class FanSourcesCache(Func<DateTime>? now = null)
 }
 
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
-    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null, WindowsRapl? rapl = null, WindowsEffectiveClocks? clocks = null, BoardVrReader? vr = null)
+    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null, WindowsRapl? rapl = null, WindowsEffectiveClocks? clocks = null, BoardVrReader? vr = null, Func<string>? dimms = null)
 {
     public string HandleLine(string line)
     {
@@ -119,6 +119,8 @@ public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerL
                 return clocks.Read() is { } mhz ? "ok " + GpuWire.Encode(mhz) : "err " + (clocks.Error ?? "effective clocks unavailable");
             case ["rapl"] when rapl is not null: // read-only: RAPL energy, Linux's reply format (WindowsRapl)
                 return rapl.Read() is { } counters ? "ok " + RaplReader.Format(counters) : "err " + (rapl.Error ?? "RAPL unavailable");
+            case ["dimms"]: // read-only: the BMC's DIMM inventory over Redfish (no serial numbers), cached by the host
+                return dimms?.Invoke() ?? "err no BMC Redfish";
             case ["vr", "page"]: // the board VR on its rail's page: a PAGE write and restore, on boards that allow it (BoardVrReader)
                 if (vr?.Read(switchPage: true) is not { } sample) return "err no known board VR";
                 return "ok " + BoardVrReader.Format(sample);

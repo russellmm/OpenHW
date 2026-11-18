@@ -99,6 +99,34 @@ public sealed class BmcRedfish(Uri baseUrl, HttpMessageHandler handler, Func<Bmc
         finally { Close(session); }
     }
 
+    /// <summary>Several pages under one login (when the BMC wants one): a login per page costs about a second each.</summary>
+    public List<JsonNode> GetMany(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return [];
+        using (var open = Send(HttpMethod.Get, paths[0], null, null))
+            if (open.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+                return [Parse(open), .. paths.Skip(1).Select(p => { using var r = Send(HttpMethod.Get, p, null, null); return Parse(r); })];
+        var credentials = login() ?? throw new IOException("the BMC wants a login for Redfish reads and none is stored (Fan Control → Give OpenHW the BMC login…)");
+        var session = Open(credentials);
+        try { return paths.Select(p => { using var r = Send(HttpMethod.Get, p, session.Token, null); return Parse(r); }).ToList(); }
+        finally { Close(session); }
+    }
+
+    /// <summary>
+    /// The BMC's DIMM inventory (Systems/Self/Memory): part, size, type, speed, ranks and health per module — never the
+    /// serial number. Two logins at most (the collection, then every member under one).
+    /// </summary>
+    public List<DimmInventory> ReadMemory()
+    {
+        var members = (Get("/redfish/v1/Systems/Self/Memory")["Members"] as JsonArray)?
+            .Select(m => m?["@odata.id"]?.GetValue<string>()).OfType<string>().ToList() ?? [];
+        return GetMany(members).Select(m => new DimmInventory(
+            m["Id"]?.GetValue<string>() ?? "", m["MemoryLocation"]?["Channel"]?.GetValue<int>(), m["MemoryLocation"]?["Slot"]?.GetValue<int>(),
+            m["MemoryDeviceType"]?.GetValue<string>(), m["CapacityMiB"]?.GetValue<long>(), m["OperatingSpeedMhz"]?.GetValue<int>(),
+            m["RankCount"]?.GetValue<int>(), m["Manufacturer"]?.GetValue<string>()?.Trim(), m["PartNumber"]?.GetValue<string>()?.Trim(),
+            m["Status"]?["Health"]?.GetValue<string>(), m["Status"]?["State"]?.GetValue<string>())).ToList();
+    }
+
     /// <summary>True when the BMC answers a Redfish read from this PC without any login.</summary>
     public bool OpenWithoutLogin()
     {
@@ -244,3 +272,7 @@ public sealed class BmcRedfish(Uri baseUrl, HttpMessageHandler handler, Func<Bmc
     private static IEnumerable<JsonObject> Pwm(JsonNode thermal) =>
         (thermal["Oem"]?["PWM"] as JsonArray ?? throw new IOException("the BMC's thermal page has no Oem.PWM list")).OfType<JsonObject>();
 }
+
+/// <summary>One DIMM as the BMC lists it (Redfish Memory); speed in MT/s (Redfish calls it OperatingSpeedMhz).</summary>
+public sealed record DimmInventory(string Id, int? Channel, int? Slot, string? Type, long? CapacityMiB, int? SpeedMts, int? Ranks,
+    string? Manufacturer, string? PartNumber, string? Health, string? State);
