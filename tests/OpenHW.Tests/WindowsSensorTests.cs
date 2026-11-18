@@ -129,6 +129,38 @@ public sealed class WindowsSensorTests
         public void Dispose() { }
     }
 
+    // HWiNFO parity (2026-11-18): Zen 5 MSR_HARDWARE_PSTATE_STATUS, checked against HWiNFO on the 9975WX
+    // (Core 0 45.25× at 0.995 V, Core 15 25× at 0.765 V); Windows' GPU engines named and numbered as HWiNFO does.
+    [Fact]
+    public void PstateAndGpuEnginesDecodeAsHwinfo()
+    {
+        ulong Pstate(int fid, int vid) => (ulong)fid | (ulong)vid << 14;
+        Assert.Equal(45.25, WindowsEffectiveClockEngine.Ratio(Pstate(905, 150)));
+        Assert.Equal(0.995, WindowsEffectiveClockEngine.Vid(Pstate(905, 150)), 6);
+        Assert.Equal(25, WindowsEffectiveClockEngine.Ratio(Pstate(500, 104)));
+        Assert.Equal(0.765, WindowsEffectiveClockEngine.Vid(Pstate(500, 104)), 6);
+
+        var engine = new WindowsEffectiveClockEngine(() => GpuWire.Encode(new Dictionary<string, double>
+        {
+            ["0"] = 267, ["0t0"] = 267, ["0t1"] = 59.4, ["1"] = 30, ["1t0"] = 30, ["avg"] = 120, ["ps0"] = Pstate(905, 150), ["ps1"] = Pstate(500, 104),
+        }), cpuFamily: 0x1A);
+        var names = engine.Discover().Select(i => i.Name).ToList();
+        Assert.Contains("Core 0 T1 Effective Clock", names);
+        Assert.Contains("Core 1 VID", names);
+        Assert.Equal(["openhw:cpu:effclock:0t0", "openhw:cpu:effclock:0t1"], engine.Children["openhw:cpu:effclock:0"]);
+        var readings = new Dictionary<string, double?>();
+        engine.ReadInto(readings, null);
+        Assert.Equal(45.25, readings["openhw:cpu:ratio"]);
+        Assert.Equal(0.765, readings["openhw:cpu:vid:1"]!.Value, 6);
+        // Not Zen 5: no ratio/VID rows (the layout differs).
+        Assert.DoesNotContain(new WindowsEffectiveClockEngine(() => GpuWire.Encode(new Dictionary<string, double> { ["0"] = 1, ["ps0"] = 1 }), cpuFamily: 0x19)
+            .Discover(), i => i.Name.EndsWith("VID", StringComparison.Ordinal));
+
+        Assert.Equal([("3D:0", "GPU D3D Usage"), ("VideoDecode:2", "GPU Video Decode 0 Usage"), ("VideoDecode:3", "GPU Video Decode 1 Usage"),
+                      ("VideoEncode:9", "GPU Video Encode 0 Usage"), ("Compute_0:7", "GPU Computing (Compute_0) Usage")],
+            WindowsGpuExtras.EngineNames(["3D:0", "VideoDecode:3", "VideoDecode:2", "VideoEncode:9", "Copy:1", "Compute_0:7"]).ToList());
+    }
+
     private sealed class NoSmart : INvmeSmartReader
     {
         public byte[] Read(string controller, string identity) => throw new IOException("none");

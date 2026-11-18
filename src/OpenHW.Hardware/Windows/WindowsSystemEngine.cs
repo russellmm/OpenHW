@@ -20,6 +20,7 @@ public sealed class WindowsSystemEngine : ISensorEngine
     private static readonly string[] Paths =
     [
         Processor + "% Processor Time", Processor + "% Processor Performance", Processor + "Processor Frequency",
+        Processor + "% Processor Utility",
         .. CStates.Select(c => Processor + $"% {c} Time"),
         @"\Paging File(_Total)\% Usage",
     ];
@@ -46,6 +47,10 @@ public sealed class WindowsSystemEngine : ISensorEngine
             Item("mem:available", "Physical Memory Available", HardwareKind.Data, "MB", SystemEngine.SystemGroup),
             Item("mem:load", "Physical Memory Load", HardwareKind.Load, "%", SystemEngine.SystemGroup),
             Item("swap:load", "Page File Usage", HardwareKind.Load, "%", SystemEngine.SystemGroup),
+            // HWiNFO's other System rows (parity, 2026-11-18): commit headroom and the page file's size and use.
+            Item("mem:commit-available", "Virtual Memory Available", HardwareKind.Data, "MB", SystemEngine.SystemGroup),
+            Item("swap:total", "Page File Total", HardwareKind.Data, "MB", SystemEngine.SystemGroup),
+            Item("swap:used", "Page File Used", HardwareKind.Data, "MB", SystemEngine.SystemGroup),
         };
 
         var clocks = new List<string>();
@@ -66,11 +71,22 @@ public sealed class WindowsSystemEngine : ISensorEngine
             }
         items.Add(Item("cpu:usage:max", "Max CPU/Thread Usage", HardwareKind.Load, "%", SystemEngine.CpuGroup));
         items.Add(Item("cpu:usage:total", "Total CPU Usage", HardwareKind.Load, "%", SystemEngine.CpuGroup));
+        // HWiNFO's "Utility": % Processor Utility — work done relative to the base clock, so it can pass 100 % when boosting.
+        var utilities = new List<string>();
+        items.Add(Item("cpu:utility", "Core Utility", HardwareKind.Load, "%", SystemEngine.CpuGroup));
+        foreach (var (core, threads) in _cores)
+            for (var t = 0; t < threads.Count; t++)
+            {
+                items.Add(Item($"cpu:utility:{Key(threads[t])}", $"Core {core} T{t} Utility", HardwareKind.Load, "%", SystemEngine.CpuGroup));
+                utilities.Add(FullId($"cpu:utility:{Key(threads[t])}"));
+            }
+        items.Add(Item("cpu:utility:total", "Total CPU Utility", HardwareKind.Load, "%", SystemEngine.CpuGroup));
 
         var children = new Dictionary<string, IReadOnlyList<string>>
         {
             [FullId("cpu:clock")] = clocks,
             [FullId("cpu:usage")] = usages,
+            [FullId("cpu:utility")] = utilities,
         };
         foreach (var name in new[] { "C0" }.Concat(CStates))
         {
@@ -118,6 +134,13 @@ public sealed class WindowsSystemEngine : ISensorEngine
         readings[FullId("cpu:usage:total")] = total;
         readings[FullId("cpu:usage:max")] = usages.Count > 0 ? usages.Max() : null;
 
+        var utility = _pdh.Values(Processor + "% Processor Utility");
+        foreach (var thread in _cores.SelectMany(c => c.Threads))
+            readings[FullId($"cpu:utility:{Key(thread)}")] = utility.TryGetValue(thread, out var u) ? Math.Max(0, u) : null;
+        double? utilityTotal = utility.TryGetValue("_Total", out var ut) ? Math.Max(0, ut) : null;
+        readings[FullId("cpu:utility")] = utilityTotal;
+        readings[FullId("cpu:utility:total")] = utilityTotal;
+
         // Residency per core = the mean of its threads; C0 = the time in none of the idle states.
         var states = CStates.ToDictionary(c => c, c => _pdh.Values(Processor + $"% {c} Time"));
         var totals = new Dictionary<string, List<double>>();
@@ -138,7 +161,11 @@ public sealed class WindowsSystemEngine : ISensorEngine
         }
         foreach (var (name, values) in totals) readings[FullId($"cstate:{name}")] = values.Average();
 
-        if (_pdh.Values(@"\Paging File(_Total)\% Usage").TryGetValue("_Total", out var pageFile)) readings[FullId("swap:load")] = pageFile;
+        if (_pdh.Values(@"\Paging File(_Total)\% Usage").TryGetValue("_Total", out var pageFile))
+        {
+            readings[FullId("swap:load")] = pageFile;
+            if (readings.TryGetValue(FullId("swap:total"), out var size) && size is { } mb) readings[FullId("swap:used")] = mb * pageFile / 100;
+        }
     }
 
     private static void ReadMemory(IDictionary<string, double?> readings)
@@ -154,6 +181,9 @@ public sealed class WindowsSystemEngine : ISensorEngine
         readings[FullId("mem:used")] = total - available;
         readings[FullId("mem:available")] = available;
         readings[FullId("mem:load")] = total > 0 ? (total - available) / total * 100 : null;
+        readings[FullId("mem:commit-available")] = Mb(info.CommitLimit) - Mb(info.CommitTotal);
+        // The commit limit is physical memory plus the page files, so the difference is the page files' size.
+        readings[FullId("swap:total")] = Math.Max(0, Mb(info.CommitLimit) - total);
     }
 
     /// <summary>Physical cores in order, each with its logical processors as PDH instance names ("0,12").</summary>

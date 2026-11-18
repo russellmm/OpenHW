@@ -76,6 +76,8 @@ public static partial class SensorExplanations
             "memory controller and Infinity Fabric — the rest of the package power is the SoC."),
         R(@"Core Usage|Core \d+ T\d+ Usage", "Share of time a thread was busy over the last poll (both SMT threads of a " +
             "core are listed)."),
+        R(@"Core Utility|Core \d+ T\d+ Utility|Total CPU Utility", "Work done relative to the CPU's base clock (Windows' % Processor " +
+            "Utility, HWiNFO's \"Utility\"): unlike Usage it counts how fast the core ran, so it passes 100 % while boosting."),
         R(@"Total CPU Usage", "Share of all CPU threads' time spent busy over the last poll."),
         R(@"Max CPU/Thread Usage", "The busiest single thread's usage — 100 % here with low total usage means one " +
             "single-threaded job is limiting."),
@@ -198,9 +200,15 @@ public static partial class SensorExplanations
         R(@"Swap Used|Swap Total|Swap Load", "Swap space on disk. Heavy swap use means RAM ran short and things slow down."),
         R(@"Corrected Hardware Errors \((since boot|30 days)\)", "Hardware errors the CPU, memory or PCIe link detected and fixed (Windows WHEA log). Zero is normal; a growing count points at memory, an overclock or a PCIe device."),
         R(@"Fatal Hardware Errors \(30 days\)", "Hardware errors that crashed the machine (Windows WHEA log, written on the next boot). Any count here is worth a look in Event Viewer → System → WHEA-Logger."),
+        R(@"Core \d+ T\d+ Effective Clock", "The clock one thread of the core actually ran at, averaged over the time it slept (its own APERF counter). The core's row shows its busier thread."),
+        R(@"Core Ratios|Core \d+ Ratio", "The core's current multiplier as its P-state sets it (×100 MHz): what the firmware asks for, not what the core averaged (that's Effective Clock)."),
+        R(@"Core VIDs|Core \d+ VID", "The voltage the core's current P-state requests from the regulator (its VID). The actual voltage at the core can differ under load (droop, offsets)."),
         R(@"Core Effective Clocks|Core \d+ Effective Clock|Average Effective Clock", "The clock the core actually ran at, averaged over the time it slept (from its APERF counter): low when idle even if the boost clock is high. HWiNFO's Effective Clock."),
         R(@"VRM1|VRM2","A thermistor on the CPU voltage regulator's power stages (ASUS embedded controller). Under 90 °C is comfortable; the VRM heatsink fans speed up as it rises."),
         R(@"USB Thermistor", "A thermistor near the board's USB controllers (ASUS embedded controller): board temperature in that corner, not a USB device's."),
+        R(@"Virtual Memory Available", "How much more memory programs can reserve before the commit limit (RAM plus page file) is reached."),
+        R(@"Page File Total", "Size of the Windows page files together: the commit limit minus physical memory."),
+        R(@"Page File Used", "How much of the page files is in use (their size × Page File Usage)."),
         R(@"Page File Usage","Share of the Windows page file in use. High use means RAM ran short and Windows moved memory to disk."),
         R(@"Virtual Memory Load", "Committed memory as a share of the commit limit (RAM plus page file). Near 100 % new allocations start to fail."),
         R(@"Virtual Memory Committed|Virtual Memory Commit Limit", "Memory programs have reserved, against how much the " +
@@ -211,6 +219,14 @@ public static partial class SensorExplanations
         // ── GPUs ───────────────────────────────────────────────────────────────────────────────────────────────
         R(@"GPU Temperature", "GPU core temperature. NVIDIA cards slow down near 83–90 °C."),
         R(@"GPU Power", "Power the graphics card is drawing right now, board total."),
+        R(@"GPU Power Limit \(rated\)", "The card's default power limit (its TDP) — what it runs at when no limit is set."),
+        R(@"GPU Power Limit \(max\)", "The highest power limit the card accepts."),
+        R(@"Total GPU Power \[% of TDP\]", "The card's power draw as a share of its default power limit (TDP)."),
+        R(@"GPU Memory Usage", "Video memory in use as a share of the card's total."),
+        R(@"GPU PCIe Replay Count", "PCIe packets the card had to resend since boot — a rising count points at a marginal riser, slot or link."),
+        R(@"GPU D3D Usage|GPU Video Decode \d+ Usage|GPU Video Encode \d+ Usage|GPU Computing \(.+\) Usage|GPU VR Usage|GPU Graphics Usage",
+            "How busy one of the card's engines is, as Windows sees it (all programs together): 3D, video decode/encode, compute (CUDA)."),
+        R(@"GPU D3D Memory Dedicated|GPU D3D Memory Dynamic", "Video memory Windows has given programs on this card (dedicated), and system memory it lends the card (dynamic/shared)."),
         R(@"GPU Power Limit", "The card's current power limit. Set it in Power → Power Limits."),
         R(@"GPU Core Load", "Share of time the GPU's cores were busy."),
         R(@"GPU Memory Controller Load", "Share of time the GPU's memory interface was busy — high for memory-bound work."),
@@ -282,6 +298,8 @@ public static partial class SensorExplanations
         R(@"UPS Temperature", "Temperature inside the UPS."),
         R(@"On Battery", "Yes when the mains has failed and the UPS is running the computer from its battery."),
         R(@"Low Battery", "Yes when the battery is nearly empty — NUT shuts the computer down at this point."),
+        R(@"Charging", "Yes while the UPS is charging its battery (after an outage or a self-test)."),
+        R(@"Discharging", "Yes while the UPS's battery is supplying power."),
         R(@"Replace Battery", "Yes when the UPS says its battery needs replacing (from its self-test)."),
         R(@"UPS Overloaded", "Yes when the connected equipment draws more than the UPS can deliver."),
         // ── Network ────────────────────────────────────────────────────────────────────────────────────────────
@@ -311,7 +329,11 @@ public static partial class SensorExplanations
         R(@"Fan Duty", "Duty of the WireView's own small fan."),
         R(@"Faults \(Status\)", "How many WireView faults are active now (over-temperature, over-current, wire over-current, over-power, current imbalance)."),
         R(@"Faults \(Log\)", "How many kinds of fault the WireView has logged since its log was last cleared (in its own app or on the device)."),
-        R(@"Current Imbalance", "How far the busiest wire is above the six wires' average current (blank at near-idle current). High values mean the load isn't shared evenly — check the connector is fully seated."),
+        R(@"Temperature Limit Exceeded \((Chip|Sensor)\)", "Yes when the WireView's chip or connector temperature passed its limit (Faults (Status): now; Faults (Log): since the log was cleared)."),
+        R(@"Over Current Limit Exceeded \((Total|Wire)\)", "Yes when the cable's total current, or one wire's, passed the WireView's limit (status: now; log: since cleared)."),
+        R(@"Power Limit Exceeded", "Yes when the power through the cable passed the WireView's limit (status: now; log: since cleared)."),
+        R(@"Current Imbalance", "Yes when the WireView flagged the six wires' currents as unevenly shared (status: now; log: since cleared). Wire Current Imbalance shows by how much."),
+        R(@"Wire Current Imbalance", "How far the busiest wire is above the six wires' average current (blank at near-idle current). High values mean the load isn't shared evenly — check the connector is fully seated."),
     ];
 
     public static string Explain(HardwareItem item, string displayName)

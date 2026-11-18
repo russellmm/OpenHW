@@ -38,6 +38,13 @@ public sealed class NutEngine(Func<string, IReadOnlyList<string>>? query = null)
     private static double? Flag(IReadOnlyDictionary<string, string> v, string token) =>
         v.TryGetValue("ups.status", out var s) ? (s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(token) ? 1 : 0) : null;
 
+    /// <summary>Windows (HWiNFO parity, 2026-11-18): the HID UPS's charging state too. Linux's NUT rows are unchanged.</summary>
+    private static readonly Row[] WindowsRows =
+    [
+        new("status:CHRG", "Charging", HardwareKind.Data, "flag", v => Flag(v, "CHRG")),
+        new("status:DISCHRG", "Discharging", HardwareKind.Data, "flag", v => Flag(v, "DISCHRG")),
+    ];
+
     // NUT variable → row; a row appears only when the UPS reports its variable (status flags: when it reports a status).
     private static readonly Row[] Rows =
     [
@@ -57,6 +64,7 @@ public sealed class NutEngine(Func<string, IReadOnlyList<string>>? query = null)
         new("status:LB", "Low Battery", HardwareKind.Data, "flag", v => Flag(v, "LB")),
         new("status:RB", "Replace Battery", HardwareKind.Data, "flag", v => Flag(v, "RB")),
         new("status:OVER", "UPS Overloaded", HardwareKind.Data, "flag", v => Flag(v, "OVER")),
+        .. (OperatingSystem.IsWindows() ? WindowsRows : []),
     ];
 
     private static string NutKey(Row r) => r.Key.StartsWith("status:", StringComparison.Ordinal) ? "ups.status" : r.Key;

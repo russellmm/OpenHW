@@ -129,7 +129,7 @@ public sealed class WireViewTests
         var top = items.Where(i => !engine.Children.Values.SelectMany(c => c).Contains(i.Id)).Select(i => i.Name).ToList();
         Assert.Equal(["Temperature In", "Temperature Out", "GPU 12VHPWR Connector Voltages", "Average Pin Voltage",
             "GPU 12VHPWR Connector Currents", "Total Current", "GPU 12VHPWR Connector Powers", "Total Power", "Fan Duty",
-            "Faults (Status)", "Faults (Log)", "Current Imbalance", "PSU Power Limit (Sense Pins)", "WireView Supply Voltage"], top);
+            "Faults (Status)", "Faults (Log)", "Wire Current Imbalance", "PSU Power Limit (Sense Pins)", "WireView Supply Voltage"], top);
         Assert.Equal(Enumerable.Range(1, 6).Select(i => $"{p}pin{i}:a").ToList(), engine.Children[p + "pins:a"]);
         Assert.Equal("Pin 5 Power", items.Single(i => i.Id == p + "pin5:w").Name);
         var readings = new Dictionary<string, double?>();

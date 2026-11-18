@@ -190,6 +190,7 @@ public static partial class SensorPresentation
         var suffix = item.Id.Split(':', 3).ElementAtOrDefault(2) ?? "";
         if (suffix.StartsWith("extra:", StringComparison.Ordinal))
             return NvidiaEngine.ExtraDisplayName(suffix[6..]) ?? item.Name;
+        if (suffix.StartsWith("win:", StringComparison.Ordinal)) return item.Name; // Windows-only rows (WindowsGpuExtras): HWiNFO's names
         var fan = FanIndex().Match(suffix);
         if (fan.Success) return $"GPU Fan{int.Parse(fan.Groups[1].Value, CultureInfo.InvariantCulture) + 1}";
         return suffix switch

@@ -71,11 +71,25 @@ public sealed class WireViewEngine(Func<int, string>? request = null, bool? hwin
         }
         yield return new Row("fan", "Fan Duty", HardwareKind.Load, "%", x => x.FanPercent);
         yield return new Row("faults:now", "Faults (Status)", HardwareKind.Counter, "", x => BitCount(x.FaultStatus));
+        foreach (var row in FaultRows("now", x => x.FaultStatus)) yield return row;
         yield return new Row("faults:log", "Faults (Log)", HardwareKind.Counter, "", x => BitCount(x.FaultLog));
-        yield return new Row("imbalance", "Current Imbalance", HardwareKind.Load, "%", x => Imbalance(x.PinAmps));
+        foreach (var row in FaultRows("log", x => x.FaultLog)) yield return row;
+        yield return new Row("imbalance", "Wire Current Imbalance", HardwareKind.Load, "%", x => Imbalance(x.PinAmps));
         yield return new Row("psu:limit", "PSU Power Limit (Sense Pins)", HardwareKind.Power, "W", x => x.PsuCapabilityWatts);
         yield return new Row("vdd", "WireView Supply Voltage", HardwareKind.Voltage, "V", x => x.SupplyVolts);
     }
+
+    /// <summary>HWiNFO's names for the fault bits, in <see cref="WireViewSample.FaultNames"/>'s order.</summary>
+    public static readonly string[] HwinfoFaultNames =
+    [
+        "Temperature Limit Exceeded (Chip)", "Temperature Limit Exceeded (Sensor)", "Over Current Limit Exceeded (Total)",
+        "Over Current Limit Exceeded (Wire)", "Power Limit Exceeded", "Current Imbalance",
+    ];
+
+    /// <summary>One Yes/No row per fault bit (HWiNFO layout), under "Faults (Status)" or "Faults (Log)".</summary>
+    private static IEnumerable<Row> FaultRows(string which, Func<WireViewSample, int> mask) =>
+        HwinfoFaultNames.Select((name, bit) => new Row($"faults:{which}:{bit}", name, HardwareKind.Status, "flag",
+            x => (mask(x) & 1 << bit) != 0 ? 1 : 0));
 
     private IEnumerable<Row> Rows(WireViewSample s) => _hwinfo ? HwinfoRows(s) : LinuxRows(s);
 
@@ -138,6 +152,9 @@ public sealed class WireViewEngine(Func<int, string>? request = null, bool? hwin
             if (_hwinfo)
                 foreach (var set in PinSets)
                     children[$"{IdPrefix}{key}:pins:{set.Key}"] = Enumerable.Range(1, 6).Select(i => $"{IdPrefix}{key}:pin{i}:{set.Key}").ToList();
+            if (_hwinfo)
+                foreach (var which in new[] { "now", "log" })
+                    children[$"{IdPrefix}{key}:faults:{which}"] = HwinfoFaultNames.Select((_, bit) => $"{IdPrefix}{key}:faults:{which}:{bit}").ToList();
             foreach (var r in Rows(d.Sample!))
                 items.Add(new HardwareItem
                 {

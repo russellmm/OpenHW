@@ -27,7 +27,7 @@ public sealed class PowerDeviceTests
     {
         using var nut = Nut("OB LB");
         var items = nut.Discover();
-        Assert.Equal(13, items.Count); // no input/output frequency or temperature on this UPS
+        Assert.Equal(OperatingSystem.IsWindows() ? 15 : 13, items.Count); // no input/output frequency or temperature on this UPS; Windows adds Charging / Discharging
         var r = new Dictionary<string, double?>();
         nut.ReadInto(r, null);
         Assert.Equal((234, 1900 / 60.0, 1, 1, 0), (r["nut:ups:ups.realpower"]!.Value, r["nut:ups:battery.runtime"]!.Value,

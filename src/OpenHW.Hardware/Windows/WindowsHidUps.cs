@@ -65,7 +65,8 @@ public static class WindowsHidUps
         Put("ups.temperature", Find(PowerPage, 0x36) is { } k ? k - 273.15 : null); // HID temperatures are kelvin
         Put("battery.charge", Find(BatteryPage, 0x66));           // RemainingCapacity
         Put("battery.runtime", Find(BatteryPage, 0x68));          // RunTimeToEmpty, seconds
-        Put("battery.voltage", Find(PowerPage, 0x30, 0x12));      // Voltage in Battery
+        // Voltage in Battery; CyberPower reports it in PowerSummary instead (27.3 V on the CP2000PFCRM2U, as HWiNFO).
+        Put("battery.voltage", Find(PowerPage, 0x30, 0x12) ?? Find(PowerPage, 0x30, 0x24));
         // No active power reported (CyberPower's): load × rating, as NUT's driver does.
         if (!vars.ContainsKey("ups.realpower") && Find(PowerPage, 0x35) is { } load && Find(PowerPage, 0x44) is { } rating)
             Put("ups.realpower", Math.Round(load / 100 * rating));

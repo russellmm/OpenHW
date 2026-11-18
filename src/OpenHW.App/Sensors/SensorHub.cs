@@ -17,7 +17,7 @@ public sealed class SensorHub : IDisposable
     private readonly HwmonEngine? _hwmon;
     // GPUs come from openhw-helper on Linux: the app never opens a card (see HelperGpuEngine), so the card filter can
     // hide it from the app while it's lent. Windows has no card filter: the app reads NVML (nvml.dll) itself.
-    private readonly ISensorEngine _nvidia = OperatingSystem.IsWindows() ? new NvidiaEngine() : new HelperGpuEngine();
+    private readonly ISensorEngine _nvidia = OperatingSystem.IsWindows() ? new OpenHW.Hardware.Windows.WindowsGpuExtras(new NvidiaEngine()) : new HelperGpuEngine();
     private readonly NvmeEngine? _nvme;
     private readonly OpenHW.Hardware.Windows.WindowsNvmeEngine? _windowsNvme;
     private readonly ISensorEngine[] _engines;
