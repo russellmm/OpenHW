@@ -140,7 +140,7 @@ public readonly record struct NvmeActivityCounters(ulong ReadSectors, ulong Writ
 
 /// <summary>The health log through a query handle, for <see cref="NvmeHealthBackend"/> (Linux reads it through the helper).</summary>
 [SupportedOSPlatform("windows")]
-internal sealed class WindowsNvmeSmartReader : INvmeSmartReader
+public sealed class WindowsNvmeSmartReader : INvmeSmartReader
 {
     public byte[] Read(string controller, string identity) => WindowsNvmeDevices.HealthLog(controller);
     public void Dispose() { }

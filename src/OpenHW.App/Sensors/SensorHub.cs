@@ -26,10 +26,10 @@ public sealed class SensorHub : IDisposable
     {
         if (OperatingSystem.IsWindows())
         {
-            // Windows (docs/windows-port.md): user-mode readers so far. The BMC and the WireView come back with the
-            // helper service; Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
+            // Windows (docs/windows-port.md): user-mode readers, and the BMC through the OpenHW Helper service. The
+            // WireView is still to come; Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
             _windowsNvme = new OpenHW.Hardware.Windows.WindowsNvmeEngine();
-            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, new NutEngine()];
+            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, new NutEngine()];
             return;
         }
         _hwmon = new HwmonEngine();
@@ -157,7 +157,9 @@ public sealed class SensorHub : IDisposable
     {
         var inventory = Inventory;
         return inventory.FirstOrDefault(i => i.Id.StartsWith("hwmon:k10temp:", StringComparison.Ordinal) && i.Id.EndsWith(":temp:1", StringComparison.Ordinal))?.Id
-            ?? inventory.FirstOrDefault(i => i.Kind == HardwareKind.Temperature && i.Name is "Tctl" or "Tdie" or "CPU Package")?.Id;
+            ?? inventory.FirstOrDefault(i => i.Kind == HardwareKind.Temperature && i.Name is "Tctl" or "Tdie" or "CPU Package")?.Id
+            // Windows has no k10temp until kernel access (docs/windows-port.md phase 3): the BMC's CPU package reading.
+            ?? (OperatingSystem.IsWindows() ? inventory.FirstOrDefault(i => i.Kind == HardwareKind.Temperature && i.Group == BmcEngine.GroupKey && i.Name == "CPU Package Temp")?.Id : null);
     }
 
     private bool RefreshInventory()

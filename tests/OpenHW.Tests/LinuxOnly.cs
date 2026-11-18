@@ -23,3 +23,12 @@ public sealed class LinuxTheoryAttribute : TheoryAttribute
         if (!OperatingSystem.IsLinux()) Skip = "Linux only (Linux readers or features)";
     }
 }
+
+/// <summary>A [Fact] that runs only on Windows (the Windows helper's named pipe, Win32 readers).</summary>
+public sealed class WindowsFactAttribute : FactAttribute
+{
+    public WindowsFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows()) Skip = "Windows only";
+    }
+}

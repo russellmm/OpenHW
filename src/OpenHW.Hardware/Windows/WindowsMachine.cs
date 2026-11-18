@@ -22,6 +22,24 @@ public static class WindowsMachine
     /// <summary>"AMD Ryzen Threadripper PRO 9975WX 32-Cores", trimmed (Windows pads the brand string).</summary>
     public static string CpuBrand => Read(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString");
 
+    /// <summary>
+    /// The SMBIOS system UUID, lowercase as Linux's /sys/class/dmi/id/product_uuid shows it: the machine identity
+    /// that fan journals and saved originals carry, so a file copied between the two systems is recognised.
+    /// </summary>
+    public static string Uuid
+    {
+        get
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher("SELECT UUID FROM Win32_ComputerSystemProduct");
+                var uuid = searcher.Get().Cast<System.Management.ManagementBaseObject>().Select(o => o["UUID"] as string).FirstOrDefault();
+                return string.IsNullOrWhiteSpace(uuid) ? "unavailable" : uuid.Trim().ToLowerInvariant();
+            }
+            catch (Exception ex) when (ex is System.Management.ManagementException or UnauthorizedAccessException) { return "unavailable"; }
+        }
+    }
+
     private static string Read(string key, string value)
     {
         try
@@ -36,7 +54,9 @@ public static class WindowsMachine
 /// <summary>Native library names that differ by platform: NVML is libnvidia-ml.so.1 on Linux and nvml.dll on Windows.</summary>
 internal static class NativeLibraries
 {
+#pragma warning disable CA2255 // a library needs the resolver before its first NVML call
     [System.Runtime.CompilerServices.ModuleInitializer]
+#pragma warning restore CA2255
     internal static void Register()
     {
         if (!OperatingSystem.IsWindows()) return;

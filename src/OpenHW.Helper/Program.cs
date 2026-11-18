@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using OpenHW.Hardware;
 
-[assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+// Linux is the root daemon below; Windows runs the "OpenHW Helper" service (WindowsHelper.cs).
 
 // openhw-helper — root daemon for the few things Linux reserves for root: NVMe SMART reads, cpufreq ceilings,
 // GPU power limits (NVML), the CPU socket power limit (HSMP), and those limits' boot-time values in the owner's
@@ -9,6 +9,8 @@ using OpenHW.Hardware;
 // reading for the window (so the desktop app never opens a card). It serves fixed,
 // validated commands over /run/openhw/helper.sock (root:openhw 0660); no client input becomes a path.
 // `openhw-helper --once <command>` answers one command on stdout and exits (for checking a build with sudo).
+
+if (OperatingSystem.IsWindows()) return OpenHW.Helper.WindowsHelper.Run(args);
 
 if (Native.geteuid() != 0)
 {

@@ -10,6 +10,9 @@ public static class HelperClient
     /// <summary>Sends <paramref name="line"/> and returns the reply after "ok ".</summary>
     public static string Request(string line, string? socketPath = null, int receiveTimeoutMs = 2500, int maxReplyBytes = 1024)
     {
+        // Windows: the helper is a service on a named pipe. An explicit socket (tests, OPENHW_HELPER_SOCKET) still uses one.
+        if (OperatingSystem.IsWindows() && socketPath is null && Environment.GetEnvironmentVariable("OPENHW_HELPER_SOCKET") is null)
+            return Windows.PipeHelperClient.Request(line, receiveTimeoutMs, maxReplyBytes);
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified) { SendTimeout = 1500, ReceiveTimeout = receiveTimeoutMs };
         socket.Connect(new UnixDomainSocketEndPoint(socketPath ?? HelperSocket.Path));
         using var stream = new NetworkStream(socket, ownsSocket: false);
