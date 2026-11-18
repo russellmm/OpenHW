@@ -13,3 +13,7 @@ tools/bios-data/*.CAP
 tools/bios-data/*.cap
 tools/bios-data/*.pdf
 tools/bios-data/__pycache__/
+
+# HWiNFO (the owner's reference copy and its debug logs): never committed
+/HWiNFO64/
+*.DBG

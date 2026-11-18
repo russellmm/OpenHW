@@ -172,6 +172,18 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   need a write to each hub's mode register on a bus the BMC uses: not done; needs research and the owner's go-ahead.
   PawnIO's `ioctl_smbus_xfer` wants an output buffer and a data word even for writes (else 0x8007007A).
 
+- **Where HWiNFO reads the DIMMs (its own Debug Mode log, HWiNFO64.DBG, 2026-11-18):** not the PIIX4 SMBus OpenHW
+  scanned, but the FCH's **I2C controllers** (AMD DesignWare I2C, "FCH I2C Host", HWiNFO's SMBus hosts 1–3 beside the
+  SMBus at 0xB00). There hub 0x50 reads `51 18`, SPD checksums OK; HWiNFO finds DIMM devices on hosts 1 and 2 (≈6 of the
+  8 DIMMs): hub temperature, TS0/TS1 and the PMIC. PawnIO has no module for these controllers (and loads only modules
+  signed by its author), so OpenHW can't reach them yet. Port 1 of the PIIX4 is a different bus.
+- **Crash, 2026-11-18 10:15:** `openhw-helper --hsmp-dimm` sent HSMP 0x18 GetDimmThermal (then 0x17/0x16) to all 256
+  DIMM addresses. The SMU took the machine down: WHEA fatal hardware error, Kernel-Power 41, hard reset; the reset also
+  zeroed WindowsHelper.cs on disk (restored from git). The probe is gone and must not come back: **never sweep firmware
+  mailbox arguments** — find the documented DIMM address encoding (AMD PPR / esmi) and test one value with the owner's
+  go-ahead. After the reboot the BMC reader failed its first start (BMC/IPMI driver not ready) and stayed failed;
+  `BmcReader` now retries every 30 s on Windows (`WindowsRetryAfter`).
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.

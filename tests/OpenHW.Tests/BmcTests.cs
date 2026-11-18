@@ -209,6 +209,26 @@ public sealed class BmcTests
         Assert.Equal(("AST2600", "2.01"), engine.Controller);
     }
 
+    // Windows: a BMC that isn't ready when the service starts (after a crash reboot) is tried again, not given up on.
+    [WindowsFact]
+    public void OnWindowsAFailedStartIsTriedAgain()
+    {
+        var before = BmcReader.WindowsRetryAfter;
+        BmcReader.WindowsRetryAfter = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            var ready = false;
+            using var reader = new BmcReader(() => ready ? new FakeBmc() : null);
+            Assert.Null(reader.Read(TimeSpan.FromSeconds(2)));
+            Assert.NotNull(reader.Error);
+            ready = true;
+            Thread.Sleep(300);
+            Assert.NotNull(reader.Read(TimeSpan.FromSeconds(5)));
+            Assert.Null(reader.Error);
+        }
+        finally { BmcReader.WindowsRetryAfter = before; }
+    }
+
     // Windows: one failed request (pipe, service or WMI hiccup) keeps the group, and the next poll asks again.
     [WindowsFact]
     public void OnWindowsAFailedRequestKeepsTheGroup()

@@ -38,6 +38,13 @@ public sealed class BmcReader : IDisposable
     private Thread? _thread;
     private volatile bool _stopping;
     private string? _error;
+    private DateTime _errorAt;
+
+    /// <summary>
+    /// Windows: how long after a failed start (BMC or IPMI driver not ready yet — seen right after a crash reboot,
+    /// 2026-11-18) the reader tries again. On Linux a failed start stays failed until the helper restarts, as before.
+    /// </summary>
+    public static TimeSpan WindowsRetryAfter { get; set; } = TimeSpan.FromSeconds(30); // tests shorten it
     private List<BmcDiscreteSensor> _discrete = [];
     private readonly Dictionary<BmcDiscreteSensor, int?> _states = [];
     private Dictionary<byte, string> _names = [];
@@ -162,6 +169,12 @@ public sealed class BmcReader : IDisposable
         lock (_gate)
         {
             _lastAsked = DateTime.UtcNow;
+            if (OperatingSystem.IsWindows() && _error is not null && _sensors is null && DateTime.UtcNow - _errorAt > WindowsRetryAfter && _thread is { IsAlive: false })
+            {
+                (_error, _thread) = (null, null); // start over: open the transport, read the SDR again
+                _transport?.Dispose();
+                _transport = null;
+            }
             if (_thread is null && !_stopping)
             {
                 _thread = new Thread(Loop) { IsBackground = true, Name = "bmc" };
@@ -263,7 +276,7 @@ public sealed class BmcReader : IDisposable
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)
         {
-            lock (_gate) { _error = ex.Message; Monitor.PulseAll(_gate); }
+            lock (_gate) { _error = ex.Message; _errorAt = DateTime.UtcNow; Monitor.PulseAll(_gate); }
         }
     }
 
