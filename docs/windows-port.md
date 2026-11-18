@@ -81,6 +81,12 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
     Explorer restart. Windows 11 keeps new icons in the hidden-icons flyout until the user drags them out.
   - Tray tiles on Windows: one more pixel of margin and the unit measured by advance width (Windows' hinting draws
     glyphs wider than their outlines).
+  - **Larger tray digits (owner: "far too small")**: Windows draws notification icons only at the small-icon size
+    (`SM_CXSMICON`: 24 px at this PC's 150 %; a bigger icon is just scaled down), so `TrayIconRenderer.DrawTall`
+    (Windows only) fills it: digits the full height less a pixel or two, narrowed sideways (to 62 %, 48 % for four
+    characters) before being made smaller, the unit smaller and raised, dropped after three characters ("100", "250";
+    the tooltip has it), greyscale anti-aliasing (ClearType fringes on a solid tile). Whole numbers only, as on Linux
+    (`TrayText`: up to 9999, then "13k").
 - **Phase 2 — service and BMC:**
   - `WmiIpmiTransport` (`Microsoft_IPMI.RequestResponse`, in-box `ipmidrv.sys`, Administrator only): `ResponseData`
     starts with the completion code (Get Device ID `00 20 81 02 01 02 BF 3F 0A 00 93 11 22 00 00 00`, AST2600 fw 2.01).

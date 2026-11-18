@@ -15,6 +15,8 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - **Power → Power Limits on Windows**: the CPU socket limit through AMD's own HSMP driver and each NVIDIA card's limit,
   live and kept (applied when the service starts).
 - `packaging\windows\build.ps1` (self-contained win-x64, mirrored to `C:\StandAlone\OpenHW`) and `install.ps1`.
+- **Larger tray digits on Windows**: they fill the 24 px tile (narrowed rather than shrunk), unit smaller and dropped
+  after three characters, no colour fringes. Whole numbers only, as before.
 - **One fan configuration for Linux and Windows** (the BMC keeps whatever the last OS wrote): `fan-curves.json` and
   `fan-profiles/` move to `C:\StandAlone\OpenHW\configs` = `/mnt/DriveC/StandAlone/OpenHW/configs` (per-user folder
   when it isn't there; `OPENHW_SHARED_CONFIG` overrides). The file in use is saved relative to it; the first start

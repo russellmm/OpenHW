@@ -1,4 +1,4 @@
-using Avalonia.Headless.XUnit;
+﻿using Avalonia.Headless.XUnit;
 using OpenHW.App.Tray;
 using Xunit;
 
@@ -13,7 +13,7 @@ public sealed class TrayIconTests
         var samples = new[]
         {
             ("45", "#C0392B", ""), ("100", "#2E86DE", ""), ("250", "#F0B429", ""), ("5.3k", "#27AE60", ""), ("1.25", "#ECF0F1", ""), ("--", "#5D6D7E", ""),
-            ("32°", "#C0392B", ""), ("55", "#2E86DE", "W"), ("250", "#2E86DE", "W"), ("87", "#27AE60", "%"), ("100", "#27AE60", "%"), ("1.25", "#ECF0F1", "V"),
+            ("32Â°", "#C0392B", ""), ("55", "#2E86DE", "W"), ("250", "#2E86DE", "W"), ("87", "#27AE60", "%"), ("100", "#27AE60", "%"), ("1.25", "#ECF0F1", "V"),
         };
         foreach (var (text, colour, unit) in samples)
         {
@@ -27,6 +27,31 @@ public sealed class TrayIconTests
         var path = Path.Combine(Path.GetTempPath(), "openhw-tray-icons.ppm");
         WriteStrip(path, samples.Select(s => TrayIconRenderer.Render(s.Item1, s.Item2, s.Item3).First(i => i.Width == 44)).ToArray());
     }
+
+    // Windows shows tray icons only at the small-icon size (24 px at 150 %): the digits must fill the tile's height
+    // (checked from 24 px; at 16 px three characters are narrowed as far as they go and then made smaller).
+    [AvaloniaFact]
+    public void OnWindowsTheDigitsFillTheTile()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var samples = new[] { ("41Â°", "#C0392B", ""), ("14", "#2E86DE", "W"), ("100", "#27AE60", "%"), ("250", "#2E86DE", "W"), ("4500", "#27AE60", ""), ("13k", "#5D6D7E", ""), ("1", "#ECF0F1", "V"), ("87", "#F0B429", "%"), ("--", "#5D6D7E", "") }; // whole numbers only (TrayText)
+        var sizes = new[] { 16, 24, 32 };
+        var strips = sizes.ToDictionary(size => size, size => samples.Select(s => TrayIconRenderer.Render(s.Item1, s.Item2, s.Item3, [size]).Single()).ToArray());
+        foreach (var (size, icons) in strips) WriteStrip(Path.Combine(Path.GetTempPath(), $"openhw-tray-icons-{size}.ppm"), icons);
+        foreach (var (size, icons) in strips)
+        {
+            foreach (var (icon, (text, _, unit)) in icons.Zip(samples))
+            {
+                Assert.True(EdgeInk(icon) <= 200, $"'{text}{unit}' is clipped at {size} px ({EdgeInk(icon)})");
+                if (text != "--" && size >= 24) Assert.True(InkRows(icon) >= size * 0.55, $"'{text}{unit}' is only {InkRows(icon)} px tall at {size} px");
+            }
+        }
+    }
+
+    // Rows with ink on them (any pixel well away from the tile colour).
+    private static int InkRows(IconPixmap icon) =>
+        Enumerable.Range(0, icon.Height).Count(y => Enumerable.Range(0, icon.Width).Any(x =>
+            Enumerable.Range(1, 3).Max(c => Math.Abs(icon.Argb[(y * icon.Width + x) * 4 + c] - icon.Argb[c])) > 96));
 
     [AvaloniaFact]
     public void AUnitIsDrawnAfterTheDigits()

@@ -530,7 +530,7 @@ public sealed class App : Application
         _ => "",
     };
 
-    /// <summary>A value short enough for a 16 px tile: 45, 250, 5.3k, 1.25.</summary>
+    /// <summary>A value short enough for a 16 px tile, whole numbers only: 45, 250, 4500, 13k.</summary>
     internal static string TrayText(double? value)
     {
         if (value is not { } v || !double.IsFinite(v)) return "--";

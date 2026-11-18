@@ -36,6 +36,9 @@ public static class TrayIconRenderer
         using (var context = bitmap.CreateDrawingContext())
         {
             context.FillRectangle(new SolidColorBrush(background), new Rect(0, 0, size, size));
+            if (OperatingSystem.IsWindows()) DrawTall(context, text, unit, size, foreground);
+            else
+            {
             var (digits, small, gap) = FitText(text, unit, size, foreground);
             // Centre the glyph outlines, not the line box: digits have no descenders, so line-box centring sits them high.
             var ink = Ink(digits);
@@ -47,6 +50,7 @@ public static class TrayIconRenderer
             {
                 var unitInk = UnitInk(small);
                 context.DrawText(small, new Point(left + ink.Width + gap - unitInk.X, bottom - unitInk.Bottom));
+            }
             }
         }
 
@@ -69,6 +73,53 @@ public static class TrayIconRenderer
         (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255.0 > 0.62
             ? Color.Parse("#141414")
             : Colors.White;
+
+    /// <summary>
+    /// Windows draws notification icons only at the small-icon size (24 px at 150 %), so the digits have to fill it: full
+    /// height less a pixel or two, narrowed sideways (down to <see cref="MinSqueeze"/>) rather than made smaller
+    /// when they're too wide, and the unit smaller and raised to the top, where it costs the digits the least width (left out after three
+    /// characters).
+    /// </summary>
+    private static void DrawTall(DrawingContext context, string text, string unit, int size, Color foreground)
+    {
+        var typeface = new Typeface(Narrow, FontStyle.Normal, FontWeight.Bold);
+        var brush = new SolidColorBrush(foreground);
+        FormattedText Text(string s, double em) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, em, brush);
+        if (text.Length >= 3) unit = ""; // "100%", "250W": the unit would squeeze the digits unreadable (the tooltip has it)
+        var height = size - 3.0; // hinting can push a glyph a pixel past its outline: keep it off the edge
+        var across = size - 2.0;
+        var gap = unit.Length > 0 ? Math.Max(1, Math.Round(size / 24.0)) : 0;
+        for (var em = size * 1.6; ; em -= 0.25)
+        {
+            var digits = Text(text, em);
+            var ink = Ink(digits);
+            if (ink.Height > height && em > 4) continue;
+            var small = unit.Length > 0 ? Text(unit, em * WindowsUnitScale) : null;
+            var unitInk = small is null ? default : UnitInk(small);
+            var width = ink.Width + gap + unitInk.Width;
+            var squeeze = Math.Min(1, across / width);
+            if (squeeze < (text.Length >= 4 ? MinSqueezeLong : MinSqueeze) && em > 4) continue;
+            var left = (size - width * squeeze) / 2;
+            var top = Math.Round((size - ink.Height) / 2);
+            // Greyscale anti-aliasing: sub-pixel (ClearType) text leaves coloured fringes on a solid tile.
+            using (context.PushRenderOptions(new RenderOptions { TextRenderingMode = TextRenderingMode.Antialias, EdgeMode = EdgeMode.Antialias }))
+            using (context.PushTransform(Matrix.CreateScale(squeeze, 1) * Matrix.CreateTranslation(left, 0)))
+            {
+                context.DrawText(digits, new Point(-ink.X, top - ink.Y));
+                if (small is not null) context.DrawText(small, new Point(ink.Width + gap - unitInk.X, top - unitInk.Y));
+            }
+            return;
+        }
+    }
+
+    /// <summary>How far digits may be narrowed on Windows before they're made smaller instead (still readable).</summary>
+    private const double MinSqueeze = 0.62;
+
+    /// <summary>Four characters ("4500", whole numbers up to 9999) may be narrowed further: taller but thinner reads better.</summary>
+    private const double MinSqueezeLong = 0.48;
+
+    /// <summary>The unit on Windows: smaller than on Linux, so the digits keep the width.</summary>
+    private const double WindowsUnitScale = 0.58;
 
     // A narrow bold face fits more digit height into a square tile ("250" is three digits wide); the default font is
     // the fallback where it isn't installed.
