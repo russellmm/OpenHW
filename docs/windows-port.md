@@ -234,7 +234,7 @@ crash): one documented value at a time, and commit before any hardware test.
    OpenFan isn't also driving them (`GpuFanDriver`'s OpenFan guard only knows OpenFan's Linux socket); retire OpenFan
    once 3 is confirmed.
 6. ~~**Fan Control's service calls off the UI thread**~~ — **done 2026-11-18**: the 6-second status poll (fans, GPU
-   fans, BMC fan sources, BMC login) runs in the background and is applied on the window thread; a refresh asked for
+   fans, BMC fan sources, BMC login) runs in the background and is applied on the window thread (Windows only; Linux keeps the synchronous refresh); a refresh asked for
    while one runs is folded into it. Only the first one, when the window opens, waits. The BMC writes themselves (Apply,
    Restore original, Apply all) stay on the window thread: each is one confirmed write and they edit the curve store
    the window also edits.

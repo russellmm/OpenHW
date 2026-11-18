@@ -282,7 +282,8 @@ public sealed class FanControlWindow : Window
     /// </summary>
     private void RefreshStatus(bool rebuild, bool wait = false)
     {
-        if (wait) { ApplyStatus(FetchStatus(), rebuild); return; }
+        // Linux keeps its original synchronous refresh (the owner's rule: Windows work leaves Linux unchanged).
+        if (wait || !OperatingSystem.IsWindows()) { ApplyStatus(FetchStatus(), rebuild); return; }
         _rebuildQueued |= rebuild;
         if (_fetching) return;
         _fetching = true;
