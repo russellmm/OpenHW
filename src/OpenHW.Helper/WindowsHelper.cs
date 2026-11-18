@@ -151,7 +151,9 @@ internal static class WindowsHelper
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
                 redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans, vr: _vr),
-            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel);
+            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel, _rapl);
+
+        private readonly WindowsRapl _rapl = new(() => PawnIo.Open("AMDFamily17", out _));
 
         private readonly WindowsKernelSensors _kernel = new();
 
@@ -190,6 +192,7 @@ internal static class WindowsHelper
             _cpuPower.Dispose();
             _hsmpSensors.Dispose();
             _kernel.Dispose();
+            _rapl.Dispose();
             _bmc.Dispose();
         }
     }

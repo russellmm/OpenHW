@@ -97,13 +97,15 @@ public sealed class FanSourcesCache(Func<DateTime>? now = null)
 }
 
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
-    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null)
+    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null, WindowsRapl? rapl = null)
 {
     public string HandleLine(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         switch (parts)
         {
+            case ["rapl"] when rapl is not null: // read-only: RAPL energy, Linux's reply format (WindowsRapl)
+                return rapl.Read() is { } counters ? "ok " + RaplReader.Format(counters) : "err " + (rapl.Error ?? "RAPL unavailable");
             case ["kernel"]: // read-only: PawnIO readings as hwmon-style chips (WindowsKernelSensors)
                 if (kernel is null) return "err kernel access unavailable";
                 return "ok " + GpuWire.Encode(kernel.Read());
