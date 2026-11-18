@@ -82,18 +82,29 @@ public sealed class FanSourcesCache(Func<DateTime>? now = null)
     private string? _reply;
     private DateTime _at;
 
+    /// <summary>
+    /// How long a failed read is kept: Fan Control asks every 2 s and waits for the answer, so a BMC that doesn't
+    /// answer (each try ~10 s) froze it (2026-11-18). The next try comes after this.
+    /// </summary>
+    public static readonly TimeSpan FailureHold = TimeSpan.FromSeconds(60);
+
+    private string? _failure;
+    private DateTime _failedAt;
+
     public string Get(Func<string> read)
     {
         lock (_gate) // one read at a time; the others wait for it and share its answer
         {
             if (_reply is not null && _now() - _at < Fresh) return _reply;
+            if (_failure is not null && _now() - _failedAt < FailureHold) return _failure;
             var reply = read();
-            if (reply.StartsWith("ok ", StringComparison.Ordinal)) (_reply, _at) = (reply, _now());
+            if (reply.StartsWith("ok ", StringComparison.Ordinal)) (_reply, _at, _failure) = (reply, _now(), null);
+            else (_failure, _failedAt) = (reply, _now());
             return reply;
         }
     }
 
-    public void Clear() { lock (_gate) _reply = null; }
+    public void Clear() { lock (_gate) (_reply, _failure) = (null, null); }
 }
 
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,

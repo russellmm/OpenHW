@@ -90,7 +90,10 @@ public sealed class WindowsHelperTests
         var reads = 0;
         string Read() { reads++; return reads == 1 ? "err BMC Redfish unavailable" : "ok sources" + reads; }
 
-        Assert.StartsWith("err", cache.Get(Read)); // not kept
+        Assert.StartsWith("err", cache.Get(Read));
+        Assert.StartsWith("err", cache.Get(Read)); // a failure is kept a minute: Fan Control mustn't wait on it every 2 s
+        Assert.Equal(1, reads);
+        now += FanSourcesCache.FailureHold;
         Assert.Equal("ok sources2", cache.Get(Read));
         now += TimeSpan.FromHours(1);
         Assert.Equal("ok sources2", cache.Get(Read)); // kept: no HTTPS while Fan Control polls
