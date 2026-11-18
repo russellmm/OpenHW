@@ -33,7 +33,7 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
 | BMC fan zones, curves, alarm thresholds | **available, not written yet** | same `FanDriver` over WMI IPMI |
 | Redfish (fan sources, BIOS settings, access check) | **working; login saved**; sources read once per service run | BMC LAN address from IPMI, bound to whichever wired port reaches it (never Tailscale) |
 | CPU power limit (PPT) | **done, write tested** | AMD's own HSMP driver (`WindowsHsmp`) |
-| GPU power limits | **done, not written yet** | NVML in the service, kept by UUID |
+| GPU power limits | **done, tested live by the owner (2026-11-18)** | NVML in the service, kept by UUID |
 | NVIDIA fan control | **running** (both RTX PRO 6000 on their shared curves since 21:35) | `GpuFanDriver` (NVML) |
 | BIOS Setup values (UEFI variables) | to do | `GetFirmwareEnvironmentVariableExW` in the service |
 | WireView Pro II | **done** (in the app, COM port) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
@@ -204,8 +204,8 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
 - **Fan Control froze (2026-11-18):** after the reboot the BMC answered on **Ethernet 5** (10.0.0.208) but not Ethernet 4
   (ARP unreachable), which the service had bound to; every `fansources` timed out (~10 s) and Fan Control asks every
   2 s. `LanBinding` now tries every wired port on the BMC's subnet (2 s connect limit, last good first — never the
-  Tailscale route, which Chrome uses), and `FanSourcesCache` keeps a failure 60 s. Fan Control still calls the
-  service on its UI thread — a slow service shows as lag there (to move off the UI thread).
+  Tailscale route, which Chrome uses), and `FanSourcesCache` keeps a failure 60 s. Fan Control's status poll now
+  runs off its window thread too (next steps, 6).
 
 - **More sensors without new drivers (2026-11-18):** RAPL (package 58.8 W vs HSMP 56.5 W), effective clocks (idle
   2–700 MHz per core, ~49 MHz average), the ASUS EC's VRM1/VRM2/USB thermistor (39/36/46 °C vs HWiNFO's 38/35/45; three
@@ -229,12 +229,15 @@ crash): one documented value at a time, and commit before any hardware test.
    `packaging/windows/pawnio-src/AMDI2C.p` to PawnIO.Modules for signing.
 3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
    one alarm threshold and restore — the same flash-write rules as Linux.
-4. **GPU power limit live**: one card, Apply then Default; "Apply and keep" then a service restart to see it reapplied.
+4. ~~**GPU power limit live**~~ — **confirmed by the owner 2026-11-18**.
 5. **OpenFan vs OpenHW on Windows**: OpenFan is still running and OpenHW drives both RTX PRO 6000 cards' fans — confirm
    OpenFan isn't also driving them (`GpuFanDriver`'s OpenFan guard only knows OpenFan's Linux socket); retire OpenFan
-   once 3–4 are confirmed.
-6. **Fan Control's service calls off the UI thread**: it asks the service on its window thread, so any slow answer
-   shows as lag (seen 2026-11-18 while Redfish timed out).
+   once 3 is confirmed.
+6. ~~**Fan Control's service calls off the UI thread**~~ — **done 2026-11-18**: the 6-second status poll (fans, GPU
+   fans, BMC fan sources, BMC login) runs in the background and is applied on the window thread; a refresh asked for
+   while one runs is folded into it. Only the first one, when the window opens, waits. The BMC writes themselves (Apply,
+   Restore original, Apply all) stay on the window thread: each is one confirmed write and they edit the curve store
+   the window also edits.
 7. **BIOS Setup values**: UEFI variables through the service (`uefivars`, SeSystemEnvironmentPrivilege).
 8. **Super I/O NCT6798D** through PawnIO's LpcIO (Linux's nct6775 decoding + the WRX90E board profile) — low value here,
    the BMC reads the rails, temperatures and fans.

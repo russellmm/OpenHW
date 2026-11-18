@@ -152,8 +152,8 @@ public sealed class FanControlWindow : Window
             Update();
         };
         Opened += (_, _) => { _timer.Start(); Update(); };
-        Closed += (_, _) => { _timer.Stop(); _runner.Store.Changed -= OnStoreChanged; };
-        RefreshStatus(rebuild: true);
+        Closed += (_, _) => { _closed = true; _timer.Stop(); _runner.Store.Changed -= OnStoreChanged; };
+        RefreshStatus(rebuild: true, wait: true);
         BuildCurves();
     }
 
@@ -248,21 +248,60 @@ public sealed class FanControlWindow : Window
 
     // ── status from the helper ───────────────────────────────────────────────────────────────────────────────────
 
-    private void RefreshStatus(bool rebuild)
+    /// <summary>One round of the helper's fan status; fields left null when that request failed (the last answer stays).</summary>
+    private sealed record StatusReply(FanDriverStatus? Bmc, GpuFanDriverStatus? Gpu, IReadOnlyDictionary<int, long>? Sources,
+        bool LoginKnown, string? LoginUser, string? Error);
+
+    /// <summary>Asks the helper; no UI access, so it runs off the window thread (a slow service answer used to freeze the window).</summary>
+    private StatusReply FetchStatus()
     {
         static bool Soft(Exception ex) => ex is IOException or System.Net.Sockets.SocketException or System.Text.Json.JsonException or FormatException;
-        _error = null;
-        try { _bmc = _client.Status(); }
+        FanDriverStatus? bmc = null;
+        GpuFanDriverStatus? gpu = null;
+        IReadOnlyDictionary<int, long>? sources = null;
+        string? error = null, user = null;
+        var loginKnown = false;
+        try { bmc = _client.Status(); }
         catch (Exception ex) when (Soft(ex))
         {
-            _bmc = null;
-            _error = ex.Message.Contains("unknown command", StringComparison.Ordinal)
+            error = ex.Message.Contains("unknown command", StringComparison.Ordinal)
                 ? "openhw-helper is too old for fan control: install the current OpenHW .deb."
                 : "openhw-helper isn't answering: " + ex.Message.Replace("openhw-helper: err ", "");
         }
-        try { _gpu = _client.GpuStatus(); } catch (Exception ex) when (Soft(ex)) { _gpu = null; }
-        try { _sources = _client.Sources(); } catch (Exception ex) when (Soft(ex)) { }
-        try { _loginUser = _client.LoginUser(); } catch (Exception ex) when (Soft(ex)) { }
+        try { gpu = _client.GpuStatus(); } catch (Exception ex) when (Soft(ex)) { }
+        try { sources = _client.Sources(); } catch (Exception ex) when (Soft(ex)) { }
+        try { (user, loginKnown) = (_client.LoginUser(), true); } catch (Exception ex) when (Soft(ex)) { }
+        return new(bmc, gpu, sources, loginKnown, user, error);
+    }
+
+    private bool _fetching, _rebuildQueued, _closed;
+
+    /// <summary>
+    /// Refreshes the status in the background and applies it on the window thread; a refresh asked for while one is
+    /// running is folded into it. <paramref name="wait"/> (the constructor) asks right away, so the window opens filled in.
+    /// </summary>
+    private void RefreshStatus(bool rebuild, bool wait = false)
+    {
+        if (wait) { ApplyStatus(FetchStatus(), rebuild); return; }
+        _rebuildQueued |= rebuild;
+        if (_fetching) return;
+        _fetching = true;
+        Task.Run(FetchStatus).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+        {
+            _fetching = false;
+            var again = _rebuildQueued;
+            _rebuildQueued = false;
+            if (!_closed && t.IsCompletedSuccessfully) ApplyStatus(t.Result, again);
+        }), TaskScheduler.Default);
+    }
+
+    private void ApplyStatus(StatusReply reply, bool rebuild)
+    {
+        _error = reply.Error;
+        _bmc = reply.Bmc;
+        _gpu = reply.Gpu;
+        if (reply.Sources is not null) _sources = reply.Sources;
+        if (reply.LoginKnown) _loginUser = reply.LoginUser;
         _choices = _sensors.Choices();
 
         var notes = new List<string>();
@@ -405,6 +444,8 @@ public sealed class FanControlWindow : Window
     private void AfterSwitch()
     {
         BuildCurves();
+        BuildControls();
+        UpdateTitle();
         RefreshStatus(rebuild: true);
     }
 

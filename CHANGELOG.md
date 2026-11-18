@@ -7,6 +7,8 @@ once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
 
 Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.md).
 
+- Fan Control no longer freezes while the service is slow: its status poll runs in the background (all platforms).
+- GPU power limits on Windows confirmed live (2026-11-18).
 - OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
   (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
   toasts, single instance, start at login.
