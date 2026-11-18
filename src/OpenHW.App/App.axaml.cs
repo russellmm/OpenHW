@@ -517,12 +517,10 @@ public sealed class App : Application
     internal static string TrayText(double? value)
     {
         if (value is not { } v || !double.IsFinite(v)) return "--";
+        // Whole numbers only (owner, 0.39.3): "9.12 W" → "9", up to 9999; then thousands, "13k".
         var a = Math.Abs(v);
-        return a >= 9999.5 ? $"{v / 1000:0}k"
-            : a >= 999.5 ? $"{v / 1000:0.0}k"
-            : a >= 9.95 ? $"{v:0}"
-            : a >= 0.995 ? $"{v:0.0#}" // volts and small powers keep their decimals
-            : $"{v:0.##}";
+        return a >= 9999.5 ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Round(v / 1000, MidpointRounding.AwayFromZero):0}k")
+            : Math.Round(v, MidpointRounding.AwayFromZero).ToString("0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private void PowerChanged()

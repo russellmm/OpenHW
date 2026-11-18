@@ -63,10 +63,12 @@ public sealed class SettingsTests
     [InlineData(null, "--")]
     [InlineData(44.6, "45")]
     [InlineData(250.0, "250")]
-    [InlineData(5324.0, "5.3k")]
+    [InlineData(5324.0, "5324")]
     [InlineData(12500.0, "13k")]
-    [InlineData(1.25, "1.25")]
-    [InlineData(0.5, "0.5")]
+    [InlineData(9.12, "9")]
+    [InlineData(1.25, "1")]
+    [InlineData(0.5, "1")]
+    [InlineData(-3.6, "-4")]
     public void TrayTextFitsATile(double? value, string text) => Assert.Equal(text, App.TrayText(value));
 
     [Theory]

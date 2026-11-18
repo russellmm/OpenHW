@@ -7,6 +7,7 @@ once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
 
 - Large tray tiles: bigger text — digits 19 px (was 15), unit 14 px (was 11) on the same 22 px tile (owner: "room to
   grow the size of the text").
+- Tray tiles show **whole numbers** (rounded): "9.12W" → "9W", "1.25" → "1"; up to 9,999 in full, then "13k".
 
 ## 0.39.2 — 2026-11-17
 
