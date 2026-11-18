@@ -14,6 +14,9 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - Windows: the board VR (XDPE19283B) reads the memory rail on PAGE 1, switching PAGE and restoring it per read; Settings → Safety → "VR Page Select (PMBus write)" turns that write off.
 - Windows: Settings switches OpenHW doesn't act on (Safety, SMBus / I2C) are grayed.
 - Windows: fan control tested live (fixed duty, BMC curve, alarm threshold, each restored).
+- Windows, HWiNFO parity: virtual memory / page file rows; per-thread CPU utility and effective clocks; Core Ratio
+  and VID (Zen 5 P-state MSR); GPU power limit rated/max, % of TDP, memory usage, PCIe replays, per-engine usage and
+  D3D memory; UPS battery voltage and charging state; WireView fault rows. Linux unchanged.
 - OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
   (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
   toasts, single instance, start at login.

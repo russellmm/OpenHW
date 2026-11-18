@@ -281,7 +281,10 @@ crash): one documented value at a time, and commit before any hardware test.
     rights for OpenHW Users), the group, autostart, a PawnIO check; uninstall gives fans back.
 11. **Phase 5, parity with HWiNFO** — **coverage compared 2026-11-18** (HWiNFO run alone, read through its shared
     memory, against `openhw --dump`): [hwinfo-parity-windows.md](hwinfo-parity-windows.md) has every group, what is
-    covered, what differs only by name, the gaps and a suggested order. Then uninstall HWiNFO; retire OpenFan.
+    covered, what differs only by name, the gaps and a suggested order. **Gaps closed the same day** (system, CPU
+    utility / per-thread effective clocks / Core Ratio and VID, GPU limits, engines and D3D memory, UPS, WireView
+    faults — 03bc3d0). Left: Super I/O (needs Super I/O writes: owner's go-ahead), Memory Timings and EC VRM Vcore
+    (undocumented offsets), DIMMs (#2), and what signed modules / NVML can't reach. Then uninstall HWiNFO; retire OpenFan.
 
 Not reachable with signed modules (left unless a module appears): the chipset (xHCI) temperature, SVI3 telemetry and
 per-core/L3 temperatures (the SMU's PM table — the RyzenSMU module works through the SMU mailbox; only with AMD/PawnIO

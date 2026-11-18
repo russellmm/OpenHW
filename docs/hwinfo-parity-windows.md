@@ -5,6 +5,29 @@ HWiNFO64 8.54 (sensors-only, run alone — OpenHW's app and service stopped) rea
 before. Rows were matched by name; per-core / per-thread rows are counted once. Values were idle. Serial numbers are
 left out.
 
+## Closed the same day (03bc3d0, checked live against HWiNFO's values)
+
+- **System**: Virtual Memory Available, Page File Total (586,752 MB, = HWiNFO), Page File Used.
+- **CPU**: per-thread Utility (`% Processor Utility`) and Total CPU Utility; per-thread effective clocks under each
+  core's row; **Core n Ratio and Core n VID** from MSR_HARDWARE_PSTATE_STATUS (PawnIO's AMDFamily17 read list; Zen 5
+  layout — FID × 5 MHz, VID 0.245 V + 5 mV/step — matches HWiNFO: 45.25× / 0.995 V, 25× / 0.765 V).
+- **GPU** (`WindowsGpuExtras`, wrapping the NVML engine; Linux unchanged): power limit rated / max (180 / 198 W on the
+  5060 Ti, 600 / 600 W on the PRO 6000s, = HWiNFO), Total GPU Power [% of TDP], GPU Memory Usage, PCIe replay count;
+  per-engine usage (D3D, Video Decode/Encode 0…n, Computing Compute_0/1/Cuda, VR, Graphics) and D3D memory dedicated /
+  dynamic from Windows' GPU Engine / Adapter Memory counters, matched to each card by adapter LUID → PCI bus.
+- **UPS**: Battery Voltage (27.3 V — CyberPower reports it in PowerSummary), Charging / Discharging.
+- **WireView**: HWiNFO's six fault rows (chip/sensor temperature, total/wire over-current, power, imbalance) under
+  Faults (Status) and Faults (Log); OpenHW's own imbalance % is now "Wire Current Imbalance".
+- **HSMP**: nothing to add — CPU Package Power (HSMP) is HWiNFO's CPU PPT, the "Frequency Limited by …" rows cover the
+  throttle flags; HSMP gives neither UCLK nor the read/write bandwidth split.
+
+**Left, and why**: Super I/O NCT6798D — reachable with PawnIO's LpcIO, but it means Super I/O writes (config-mode key,
+device select, bank select on every read), so it waits for the owner's go-ahead; the BMC already reads its rails and
+fans. Memory Timings — the UMC timing registers' SMN offsets for Zen 5 aren't documented to us (no guessing at
+SMN reads); the configured timings show in BIOS Setup. EC VRM Vcore voltage / current — the WRX90E EC's register
+offsets aren't documented to us. DIMMs — the AMDI2C one-boot test. Not reachable with signed modules or NVML: the
+PM-table rows, the chipset temperature, NVIDIA's private-API rows. PresentMon — out of scope.
+
 Legend: **✓** covered · **≈** covered under other names · **gap** missing (with what it would take).
 
 | HWiNFO group | OpenHW | Gaps |
