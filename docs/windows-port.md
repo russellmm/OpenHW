@@ -39,7 +39,7 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
 | WireView Pro II | **done** (in the app, COM port; HWiNFO's grouping and names on Windows) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
 | UPS | **done** (USB HID, CyberPower CP2000PFCRM2U) | `WindowsHidUps` answers NUT's LIST UPS/VAR for `NutEngine` |
 | Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
-| Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far) | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
+| Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far; reads PAGE 1 with a PAGE write + restore, Settings → Safety → "VR Page Select (PMBus write)") | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
 | DIMM SPD hub/PMIC | **waiting on a test boot** | on the FCH DesignWare I2C controllers (AMDI0010), not the SMBus: OpenHW's module `AMDI2C` is written and compiles; the official PawnIO won't load it until its author signs it; a test build of the driver is ready |
 | RAPL package + cores power | **done** | `WindowsRapl` (AMDFamily17 MSRs) → Linux's `RaplEngine` rows |
 | Effective clocks per core + average | **done** | `WindowsEffectiveClocks` (APERF per logical CPU) → `WindowsEffectiveClockEngine` |
@@ -218,6 +218,17 @@ In order; anything that writes to the BMC, the CPU, the GPUs or a bus device onl
 the owner present. **Never sweep** firmware mailboxes, MSRs, EC/Super I/O registers or bus addresses (the 2026-11-18
 crash): one documented value at a time, and commit before any hardware test.
 
+0. **Board VR page select (done 2026-11-18, owner present)**: the WRX90E leaves the XDPE19283B on PAGE 0, an unused
+   loop (0 V out, POWER_GOOD# set), so the VR rows were blank. `--vr-page-test` (one PAGE = 1 write, read, PAGE = 0
+   back) showed the rail on PAGE 1: 1.25 V out (the EXPO DRAM voltage), 12.02 V in, 8.1 A / 0.75 A, 10 W / 9 W,
+   41/42 °C. The service now answers `vr page` by writing PAGE = 1, reading and writing the original back, all inside
+   one hold of `Global\Access_SMBUS.HTP.Method` (only from PAGE 0; any other value is read as it is); plain `vr`
+   never writes. The app asks for `vr page` only while **Settings → Safety → "VR Page Select (PMBus write)"** is on
+   (default on; off = nothing written to the VR, rows blank).
+   - **Settings switches that do nothing are grayed on Windows** (owner, 2026-11-18): on Safety only S.M.A.R.T.
+     Support, Enable NVML and VR Page Select act; on SMBus / I2C only SMBus Support. **Linux: still all live — check
+     which do nothing there and gray those too** (on the next Linux boot, with step 1). "EC Support" could later
+     turn off the ASUS EC reads (they use the ACPI EC command ports).
 1. **On the next Linux boot**: run both test suites (expected unchanged — every Windows change is gated); check OpenHW
    there loads the shared fan configuration `/mnt/DriveC/StandAlone/OpenHW/configs` (Fan Control's title shows
    `fans.json`); compare a drive's `nvme-health:<id>` with the Windows ids.

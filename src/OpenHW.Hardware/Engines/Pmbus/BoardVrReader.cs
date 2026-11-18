@@ -5,8 +5,11 @@ namespace OpenHW.Hardware;
 /// <summary>
 /// A PMBus voltage regulator on a known board's SMBus: where it is (adapter name and address, found once with a
 /// read-only scan — tools/smbus-probe), its IC_DEVICE_ID to confirm it before every read, and which PAGE carries
-/// the board's rail. OpenHW never writes PAGE: the board firmware leaves it set, and the rail is reported only while
-/// it still is.
+/// the board's rail. On Linux OpenHW never writes PAGE: the board firmware leaves it set, and the rail is reported
+/// only while it still is. The exception is <c>Read(switchPage: true)</c> on a reader built with <c>canSwitchPage</c>
+/// (Windows, WRX90E-SAGE SE only): that board leaves PAGE on 0, an unused loop, so the reader sets the rail's page,
+/// reads, and puts the original back, as HWiNFO does (owner-approved and tested once with the owner present,
+/// 2026-11-18). The app asks for it only while Settings → Safety → "VR Page Select (PMBus write)" is on.
 /// </summary>
 public sealed record BoardVr(string VendorPrefix, string Board, string Adapter, int Address, byte[] DeviceId, string Chip, int RailPage)
 {
@@ -50,9 +53,20 @@ public sealed record PmbusSample(string Chip, byte Page, byte VoutMode, ushort V
     ushort Temp1, ushort Temp2, ushort Pout, ushort Pin, ushort Status);
 
 /// <summary>Root side: this board's VR (if it has a known one), confirmed by IC_DEVICE_ID, read with PMBus reads only.</summary>
-public sealed class BoardVrReader(ISmbusProvider buses, BoardVr? vr, string sysRoot = "/sys", int? adapterNumber = null)
+public sealed class BoardVrReader(ISmbusProvider buses, BoardVr? vr, string sysRoot = "/sys", int? adapterNumber = null,
+    bool canSwitchPage = false, Func<Func<PmbusSample?>, PmbusSample?>? exclusive = null)
 {
-    public PmbusSample? Read()
+    /// <summary>True when this board's reader may switch PAGE (and does, when asked).</summary>
+    public bool CanSwitchPage => canSwitchPage;
+
+    /// <summary>One sample; <paramref name="switchPage"/> (honoured only with canSwitchPage) reads the rail's page.</summary>
+    public PmbusSample? Read(bool switchPage = false)
+    {
+        var allowed = switchPage && canSwitchPage;
+        return exclusive is null ? ReadOnce(allowed) : exclusive(() => ReadOnce(allowed));
+    }
+
+    private PmbusSample? ReadOnce(bool switchPage)
     {
         if (vr is null) return null;
         // Windows passes the FCH port; Linux finds the adapter by name in sysfs.
@@ -63,12 +77,25 @@ public sealed class BoardVrReader(ISmbusProvider buses, BoardVr? vr, string sysR
             using var bus = buses.Open(adapter.Value);
             var a = vr.Address;
             if (!bus.ReadBlock(a, 0xAD).SequenceEqual(vr.DeviceId)) return null; // not the expected chip: read nothing else
-            return new PmbusSample(vr.Slug, bus.ReadByte(a, 0x00), bus.ReadByte(a, 0x20),
-                bus.ReadWord(a, 0x88), bus.ReadWord(a, 0x89), bus.ReadWord(a, 0x8B), bus.ReadWord(a, 0x8C),
-                bus.ReadWord(a, 0x8D), bus.ReadWord(a, 0x8E), bus.ReadWord(a, 0x96), bus.ReadWord(a, 0x97), bus.ReadWord(a, 0x79));
+            if (switchPage)
+            {
+                // Only between the two pages seen on this chip: anything else is left alone and read as it is.
+                var page = bus.ReadByte(a, 0x00);
+                if (page != vr.RailPage && page == 0)
+                {
+                    bus.WriteByte(a, 0x00, (byte)vr.RailPage);
+                    try { return Sample(bus, a); }
+                    finally { bus.WriteByte(a, 0x00, page); }
+                }
+            }
+            return Sample(bus, a);
         }
         catch (IOException) { return null; }
     }
+
+    private PmbusSample Sample(ISmbus bus, int a) => new(vr!.Slug, bus.ReadByte(a, 0x00), bus.ReadByte(a, 0x20),
+                bus.ReadWord(a, 0x88), bus.ReadWord(a, 0x89), bus.ReadWord(a, 0x8B), bus.ReadWord(a, 0x8C),
+                bus.ReadWord(a, 0x8D), bus.ReadWord(a, 0x8E), bus.ReadWord(a, 0x96), bus.ReadWord(a, 0x97), bus.ReadWord(a, 0x79));
 
     /// <summary>"xdpe19283b 01 18 d302 b380 015a cbb0 0026 0025 d2d0 d278 0002" (chip, PAGE, VOUT_MODE, then the words).</summary>
     public static string Format(PmbusSample s) =>

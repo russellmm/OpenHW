@@ -120,6 +120,12 @@ public sealed class AppSettings
     /// <summary>DIMM and board VR sensors on the SMBus (through openhw-helper).</summary>
     public bool ReadSmbus { get; set; } = true;
 
+    /// <summary>
+    /// Windows: the board VR is read on its rail's page — the service writes the VR's PAGE register and puts it back
+    /// (the WRX90E leaves it on an unused loop). Off: nothing is written to the VR and its rows stay blank.
+    /// </summary>
+    public bool VrPageSelect { get; set; } = true;
+
     /// <summary>NVMe S.M.A.R.T. health readings (through openhw-helper); drive temperatures from hwmon stay.</summary>
     public bool ReadSmart { get; set; } = true;
 

@@ -325,6 +325,7 @@ public sealed class App : Application
     private void ApplyReading()
     {
         _hub.SetReaders(_settings.ReadNvidia, _settings.ReadSmbus, _settings.ReadSmart);
+        Sensors.SensorHub.VrPageSelect = _settings.VrPageSelect;
         _hub.SetAverageSamples(_settings.AverageSamples);
         WindowPlaces.Validate = _settings.ValidateWindowPositions;
     }

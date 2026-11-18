@@ -126,7 +126,8 @@ public sealed class MainSettingsWindow : ClassicDialog
         p.Radio("Low-level IO Access", "drive-scan", 40, 170);
         p.Radio("Disable Drive Scan", "drive-scan", 40, 202);
         p.Check("CSMI SAS Support", 40, 242, true);
-        Bind(p.Check("S.M.A.R.T. Support", 40, 272, true), _settings, _applied, () => _settings.ReadSmart, v => _settings.ReadSmart = v,
+        var smart = p.Check("S.M.A.R.T. Support", 40, 272, true);
+        Bind(smart, _settings, _applied, () => _settings.ReadSmart, v => _settings.ReadSmart = v,
             "Read the NVMe drives' S.M.A.R.T. health (through openhw-helper). Off: those readings leave the list; drive temperatures stay.");
         p.Check("ATA Statistics Support", 40, 302, true);
 
@@ -144,6 +145,12 @@ public sealed class MainSettingsWindow : ClassicDialog
             ("ACPI AML Enumeration", 422, false), ("Intel ME Support", 452, true), ("Intel SVID Support", 482, true),
         ];
         foreach (var (text, y, on) in middle) p.Check(text, 351, y, on);
+        CheckBox? vrPage = null;
+        if (OperatingSystem.IsWindows())
+            Bind(vrPage = p.Check("VR Page Select (PMBus write)", 351, 302, true), _settings, _applied, () => _settings.VrPageSelect, v => _settings.VrPageSelect = v,
+                "Read the board VR on its rail's page: the service sets the VR's PAGE register before each read and puts it back " +
+                "right after, as HWiNFO does (this board leaves it on an unused loop). Off: nothing is written to the VR and " +
+                "its rows stay blank.");
 
         (string Text, double Y, bool On)[] right =
         [
@@ -153,14 +160,25 @@ public sealed class MainSettingsWindow : ClassicDialog
         var rightChecks = right.Select(c => p.Check(c.Text, 675, c.Y, c.On)).ToList();
         Bind(rightChecks[0], _settings, _applied, () => _settings.ReadNvidia, v => _settings.ReadNvidia = v,
             "Read the NVIDIA GPUs (NVML, through openhw-helper). Off: the GPU sensors leave the list. GPU Lending works either way.");
+        // Windows: the rest of HWiNFO's switches have nothing behind them yet, so they're grayed (owner, 2026-11-18).
+        // Linux still shows them all live — to gray there too once checked which do nothing (docs/windows-port.md).
+        if (OperatingSystem.IsWindows()) GrayUnwired(p, smart, rightChecks[0], vrPage);
         return p;
+    }
+
+    /// <summary>Grays every switch on <paramref name="page"/> except <paramref name="wired"/>: the HWiNFO switches OpenHW doesn't act on.</summary>
+    private static void GrayUnwired(ClassicPage page, params Control?[] wired)
+    {
+        foreach (var control in page.Children.OfType<Avalonia.Controls.Primitives.ToggleButton>().Where(c => !wired.Contains(c)))
+            control.IsEnabled = false;
     }
 
     // Main_Settings_SMBus_I2C.jpg — page frame at (12, 85).
     private ClassicPage SmbusI2c()
     {
         var p = new ClassicPage(12, 85);
-        Bind(p.Check("SMBus Support", 44, 113, true), _settings, _applied, () => _settings.ReadSmbus, v => _settings.ReadSmbus = v,
+        var smbus = p.Check("SMBus Support", 44, 113, true);
+        Bind(smbus, _settings, _applied, () => _settings.ReadSmbus, v => _settings.ReadSmbus = v,
             "Read the DIMM and board VR sensors on the SMBus (through openhw-helper). Off: those sensors leave the list.");
         p.Group("SMBus Device Exclusion", 30, 158, 449, 390, 40);
         // 8 rows (0x–7x) × 16 columns (x0–xF) of 7-bit addresses; HWiNFO excludes 0x00–0x0F by default.
@@ -186,6 +204,7 @@ public sealed class MainSettingsWindow : ClassicDialog
         p.Check("GPU I2C Caching", 489, 368, true);
         p.Button("Reset GPU I2C Cache", 489, 390, 745, 446);
         p.Check("Force GPU I2C Support", 489, 473);
+        if (OperatingSystem.IsWindows()) GrayUnwired(p, smbus); // as on Safety: only SMBus Support acts
         return p;
     }
 

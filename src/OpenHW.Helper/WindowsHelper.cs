@@ -152,7 +152,7 @@ internal static class WindowsHelper
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
                 redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans, vr: _vr),
-            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel, _rapl, _clocks);
+            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel, _rapl, _clocks, _vr);
 
         private readonly WindowsEffectiveClocks _clocks = new(() => PawnIo.Open("AMDFamily17", out _));
 
@@ -163,7 +163,11 @@ internal static class WindowsHelper
         // The chipset SMBus through PawnIO (null without it): the board VR now, the DIMMs next.
         private static readonly WindowsSmbusProvider? Smbus = WindowsSmbusProvider.Open(out _);
         private readonly BoardVrReader? _vr = Smbus is null ? null
-            : new BoardVrReader(Smbus, BoardVrs.ForWindows(WindowsMachine.BoardVendor, WindowsMachine.BoardName), adapterNumber: 0);
+            : new BoardVrReader(Smbus, BoardVrs.ForWindows(WindowsMachine.BoardVendor, WindowsMachine.BoardName), adapterNumber: 0,
+                // The WRX90E leaves PAGE on 0: set the rail's page, read and restore, holding the shared SMBus mutex
+                // for the whole read so no other tool sees the other page (BoardVrReader; tested with the owner 2026-11-18).
+                canSwitchPage: BoardVrs.WindowsKnown.Any(v => v.Matches(WindowsMachine.BoardVendor, WindowsMachine.BoardName)),
+                exclusive: read => HardwareMutex.Hold(HardwareMutex.Smbus, read));
 
         private readonly WindowsHsmpSensors _hsmpSensors = new(() => WindowsHsmp.Open(out _));
 

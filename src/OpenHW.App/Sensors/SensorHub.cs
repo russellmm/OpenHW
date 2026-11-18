@@ -8,6 +8,12 @@ namespace OpenHW.App.Sensors;
 /// </summary>
 public sealed class SensorHub : IDisposable
 {
+    /// <summary>
+    /// Windows: ask the service to switch the board VR to its rail's PAGE for each read (a PMBus write, put back right
+    /// after). Settings → Safety → "VR Page Select (PMBus write)"; off = the service writes nothing to the VR.
+    /// </summary>
+    public static volatile bool VrPageSelect = true;
+
     private readonly HwmonEngine? _hwmon;
     // GPUs come from openhw-helper on Linux: the app never opens a card (see HelperGpuEngine), so the card filter can
     // hide it from the app while it's lent. Windows has no card filter: the app reads NVML (nvml.dll) itself.
@@ -32,7 +38,7 @@ public sealed class SensorHub : IDisposable
             _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), new OpenHW.Hardware.Windows.WindowsEffectiveClockEngine(),
                 new HwmonEngine(new OpenHW.Hardware.Windows.WindowsKernelSensorsReader(), OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName),
                 new OpenHW.Hardware.Windows.WindowsHsmpEngine(), new RaplEngine(), new OpenHW.Hardware.Windows.WindowsWheaEngine(),
-                new BoardVrEngine(vr: BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
+                new BoardVrEngine(() => HelperClient.Request(VrPageSelect ? "vr page" : "vr"), BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
             return;
         }
         _hwmon = new HwmonEngine();
