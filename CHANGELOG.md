@@ -3,6 +3,11 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.39.1 — 2026-11-17
+
+- Large tray tiles: each icon's tile files are keyed by the icon itself (not its position while the list is still
+  being built at start), and files of removed icons are deleted — 0.39.0 left a few dozen stale SVGs at start-up.
+
 ## 0.39.0 — 2026-11-17
 
 - **Large tray tiles** (Tray Icons → "Large tiles", on by default): each tray value is drawn at panel text size —

@@ -70,6 +70,19 @@ public static class TrayTileSvg
     private static double Measure(string text, double size) =>
         text.Length == 0 ? 0 : new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Bold, size, Brushes.White).WidthIncludingTrailingWhitespace;
 
+    /// <summary>Removes the files of tiles whose icon is gone (an icon removed or the list rebuilt).</summary>
+    public static void Prune(IEnumerable<string> liveKeys)
+    {
+        var live = liveKeys.ToHashSet(StringComparer.Ordinal);
+        lock (Last)
+            foreach (var key in Last.Keys.Where(k => !live.Contains(k)).ToList())
+            {
+                foreach (var f in new[] { Last[key].Path, Last[key].Previous })
+                    if (f is not null) try { File.Delete(f); } catch (IOException) { }
+                Last.Remove(key);
+            }
+    }
+
     /// <summary>
     /// Writes the tile for one tray icon and returns its absolute path. Unchanged text/unit/colour → the same file (no
     /// write, no NewIcon); a change → a new file name, and the one before the previous is removed.

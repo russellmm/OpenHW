@@ -485,7 +485,7 @@ public sealed class App : Application
             var small = unit == "°" ? "" : unit;
             string tile = "";
             if (_settings.TrayLargeTiles)
-                try { tile = TrayTileSvg.Write(config.SensorId + "@" + _trayIcons.IndexOf((config, icon)), digits, small, config.Colour); }
+                try { tile = TrayTileSvg.Write(TileKey(config), digits, small, config.Colour); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { tile = ""; } // falls back to the square pixmaps
             icon.Update(TrayIconRenderer.Render(digits, config.Colour, small), "OpenHW · " + info[0], _trayInfo[config].Tooltip, tile);
             // The info lines are the menu's first items (ids 1..InfoLines). Same number of lines: update their labels in
@@ -494,7 +494,12 @@ public sealed class App : Application
             if (old.Count != info.Count) icon.RefreshMenu();
             else if (!old.SequenceEqual(info)) icon.RefreshMenuItems(Enumerable.Range(1, InfoLines));
         }
+        if (_settings.TrayLargeTiles) TrayTileSvg.Prune(_trayIcons.Select(t => TileKey(t.Config)));
     }
+
+    /// <summary>A tray icon's tile-file key: stable for as long as the icon exists (its settings object), whatever the order.</summary>
+    private static string TileKey(TraySensor config) =>
+        config.SensorId + "#" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(config).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// What a tray tile shows after the digits: "°" for any temperature (drawn full size, "32°"), the one-letter units

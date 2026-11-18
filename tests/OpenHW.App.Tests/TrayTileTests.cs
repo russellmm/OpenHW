@@ -30,6 +30,8 @@ public sealed class TrayTileTests
         Assert.True(Path.IsPathRooted(c) && c.EndsWith(".svg", StringComparison.Ordinal));
         Assert.False(File.Exists(a));
         Assert.True(File.Exists(b) && File.Exists(c));
+        TrayTileSvg.Prune(["other"]); // test@0's icon is gone
+        Assert.False(File.Exists(b) || File.Exists(c));
 
         if (Environment.GetEnvironmentVariable("OPENHW_CAPTURES") is { } dir)
         {
