@@ -11,11 +11,11 @@ using OpenHW.Hardware;
 namespace OpenHW.App.Power;
 
 /// <summary>
-/// Power → Power Limits on Windows: each NVIDIA card's limit, live and kept. Like the Linux window, every change goes
+/// Power → Power Limits on Windows: the CPU socket limit (PPT) and each NVIDIA card's limit, live and kept. Like the Linux window, every change goes
 /// through the helper (here the OpenHW Helper service), which checks the range and reads the result back. A live limit
 /// lasts until the driver resets (reboot); "Keep" stores it by card UUID in the service, which applies it every time it
-/// starts — Windows has no nvidia-power-limit.service. The CPU socket limit needs kernel access (the HSMP mailbox) and
-/// comes with that phase of the port (docs/windows-port.md).
+/// starts — Windows has no nvidia-power-limit.service or hsmp-control. The CPU limit goes through AMD's own HSMP driver
+/// in the service (<see cref="OpenHW.Hardware.Windows.WindowsCpuPowerLimits"/>), with the Linux rules (50 W to the SMU's maximum).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPowerLimitsWindow : Window
@@ -29,6 +29,8 @@ public sealed class WindowsPowerLimitsWindow : Window
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private IReadOnlyList<GpuPowerLimit> _gpusNow = [];
     private IReadOnlyDictionary<string, long> _saved = new Dictionary<string, long>();
+    private CpuPowerLimit? _cpuNow;
+    private string? _cpuError;
     private bool _busy;
 
     public WindowsPowerLimitsWindow(IGpuPowerLimitReader gpus)
@@ -44,23 +46,7 @@ public sealed class WindowsPowerLimitsWindow : Window
 
         Read();
         var sections = new StackPanel { Spacing = 2 };
-        sections.Children.Add(new Border
-        {
-            Background = Palette.RowB, Margin = new Thickness(8, 4), Padding = new Thickness(10, 8), CornerRadius = new CornerRadius(3),
-            Child = new StackPanel
-            {
-                Spacing = 6,
-                Children =
-                {
-                    new TextBlock { Text = "CPU socket power limit (PPT)", FontWeight = FontWeight.SemiBold },
-                    new TextBlock
-                    {
-                        Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap,
-                        Text = "Not on Windows yet: the limit is set through the CPU's HSMP mailbox, which needs the kernel-access driver (next phase of the Windows port).",
-                    },
-                },
-            },
-        });
+        sections.Children.Add(CpuSection());
         var index = 0;
         foreach (var g in _gpusNow)
         {
@@ -89,6 +75,54 @@ public sealed class WindowsPowerLimitsWindow : Window
         _timer.Tick += (_, _) => RefreshLive();
         Opened += (_, _) => _timer.Start();
         RefreshLive();
+    }
+
+    // The CPU socket limit (PPT) through AMD's HSMP driver, in the service. Without it, the reason.
+    private Control CpuSection()
+    {
+        const string title = "CPU socket power limit (PPT)";
+        var text = new TextBlock { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
+        var children = new StackPanel { Spacing = 6, Children = { new TextBlock { Text = title, FontWeight = FontWeight.SemiBold }, text } };
+        var border = new Border
+        {
+            Background = Palette.RowB, Margin = new Thickness(8, 4), Padding = new Thickness(10, 8), CornerRadius = new CornerRadius(3), Child = children,
+        };
+        if (_cpuNow is not { } c)
+        {
+            text.Text = "Not available: " + (_cpuError ?? "the OpenHW Helper service isn't answering.") +
+                        " It uses AMD's HSMP driver (AMD chipset drivers; HSMP enabled in the BIOS).";
+            return border;
+        }
+        _live.Add((() => _cpuNow is { } now
+            ? $"Limit {W(now.LimitMW)} · drawing {(now.DrawMW is { } d ? W(d) : "–")} · range {W(CpuPowerLimit.MinMW)}–{W(now.MaxMW)}"
+            : "Not available", text));
+        var keptText = new TextBlock { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
+        _live.Add((() => _cpuNow?.BootMW is { } k ? $"Kept: {W(k)}, applied when the service starts" : "Kept: none (the firmware's limit at boot)", keptText));
+        var value = new NumericUpDown
+        {
+            Width = 130, Increment = 5, FormatString = "0", Minimum = CpuPowerLimit.MinMW / 1000m, Maximum = c.MaxMW / 1000m,
+            Value = (c.BootMW ?? c.LimitMW) / 1000m, VerticalAlignment = VerticalAlignment.Center,
+        };
+        children.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Limit (W)", VerticalAlignment = VerticalAlignment.Center }, value,
+                TextButton("Apply", () =>
+                {
+                    if (value.Value is { } watts) _ = RunAsync([$"cpuppt {(long)Math.Round(watts * 1000m)}"], $"CPU: limit set to {watts:0} W.");
+                }),
+                TextButton("Apply and keep", () =>
+                {
+                    if (value.Value is { } watts)
+                        _ = RunAsync([$"cpuppt {(long)Math.Round(watts * 1000m)}", $"cpupptsave {(long)Math.Round(watts)}"], $"CPU: {watts:0} W now and at every start.");
+                }),
+                TextButton("Don't keep", () => _ = RunAsync(["cpupptsave none"], "CPU: nothing kept; the firmware's limit applies from the next boot.")),
+            },
+        });
+        children.Children.Add(keptText);
+        return border;
     }
 
     private Control Section(string title, string uuid, Func<string> describe, GpuPowerLimit card)
@@ -152,6 +186,16 @@ public sealed class WindowsPowerLimitsWindow : Window
     private void Read()
     {
         _gpusNow = _gpus.Read();
+        try
+        {
+            _cpuNow = GpuWire.Decode<CpuPowerLimit>(HelperClient.Request("cpupptread", receiveTimeoutMs: 4000));
+            _cpuError = null;
+        }
+        catch (Exception ex) when (ex is IOException or FormatException or System.Text.Json.JsonException)
+        {
+            _cpuNow = null;
+            _cpuError = ex.Message.Replace("openhw-helper: err ", "").Replace("openhw-helper: ", "");
+        }
         try { _saved = GpuWire.Decode<Dictionary<string, long>>(HelperClient.Request("gpupowersaved")) ?? []; }
         catch (Exception ex) when (ex is IOException or FormatException or System.Text.Json.JsonException) { }
     }

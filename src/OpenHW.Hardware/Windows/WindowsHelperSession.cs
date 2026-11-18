@@ -60,16 +60,38 @@ public sealed class SavedGpuPowerLimits(string? path = null)
 /// The Windows service's commands: the shared <see cref="HelperSession"/> (same protocol as Linux) plus the ones only
 /// Windows has — <c>gpupowersaved</c> (the saved limits, as GpuWire JSON) and <c>gpupowersave &lt;uuid&gt; &lt;W|none&gt;</c>
 /// (an enumerated card, within NVML's range for it). Linux keeps its boot limits in nvidia-power-limit.service's
-/// drop-in (<c>gpupowerboot</c>), which Windows doesn't have.
+/// drop-in (<c>gpupowerboot</c>), which Windows doesn't have. The CPU socket limit through AMD's HSMP driver
+/// (<see cref="WindowsCpuPowerLimits"/>): <c>cpupptread</c> (GpuWire JSON of <see cref="CpuPowerLimit"/>, BootMW = the
+/// kept value), <c>cpuppt &lt;mW|boot&gt;</c> (as on Linux; "boot" = the kept value) and <c>cpupptsave &lt;W|none&gt;</c>.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved)
+public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
+    WindowsCpuPowerLimits? cpuPower = null)
 {
     public string HandleLine(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         switch (parts)
         {
+            case ["cpupptread"]:
+                if (cpuPower is null) return "err CPU power limit unavailable";
+                return cpuPower.Read() is { } now ? "ok " + GpuWire.Encode(now) : "err " + (cpuPower.Error ?? "CPU power limit unavailable");
+            case ["cpuppt", var value]:
+                if (cpuPower is null) return "err CPU power limit unavailable";
+                if (value != "boot" && !MilliWatts().IsMatch(value)) return "err expected mW or boot";
+                try { return "ok " + cpuPower.Set(value == "boot" ? null : long.Parse(value, CultureInfo.InvariantCulture)).ToString(CultureInfo.InvariantCulture); }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (IOException ex) { return "err " + ex.Message; }
+            case ["cpupptsave", var value]:
+                if (cpuPower is null) return "err CPU power limit unavailable";
+                if (value != "none" && !Watts().IsMatch(value)) return "err expected W or none";
+                try
+                {
+                    cpuPower.Keep(value == "none" ? null : long.Parse(value, CultureInfo.InvariantCulture) * 1000);
+                    return "ok " + (cpuPower.Saved() is { } kept ? (kept / 1000).ToString(CultureInfo.InvariantCulture) : "none");
+                }
+                catch (ArgumentException ex) { return "err " + ex.Message; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "err " + ex.Message; }
             case ["gpupowersaved"]:
                 return saved is null ? "err saved limits unavailable" : "ok " + GpuWire.Encode(saved.Read());
             case ["gpupowersave", var uuid, var value]:
@@ -96,4 +118,7 @@ public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerL
 
     [GeneratedRegex("^[0-9]{1,4}$")]
     private static partial Regex Watts();
+
+    [GeneratedRegex("^[0-9]{1,7}$")]
+    private static partial Regex MilliWatts();
 }

@@ -32,6 +32,7 @@ internal static class WindowsHelper
         switch (args)
         {
             case ["--ipmi-check"]: return IpmiCheck();
+            case ["--hsmp-check"]: return HsmpCheck();
             case ["--install"]: return Install();
             case ["--uninstall"]: return Uninstall();
             case ["--once", .. var command] when command.Length > 0:
@@ -120,11 +121,12 @@ internal static class WindowsHelper
         }
 
         private readonly SavedGpuPowerLimits _savedGpuPower = new();
+        private readonly WindowsCpuPowerLimits _cpuPower = new(() => WindowsHsmp.Open(out _));
 
         public WindowsHelperSession Session() => new(
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans, redfish: _fans?.Status(null).Available == true ? _redfish : null,
                 loginPath: LoginPath, gpuFans: _gpuFans),
-            _gpuPower, _savedGpuPower);
+            _gpuPower, _savedGpuPower, _cpuPower);
 
         public bool GroupAccess => _server?.GroupAccess ?? false;
 
@@ -133,6 +135,10 @@ internal static class WindowsHelper
             // The saved GPU power limits, as nvidia-power-limit.service does at boot on Linux (OpenFan did this on Windows).
             try { foreach (var line in _savedGpuPower.Apply(_gpuPower)) Console.Error.WriteLine("openhw-helper: GPU power limit at start: " + line); }
             catch (Exception ex) when (ex is IOException or DllNotFoundException or EntryPointNotFoundException) { Console.Error.WriteLine("openhw-helper: GPU power limits: " + ex.Message); }
+            // The kept CPU power limit, as hsmp-control-apply.service does at boot on Linux.
+            if (_cpuPower.Saved() is { } cpu)
+                try { Console.Error.WriteLine($"openhw-helper: CPU power limit at start: {_cpuPower.Set(cpu)} mW"); }
+                catch (Exception ex) when (ex is IOException or ArgumentException) { Console.Error.WriteLine("openhw-helper: CPU power limit: " + ex.Message); }
             _server = new PipeHelperServer(() => Session().HandleLine);
             _server.Start();
         }
@@ -144,6 +150,7 @@ internal static class WindowsHelper
             _nvmlFans?.Dispose();
             _fans?.Dispose(); // every zone OpenHW drives goes back to its BMC curve
             _gpuPower.Dispose();
+            _cpuPower.Dispose();
             _bmc.Dispose();
         }
     }
@@ -206,6 +213,40 @@ internal static class WindowsHelper
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// --hsmp-check (elevated): HSMP's test message (1: the SMU answers its argument + 1) through AMD's driver, then
+    /// read-only queries — interface version (3), SMU firmware (2), socket power (4), power limit (6) and its maximum (7).
+    /// Nothing is set.
+    /// </summary>
+    private static int HsmpCheck()
+    {
+        using var hsmp = WindowsHsmp.Open(out var reason);
+        if (hsmp is null)
+        {
+            Console.WriteLine("no HSMP: " + reason);
+            return 1;
+        }
+        try
+        {
+            var reply = hsmp.SendRaw(WindowsHsmp.Request(1, [0x1234], 1));
+            Console.WriteLine("test 0x1234 -> reply " + Convert.ToHexString(reply));
+            var answer = BitConverter.ToUInt32(reply, 8);
+            if (answer != 0x1235)
+            {
+                Console.WriteLine($"unexpected answer 0x{answer:X}: the message layout isn't the one assumed; stopping.");
+                return 1;
+            }
+            foreach (var (name, id) in new[] { ("interface version", 3u), ("SMU firmware", 2u), ("socket power mW", 4u), ("power limit mW", 6u), ("power limit max mW", 7u) })
+                Console.WriteLine($"{name}: {hsmp.Send(id, [], 1)[0]}");
+            return 0;
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine(ex.Message);
             return 1;
         }
     }

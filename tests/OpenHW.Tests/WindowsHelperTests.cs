@@ -52,6 +52,19 @@ public sealed class WindowsHelperTests
         Assert.Equal("ok " + HelperSession.Version, session.HandleLine("ping")); // the shared commands still answer
     }
 
+    [Fact]
+    public void HsmpMessagesUseLinuxsStructLayoutIn48Bytes()
+    {
+        // Set the socket limit to 300 W: msg_id 5, one argument, no response, socket 0. The layout was confirmed on
+        // 2026-11-17 with HSMP's test message (0x1234 → 0x1235) through AMD's Windows driver.
+        var request = WindowsHsmp.Request(5, [300_000], 0);
+        Assert.Equal(48, request.Length);
+        Assert.Equal("05000000" + "0100" + "0000" + "E0930400" + new string('0', 56) + "0000" + "000000000000", Convert.ToHexString(request));
+        Assert.Throws<ArgumentException>(() => WindowsHsmp.Request(1, new uint[9], 0));
+        Assert.Equal("err CPU power limit unavailable",
+            new WindowsHelperSession(new HelperSession(new NoSmart()), null, null).HandleLine("cpuppt 300000"));
+    }
+
     [WindowsFact]
     public void WithoutTheServiceTheClientSaysSo()
     {

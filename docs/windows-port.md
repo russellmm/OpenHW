@@ -58,10 +58,20 @@ Windows.
   - Still to do in phase 2: exercise Fan Control (curves/thresholds) and a GPU limit live with the owner's go-ahead;
     NVIDIA fan control live; Redfish over LAN (`%ProgramData%\OpenHW\bmc-url`, then Fan Control → BMC login); UEFI
     variables for BIOS Setup; WireView (COM port).
-- **CPU power limit on Windows** (owner wants it): needs the HSMP mailbox over SMN → kernel access. OpenFan for Windows
-  already loads **PawnIO** (its `AMDFamily17.bin` module, SMN reads for Tctl/CCD temps) — so the kernel-access choice
-  is likely PawnIO, as OpenFan; whether its AMD module allows the SMN *writes* the mailbox needs is to be checked.
-  OpenFan's Windows source (E:\OpenAI\OpenFan) has GPU power limits only — no CPU limit found there.
+- **CPU power limit on Windows — done, through AMD's own HSMP driver** (owner: OpenHW, not Ryzen Master, sets it;
+  OpenFan never did). AMD's chipset package installs **AmdHSMPDriver.sys** (1.0.0.7, WHQL-signed, "AMD Host System
+  Management Port", on `ACPI\AMDI0097` — the device Linux's amd_hsmp binds; device ACL SYSTEM + Administrators). No
+  public interface, so it was read from the driver (2026-11-17): device interface `{dc142d67-9b96-4778-a0b3-b6d6eca590be}`,
+  one IOCTL **0x2203C8** (buffered), 48-byte in/out = Linux's `struct hsmp_message` (msg_id u32 @0, num_args u16 @4,
+  response_sz u16 @6, args u32[8] @8, sock_ind u16 @40). Confirmed live with HSMP's test message (0x1234 → 0x1235):
+  interface version 7, socket power ~61 W, PPT limit 350 W, SMU maximum 2000 W. `WindowsHsmp`, `WindowsCpuPowerLimits`
+  (messages 4/5/6/7, the Linux rules: 50 W to the SMU maximum, read back), service commands `cpupptread`,
+  `cpuppt <mW|boot>`, `cpupptsave <W|none>`; the kept value (`%ProgramData%\OpenHW\cpu-power-limit.json`) is applied
+  when the service starts. Power → Power Limits shows it. `openhw-helper --hsmp-check` (elevated) repeats the check.
+  **No limit set yet** — first write with the owner's go-ahead. No PawnIO needed for this; the same driver can serve
+  the other HSMP readings Linux shows (FCLK/MCLK, DRAM bandwidth, …) later.
+- Kernel access for Super I/O, Tctl/CCD temperatures and SMBus is still phase 3: OpenFan for Windows already loads
+  **PawnIO** (its `AMDFamily17.bin` module reads SMN), so PawnIO is the likely route there.
 
 ## Goal and scope (owner, 2026-11-16)
 
