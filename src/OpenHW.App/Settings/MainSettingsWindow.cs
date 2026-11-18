@@ -19,6 +19,7 @@ public sealed class MainSettingsWindow : ClassicDialog
     private readonly Action _applied;
     private CheckBox _autoStart = null!, _startMinimized = null!;
     private TextBlock _driverStatus = null!;
+    private readonly Func<string> _ping;
     private bool _showing; // showing saved values: not a user change
 
     public MainSettingsWindow(AppSettings settings, Action applied, Func<string>? ping = null)
@@ -35,8 +36,9 @@ public sealed class MainSettingsWindow : ClassicDialog
         ShowSaved();
         settings.Saved += ShowSaved;
         Closed += (_, _) => settings.Saved -= ShowSaved;
-        ping ??= () => HelperClient.Request("ping");
-        Opened += async (_, _) => _driverStatus.Text = await Task.Run(() => HelperStatus(ping));
+        _ping = ping ??= () => HelperClient.Request("ping");
+        if (OperatingSystem.IsWindows()) Opened += async (_, _) => await ShowServiceAsync();
+        else Opened += async (_, _) => _driverStatus.Text = await Task.Run(() => HelperStatus(ping));
     }
 
     internal CheckBox AutoStartBox => _autoStart;
@@ -194,10 +196,43 @@ public sealed class MainSettingsWindow : ClassicDialog
         p.Label("Current Status:", 39, 127);
         var status = p.Readout("…", 215, 112, 349, 141);
         _driverStatus = (TextBlock)status.Child!;
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows: the OpenHW Helper service, started and stopped here (owner, 2026-11-18).
+            ToolTip.SetTip(status, "The OpenHW Helper Windows service: the BMC, fan control and power limits. Stopping it gives held fans back to their BMC curves.");
+            _serviceStart = p.Button("Start", 40, 181, 172, 222);
+            _serviceStop = p.Button("Stop", 216, 181, 348, 222);
+            _serviceStart.Click += (_, _) => _ = SetServiceAsync(run: true);
+            _serviceStop.Click += (_, _) => _ = SetServiceAsync(run: false);
+            p.Check("Persistent Driver", 40, 279, true).IsEnabled = false; // the service starts with Windows
+            return p;
+        }
         ToolTip.SetTip(status, "openhw-helper, OpenHW's root helper (HWiNFO's driver): installed with the .deb, run by systemd.");
         p.Button("Install", 40, 181, 172, 222);
         p.Button("Remove", 216, 181, 348, 222);
         p.Check("Persistent Driver", 40, 279);
         return p;
+    }
+
+    private Button? _serviceStart, _serviceStop;
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private async Task SetServiceAsync(bool run)
+    {
+        _serviceStart!.IsEnabled = _serviceStop!.IsEnabled = false;
+        _driverStatus.Text = run ? "Starting…" : "Stopping…";
+        var error = await Task.Run(() => WindowsHelperService.Set(run));
+        await ShowServiceAsync();
+        if (error is not null) _driverStatus.Text = error;
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private async Task ShowServiceAsync()
+    {
+        var state = await Task.Run(WindowsHelperService.State);
+        _driverStatus.Text = state == "Running" ? await Task.Run(() => HelperStatus(_ping)) : state;
+        _serviceStart!.IsEnabled = state is "Stopped";
+        _serviceStop!.IsEnabled = state is "Running";
+        if (_driverStatus.Parent is Control box) ToolTip.SetTip(box, _driverStatus.Text);
     }
 }

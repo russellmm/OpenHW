@@ -16,5 +16,9 @@
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
   </ItemGroup>
+  <!-- Windows only: PawnIO.Modules' signed modules (LGPL-2.1) beside openhw-helper.exe, for WindowsKernelSensors. -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows')))">
+    <None Include="..\..\packaging\windows\pawnio\*" Link="pawnio\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

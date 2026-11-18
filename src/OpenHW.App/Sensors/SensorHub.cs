@@ -26,10 +26,12 @@ public sealed class SensorHub : IDisposable
     {
         if (OperatingSystem.IsWindows())
         {
-            // Windows (docs/windows-port.md): user-mode readers, and the BMC through the OpenHW Helper service. The
-            // WireView is still to come; Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
+            // Windows (docs/windows-port.md): user-mode readers (the WireView on its COM port too), and the BMC through
+            // the OpenHW Helper service. Super I/O, CPU temperatures and SMBus need kernel access (phase 3).
             _windowsNvme = new OpenHW.Hardware.Windows.WindowsNvmeEngine();
-            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, new NutEngine()];
+            _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(),
+                new HwmonEngine(new OpenHW.Hardware.Windows.WindowsKernelSensorsReader(), OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName),
+                new OpenHW.Hardware.Windows.WindowsHsmpEngine(), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
             return;
         }
         _hwmon = new HwmonEngine();
@@ -41,7 +43,7 @@ public sealed class SensorHub : IDisposable
     public BmcEngine Bmc { get; } = new();
 
     /// <summary>WireView Pro II power meters on USB (through the helper).</summary>
-    public WireViewEngine WireView { get; } = new();
+    public WireViewEngine WireView { get; } = OperatingSystem.IsWindows() ? new(OpenHW.Hardware.Windows.WindowsWireView.Request) : new();
 
     public SensorStatistics Statistics { get; } = new();
 

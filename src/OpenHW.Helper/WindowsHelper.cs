@@ -146,7 +146,11 @@ internal static class WindowsHelper
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
                 redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
                 loginPath: LoginPath, gpuFans: _gpuFans),
-            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null);
+            _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel);
+
+        private readonly WindowsKernelSensors _kernel = new();
+
+        private readonly WindowsHsmpSensors _hsmpSensors = new(() => WindowsHsmp.Open(out _));
 
         /// <summary>The fans' Redfish sources, read once and kept while the service runs (see <see cref="FanSourcesCache"/>).</summary>
         private readonly FanSourcesCache _sources = new();
@@ -174,6 +178,8 @@ internal static class WindowsHelper
             _fans?.Dispose(); // every zone OpenHW drives goes back to its BMC curve
             _gpuPower.Dispose();
             _cpuPower.Dispose();
+            _hsmpSensors.Dispose();
+            _kernel.Dispose();
             _bmc.Dispose();
         }
     }
@@ -290,6 +296,7 @@ internal static class WindowsHelper
         Run("net", "localgroup", HelperPipe.Group, "/add", "/comment:May use the OpenHW Helper service");
         var user = Environment.GetEnvironmentVariable("USERDOMAIN") is { Length: > 0 } domain ? $"{domain}\\{Environment.UserName}" : Environment.UserName;
         Run("net", "localgroup", HelperPipe.Group, user, "/add");
+        AllowStartStop();
         // The group counts only from the next sign-in: allow this account by SID too, so OpenHW works right away.
         if (System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value is { } sid)
         {
@@ -300,6 +307,32 @@ internal static class WindowsHelper
         Sc("start", ServiceName);
         Console.WriteLine($"Installed. {user} is in \"{HelperPipe.Group}\" (sign out and in again for the membership to apply).");
         return 0;
+    }
+
+    /// <summary>
+    /// Lets "OpenHW Users" and the installing account start, stop and query the service (Settings → Driver
+    /// Management), without elevation: the service's own access list gets one entry each (SERVICE_START, _STOP,
+    /// _QUERY_STATUS/CONFIG, _INTERROGATE, user-defined control, read). Nothing else changes.
+    /// </summary>
+    private static void AllowStartStop()
+    {
+        var sids = new List<string>();
+        try { sids.Add(((System.Security.Principal.SecurityIdentifier)new System.Security.Principal.NTAccount(HelperPipe.Group).Translate(typeof(System.Security.Principal.SecurityIdentifier))).Value); }
+        catch (System.Security.Principal.IdentityNotMappedException) { }
+        if (System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value is { } self) sids.Add(self);
+        var start = new ProcessStartInfo("sc.exe", ["sdshow", ServiceName]) { UseShellExecute = false, RedirectStandardOutput = true };
+        using var sdshow = Process.Start(start)!;
+        var sddl = sdshow.StandardOutput.ReadToEnd().Trim();
+        sdshow.WaitForExit();
+        if (!sddl.StartsWith("D:", StringComparison.Ordinal)) { Console.WriteLine("Couldn't read the service's permissions: " + sddl); return; }
+        var sacl = sddl.IndexOf("S:", StringComparison.Ordinal);
+        var dacl = sacl >= 0 ? sddl[..sacl] : sddl;
+        foreach (var sid in sids)
+        {
+            var ace = $"(A;;CCLCSWRPWPLOCRRC;;;{sid})";
+            if (!dacl.Contains(ace, StringComparison.OrdinalIgnoreCase)) dacl += ace;
+        }
+        Sc("sdset", ServiceName, dacl + (sacl >= 0 ? sddl[sacl..] : ""));
     }
 
     private static int Uninstall()

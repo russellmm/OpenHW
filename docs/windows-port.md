@@ -27,7 +27,8 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | NVMe: SMART, temperatures, activity (8 drives) | **done**, unelevated | `WindowsNvmeEngine` (query-only IOCTLs); ids = Linux's (to confirm on Linux) |
 | Network | **done** | `WindowsNetworkEngine` (GetIfTable2) |
 | BMC sensors, states, SEL, thresholds | **done** (read live) | service + `WmiIpmiTransport` |
-| CPU temperature | **BMC "CPU Package Temp"** for now | Tctl/CCD need kernel access (phase 3) |
+| CPU temperature (Tctl, CCD1–4) | **done** (PawnIO) | `K10Temp` (SMN, k10temp's map) as hwmon chip `k10temp` through `WindowsKernelSensorsReader` → `HwmonEngine` |
+| CPU Enhanced (HSMP: package power, PPT limit, FCLK/MCLK, frequency limit + sources, C0, DRAM bandwidth, PROCHOT) | **done** | `WindowsHsmpSensors` (service, `hsmpread`) → `WindowsHsmpEngine`, Linux's `hsmp:*` ids |
 | Fan configuration | **shared with Linux** (`C:\StandAlone\OpenHW\configs` = `/mnt/DriveC/StandAlone/OpenHW/configs`) | `OsFiles.SharedConfigDir`, `FanCurveStore` |
 | BMC fan zones, curves, alarm thresholds | **available, not written yet** | same `FanDriver` over WMI IPMI |
 | Redfish (fan sources, BIOS settings, access check) | **reachable; login saved** (2026-11-17) | BMC LAN address from IPMI, bound to the wired port |
@@ -35,9 +36,10 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | GPU power limits | **done, not written yet** | NVML in the service, kept by UUID |
 | NVIDIA fan control | **running** (both RTX PRO 6000 on their shared curves since 21:35) | `GpuFanDriver` (NVML) |
 | BIOS Setup values (UEFI variables) | to do | `GetFirmwareEnvironmentVariableExW` in the service |
-| WireView Pro II | to do | `SerialPort` on its COM port |
-| UPS (NUT) | not checked live | NUT client is portable |
-| Super I/O, Tctl/CCD, effective clocks, RAPL, SMBus (DIMM SPD/PMIC) | phase 3 | PawnIO (as OpenFan) |
+| WireView Pro II | **done** (in the app, COM port) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
+| UPS | **done** (USB HID, CyberPower CP2000PFCRM2U) | `WindowsHidUps` answers NUT's LIST UPS/VAR for `NutEngine` |
+| Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
+| Super I/O NCT6798D, ASUS EC, RAPL, SMBus (DIMM SPD hub/PMIC, Infineon XDPE VR) | **next** (PawnIO) | `LpcIO`, `LpcACPIEC`, `AMDFamily17` MSRs, `SmbusPIIX4` |
 | Installer | phase 4 | scripts for now; Inno Setup is on this PC |
 
 ## How it's installed on this PC
@@ -143,6 +145,17 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   to read, and only when an Apply changes a fan's sensors to write. The owner's BMC_Control project (`F:\Claude\BMC_Control`,
   reference only) confirmed the curve/mode commands over local IPMI; its finding that the BMC ignores stored curves
   in **Generic** mode is noted: OpenHW's fan driver refuses a BMC not in Manual (it is in Manual now).
+
+- **Kernel access, own PawnIO (2026-11-18).** OpenHW loads PawnIO.Modules' signed release 0.2.12 itself
+  (`packaging/windows/pawnio/`: AMDFamily17, SmbusPIIX4, LpcIO, LpcACPIEC, LGPL-2.1, copied beside openhw-helper.exe;
+  PawnIO's driver and PawnIOLib.dll come from its installer, already here via OpenFan). No LibreHardwareMonitor: a probe
+  showed it misreads this CPU (Tctl 85 °C vs 37 °C, bogus SVI2, no CCDs) and has no EC/DIMM/VR support here. The
+  service's `kernel` command reports hwmon-style chips (`KernelChannel`), the app's `WindowsKernelSensorsReader` is an
+  `ILibSensorsReader`, so `HwmonEngine` (board profiles, names, ids) is Linux's. Shared mutexes `Global\Access_PCI`,
+  `…SMBUS.HTP.Method`, `…ISABUS.HTP.Method`, `Global\Access_EC` (HWiNFO/OpenFan use the same). Live: Tctl 41.6 °C,
+  CCD 42.3/29.5/28.9/31.0 °C; HSMP FCLK 1950, MCLK 2600, limit 4529 MHz, 71 W.
+- **WireView** (COM5, VID 0483/PID 5740 from the registry) and the **UPS** (HID Power Device pages 0x84/0x85; CGS
+  units: exponent 7 = volts/watts) read in the app, no service.
 
 ## Next steps
 

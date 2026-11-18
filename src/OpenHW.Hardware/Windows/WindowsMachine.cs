@@ -60,9 +60,13 @@ internal static class NativeLibraries
     internal static void Register()
     {
         if (!OperatingSystem.IsWindows()) return;
-        NativeLibrary.SetDllImportResolver(typeof(NativeLibraries).Assembly, (name, assembly, path) =>
-            name == "libnvidia-ml.so.1" && NativeLibrary.TryLoad("nvml.dll", assembly, DllImportSearchPath.System32, out var handle)
-                ? handle
-                : 0);
+        // One resolver per assembly: NVML under its Linux name, and PawnIO's library from where its installer puts it
+        // (Program Files\PawnIO isn't on the DLL search path).
+        NativeLibrary.SetDllImportResolver(typeof(NativeLibraries).Assembly, (name, assembly, path) => name switch
+        {
+            "libnvidia-ml.so.1" when NativeLibrary.TryLoad("nvml.dll", assembly, DllImportSearchPath.System32, out var nvml) => nvml,
+            "PawnIOLib" when NativeLibrary.TryLoad(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PawnIO", "PawnIOLib.dll"), out var pawnio) => pawnio,
+            _ => 0,
+        });
     }
 }

@@ -97,13 +97,19 @@ public sealed class FanSourcesCache(Func<DateTime>? now = null)
 }
 
 public sealed partial class WindowsHelperSession(HelperSession shared, GpuPowerLimits? gpuPower, SavedGpuPowerLimits? saved,
-    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null)
+    WindowsCpuPowerLimits? cpuPower = null, FanSourcesCache? sources = null, WindowsHsmpSensors? hsmp = null, WindowsKernelSensors? kernel = null)
 {
     public string HandleLine(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         switch (parts)
         {
+            case ["kernel"]: // read-only: PawnIO readings as hwmon-style chips (WindowsKernelSensors)
+                if (kernel is null) return "err kernel access unavailable";
+                return "ok " + GpuWire.Encode(kernel.Read());
+            case ["hsmpread"]: // read-only: the CPU's HSMP readings (WindowsHsmpSensors)
+                if (hsmp is null) return "err HSMP unavailable";
+                return hsmp.Read() is { } values ? "ok " + GpuWire.Encode(values) : "err " + (hsmp.Error ?? "HSMP unavailable");
             case ["fansources"] when sources is not null:
                 return sources.Get(() => shared.HandleLine(line));
             case ["fansource", _, _] or ["fanoriginal", _] or ["bmclogin", _, _] or ["bmclogout"] when sources is not null:

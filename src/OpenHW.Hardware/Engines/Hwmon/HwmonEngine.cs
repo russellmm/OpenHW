@@ -7,12 +7,29 @@ namespace OpenHW.Hardware;
 /// </summary>
 public sealed class HwmonEngine : ISensorEngine
 {
-    private readonly LibSensorsBackend _libSensors = new();
+    private readonly LibSensorsBackend _libSensors;
     private readonly HwmonBackend _sysfs = new();
     private bool _usingLibSensors;
     private IReadOnlyDictionary<string, double> _scales = new Dictionary<string, double>();
-    private readonly string _boardVendor = SysFs.ReadText("/sys/class/dmi/id/board_vendor");
-    private readonly string _boardName = SysFs.ReadText("/sys/class/dmi/id/board_name");
+    private readonly string _boardVendor;
+    private readonly string _boardName;
+
+    public HwmonEngine()
+    {
+        _libSensors = new();
+        _boardVendor = SysFs.ReadText("/sys/class/dmi/id/board_vendor");
+        _boardName = SysFs.ReadText("/sys/class/dmi/id/board_name");
+    }
+
+    /// <summary>
+    /// Windows: the same engine over another source of hwmon-style chips (the OpenHW Helper service's PawnIO readers,
+    /// WindowsKernelSensors), so the board profiles, names and ids are Linux's.
+    /// </summary>
+    public HwmonEngine(ILibSensorsReader reader, string boardVendor, string boardName)
+    {
+        _libSensors = new(reader: reader);
+        (_boardVendor, _boardName) = (boardVendor, boardName);
+    }
 
     public string Name => "hwmon";
     public bool Available => _libSensors.Available || _sysfs.Available;

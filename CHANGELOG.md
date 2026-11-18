@@ -15,6 +15,9 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - **Power → Power Limits on Windows**: the CPU socket limit through AMD's own HSMP driver and each NVIDIA card's limit,
   live and kept (applied when the service starts).
 - `packaging\windows\build.ps1` (self-contained win-x64, mirrored to `C:\StandAlone\OpenHW`) and `install.ps1`.
+- **Windows sensors**: CPU Tctl and CCD temperatures (PawnIO, k10temp's registers), the CPU Enhanced group (HSMP),
+  WireView Pro II (COM port) and the UPS (USB HID), each in the same rows as on Linux.
+- **Settings → Driver Management on Windows**: start and stop the OpenHW Helper service, no admin prompt.
 - **BMC sensors no longer drop out while Fan Control is open (Windows)**: fan sources are read over HTTPS once per
   service run instead of every 2 s, one IPMI request at a time in the service, and a failed read keeps the BMC group
   for 30 s while the app retries.

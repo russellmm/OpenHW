@@ -116,7 +116,7 @@ public static partial class SensorPresentation
         if (key == BmcEngine.GroupKey)
             return (6, $"{vendor} {machine.BoardName} (BMC: {sample.Source.Split(' ')[0]})");
         if (key.StartsWith(NutEngine.GroupPrefix, StringComparison.Ordinal))
-            return (8, $"UPS: {sample.Source} (NUT)");
+            return (8, sample.Details?.Contains("(Windows HID)", StringComparison.Ordinal) == true ? $"UPS: {sample.Source}" : $"UPS: {sample.Source} (NUT)"); // Windows reads the UPS over USB HID
         if (key.StartsWith(WireViewEngine.GroupPrefix, StringComparison.Ordinal))
             // The device names itself "Thermal Grizzly WireView Pro II" (build info); older replies said "WireView Pro II".
             return (9, (sample.Source.StartsWith("Thermal Grizzly", StringComparison.Ordinal) ? sample.Source : "Thermal Grizzly " + sample.Source) + " (12V-2x6)");
