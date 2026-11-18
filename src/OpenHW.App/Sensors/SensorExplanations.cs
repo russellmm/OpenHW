@@ -196,6 +196,8 @@ public static partial class SensorExplanations
         R(@"Physical Memory Used|Physical Memory Available|Physical Memory Load", "RAM in use by programs and the kernel " +
             "(cache that can be freed counts as available)."),
         R(@"Swap Used|Swap Total|Swap Load", "Swap space on disk. Heavy swap use means RAM ran short and things slow down."),
+        R(@"Corrected Hardware Errors \((since boot|30 days)\)", "Hardware errors the CPU, memory or PCIe link detected and fixed (Windows WHEA log). Zero is normal; a growing count points at memory, an overclock or a PCIe device."),
+        R(@"Fatal Hardware Errors \(30 days\)", "Hardware errors that crashed the machine (Windows WHEA log, written on the next boot). Any count here is worth a look in Event Viewer → System → WHEA-Logger."),
         R(@"Core Effective Clocks|Core \d+ Effective Clock|Average Effective Clock", "The clock the core actually ran at, averaged over the time it slept (from its APERF counter): low when idle even if the boost clock is high. HWiNFO's Effective Clock."),
         R(@"VRM1|VRM2","A thermistor on the CPU voltage regulator's power stages (ASUS embedded controller). Under 90 °C is comfortable; the VRM heatsink fans speed up as it rises."),
         R(@"USB Thermistor", "A thermistor near the board's USB controllers (ASUS embedded controller): board temperature in that corner, not a USB device's."),

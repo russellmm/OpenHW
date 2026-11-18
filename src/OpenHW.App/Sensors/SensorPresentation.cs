@@ -121,6 +121,7 @@ public static partial class SensorPresentation
             // The device names itself "Thermal Grizzly WireView Pro II" (build info); older replies said "WireView Pro II".
             return (9, (sample.Source.StartsWith("Thermal Grizzly", StringComparison.Ordinal) ? sample.Source : "Thermal Grizzly " + sample.Source) + " (12V-2x6)");
         if (key == "edac") return (4, "Memory Controller: EDAC");
+        if (key == OpenHW.Hardware.Windows.WindowsWheaEngine.Group) return (4, "Hardware Errors: WHEA");
         if (key.StartsWith("gpu:", StringComparison.Ordinal))
         {
             var index = gpus.ToList().IndexOf(sample.Group);
