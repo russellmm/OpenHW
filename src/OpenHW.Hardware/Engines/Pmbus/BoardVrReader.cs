@@ -27,6 +27,19 @@ public static class BoardVrs
 
     public static BoardVr? For(string vendor, string board) => Known.FirstOrDefault(v => v.Matches(vendor, board));
 
+    /// <summary>
+    /// Boards whose VR is confirmed on Windows only (not yet checked under Linux, so Linux doesn't read them):
+    /// the WRX90E-SAGE SE's XDPE19283B, found 2026-11-18 by openhw-helper --smbus-scan at FCH SMBus port 0 address
+    /// 0x20 (IC_DEVICE_ID 01 95), the TRX50's chip and address.
+    /// </summary>
+    public static readonly IReadOnlyList<BoardVr> WindowsKnown =
+    [
+        new("ASUSTeK", "Pro WS WRX90E-SAGE SE", "SMBus PIIX4 adapter port 0 at 0b00", 0x20, [0x01, 0x95], "Infineon XDPE19283B", 1),
+    ];
+
+    /// <summary>Windows: the Linux list and the Windows-only one.</summary>
+    public static BoardVr? ForWindows(string vendor, string board) => For(vendor, board) ?? WindowsKnown.FirstOrDefault(v => v.Matches(vendor, board));
+
     public static BoardVr? ForThisBoard(string sysRoot = "/sys") => For(
         SysFs.ReadText(Path.Combine(sysRoot, "class", "dmi", "id", "board_vendor")),
         SysFs.ReadText(Path.Combine(sysRoot, "class", "dmi", "id", "board_name")));
@@ -37,16 +50,17 @@ public sealed record PmbusSample(string Chip, byte Page, byte VoutMode, ushort V
     ushort Temp1, ushort Temp2, ushort Pout, ushort Pin, ushort Status);
 
 /// <summary>Root side: this board's VR (if it has a known one), confirmed by IC_DEVICE_ID, read with PMBus reads only.</summary>
-public sealed class BoardVrReader(ISmbusProvider buses, BoardVr? vr, string sysRoot = "/sys")
+public sealed class BoardVrReader(ISmbusProvider buses, BoardVr? vr, string sysRoot = "/sys", int? adapterNumber = null)
 {
     public PmbusSample? Read()
     {
         if (vr is null) return null;
-        var adapter = SmbusAdapters.List(sysRoot).FirstOrDefault(a => a.Name == vr.Adapter);
+        // Windows passes the FCH port; Linux finds the adapter by name in sysfs.
+        var adapter = adapterNumber ?? SmbusAdapters.List(sysRoot).FirstOrDefault(a => a.Name == vr.Adapter)?.Number;
         if (adapter is null) return null;
         try
         {
-            using var bus = buses.Open(adapter.Number);
+            using var bus = buses.Open(adapter.Value);
             var a = vr.Address;
             if (!bus.ReadBlock(a, 0xAD).SequenceEqual(vr.DeviceId)) return null; // not the expected chip: read nothing else
             return new PmbusSample(vr.Slug, bus.ReadByte(a, 0x00), bus.ReadByte(a, 0x20),

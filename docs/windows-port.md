@@ -39,7 +39,9 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
 | WireView Pro II | **done** (in the app, COM port) | `WindowsWireView` (+ `WindowsSerialLink`) feeding `WireViewEngine` |
 | UPS | **done** (USB HID, CyberPower CP2000PFCRM2U) | `WindowsHidUps` answers NUT's LIST UPS/VAR for `NutEngine` |
 | Service start/stop from OpenHW | **done** | Settings → Driver Management (Start/Stop); `--install` gives OpenHW Users start/stop rights |
-| Super I/O NCT6798D, ASUS EC, RAPL, SMBus (DIMM SPD hub/PMIC, Infineon XDPE VR) | **next** (PawnIO) | `LpcIO`, `LpcACPIEC`, `AMDFamily17` MSRs, `SmbusPIIX4` |
+| Board VR (Infineon XDPE19283B, VDDIO_Mem) | **done** (Windows only so far) | `WindowsSmbusProvider` (PawnIO SmbusPIIX4) → Linux's `BoardVrReader`/`BoardVrEngine`; `BoardVrs.WindowsKnown` |
+| DIMM SPD hub/PMIC | **next** | port 1 has 4 DIMMs (hubs 0x52/53/56/57 answer MR0 = 0x8E, not 0x51 — to understand); the other 4 are likely behind a switch at 0x73 (shared with the BMC: owner's go-ahead first) |
+| Super I/O NCT6798D, ASUS EC, RAPL, chipset (xHCI) temperature | to do (PawnIO) | `LpcIO`, `LpcACPIEC`, `AMDFamily17` MSRs |
 | Installer | phase 4 | scripts for now; Inno Setup is on this PC |
 
 ## How it's installed on this PC
@@ -156,6 +158,11 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   CCD 42.3/29.5/28.9/31.0 °C; HSMP FCLK 1950, MCLK 2600, limit 4529 MHz, 71 W.
 - **WireView** (COM5, VID 0483/PID 5740 from the registry) and the **UPS** (HID Power Device pages 0x84/0x85; CGS
   units: exponent 7 = volts/watts) read in the app, no service.
+
+- **SMBus map of the WRX90E-SAGE SE (2026-11-18, `openhw-helper --smbus-scan`, read-only receive-byte):** port 0:
+  0x0c, **0x20 = XDPE19283B** (IC_DEVICE_ID 01 95, same as the TRX50's), 0x56 (MR0 0xFF, not a hub). Port 1: DIMM
+  thermal sensors 0x12/13/16/17, hubs 0x52/53/56/57 (MR0 0x8E), 0x73 (probably a bus switch). Hardware Check on
+  Windows now shows the BIOS version and memory size, and Windows notes instead of Linux commands.
 
 ## Next steps
 

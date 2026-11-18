@@ -63,9 +63,11 @@ public static class Coverage
         if (now.DimmsBmc > now.DimmsReadable)
             notes.Add(new("Memory", $"{now.DimmsBmc} DIMMs installed (BMC), {now.DimmsReadable} readable over the SPD sideband. " +
                 "The others' voltages and PMIC power aren't shown; their temperatures come from the BMC group.",
-                Fix: "Linux bound SPD hubs only on some of the board's memory buses. Attaching the spd5118 driver to the " +
-                     "others needs a root scan of those buses, shared with the BMC — not done automatically."));
-        else if (now.DimmsReadable == 0 && now.MemoryGiB > 0)
+                Fix: OperatingSystem.IsWindows()
+                    ? "Windows: OpenHW doesn't read the DIMMs' SPD hubs and PMICs over SMBus yet (PawnIO, in progress)."
+                    : "Linux bound SPD hubs only on some of the board's memory buses. Attaching the spd5118 driver to the " +
+                      "others needs a root scan of those buses, shared with the BMC — not done automatically."));
+        else if (now.DimmsReadable == 0 && now.MemoryGiB > 0 && !OperatingSystem.IsWindows())
             notes.Add(new("Memory", "No DIMM sensors: the kernel's spd5118 driver hasn't bound any SPD hub.",
                 Fix: "sudo modprobe spd5118 (DDR5) or jc42 (DDR4); some boards need i2c_piix4 or i2c_designware loaded first."));
 
@@ -78,12 +80,15 @@ public static class Coverage
                     ? "The BMC group reads this board's rails and fans under their real names. A profile still needs a session " +
                       "comparing readings with HWiNFO on this board (docs/board-profiles.md)."
                     : "A profile needs a session comparing readings with HWiNFO on this board (docs/board-profiles.md)."));
+        else if (superIo is null && OperatingSystem.IsWindows())
+            notes.Add(new("Motherboard", "The Super I/O chip isn't read on Windows yet (PawnIO, in progress)." +
+                (now.Bmc.Length > 0 ? " The BMC group reads this board's rails, temperatures and fans." : "")));
         else if (superIo is null && !now.Board.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
             notes.Add(new("Motherboard", "No Super I/O sensor chip found (no nct67xx/it87 hwmon).",
                 Fix: "sudo modprobe nct6775 (Nuvoton) or it87 (ITE); some boards need acpi_enforce_resources=lax on the kernel command line."));
 
         // ── Board VR ──
-        if (BoardVrs.For(now.BoardVendor, now.Board) is null)
+        if ((OperatingSystem.IsWindows() ? BoardVrs.ForWindows(now.BoardVendor, now.Board) : BoardVrs.For(now.BoardVendor, now.Board)) is null)
             notes.Add(new("Motherboard", "No known PMBus voltage regulator for this board, so no VR group (only the TRX50-SAGE's is mapped)."));
 
         // ── GPU Lending's card: chosen by UUID since 0.21.0, and followed to its current slot when the helper starts ──

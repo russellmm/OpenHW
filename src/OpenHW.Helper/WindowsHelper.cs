@@ -38,6 +38,7 @@ internal static class WindowsHelper
         {
             case ["--ipmi-check"]: return IpmiCheck();
             case ["--hsmp-check"]: return HsmpCheck();
+            case ["--smbus-scan"]: return SmbusScan();
             case ["--install"]: return Install();
             case ["--uninstall"]: return Uninstall();
             case ["--once", .. var command] when command.Length > 0:
@@ -145,10 +146,15 @@ internal static class WindowsHelper
         public WindowsHelperSession Session() => new(
             new HelperSession(_smart, gpuPower: _gpuPower, bmc: _bmc, fans: _fans,
                 redfish: _fans is not null || _oneShot is "fansources" or "biossettings" or "bmcaccess" ? _redfish : null, // one-shot reads as on Linux
-                loginPath: LoginPath, gpuFans: _gpuFans),
+                loginPath: LoginPath, gpuFans: _gpuFans, vr: _vr),
             _gpuPower, _savedGpuPower, _cpuPower, _oneShot is null ? _sources : null, _hsmpSensors, _kernel);
 
         private readonly WindowsKernelSensors _kernel = new();
+
+        // The chipset SMBus through PawnIO (null without it): the board VR now, the DIMMs next.
+        private static readonly WindowsSmbusProvider? Smbus = WindowsSmbusProvider.Open(out _);
+        private readonly BoardVrReader? _vr = Smbus is null ? null
+            : new BoardVrReader(Smbus, BoardVrs.ForWindows(WindowsMachine.BoardVendor, WindowsMachine.BoardName), adapterNumber: 0);
 
         private readonly WindowsHsmpSensors _hsmpSensors = new(() => WindowsHsmp.Open(out _));
 
@@ -278,6 +284,33 @@ internal static class WindowsHelper
             Console.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Read-only map of the chipset SMBus ports 0 and 1: which addresses answer a receive-byte (as i2cdetect -r), each
+    /// DDR5 hub's MR0 (0x51 = SPD5118) at 0x50–0x57, each PMIC's vendor at 0x48–0x4F, and the PMBus IC_DEVICE_ID at
+    /// 0x20 (the VR's address on the TRX50-SAGE). Nothing is written.
+    /// </summary>
+    private static int SmbusScan()
+    {
+        using var buses = WindowsSmbusProvider.Open(out var reason);
+        if (buses is null) { Console.WriteLine(reason); return 1; }
+        foreach (var port in new[] { 0, 1 })
+        {
+            var bus = (WindowsSmbus)buses.Open(port);
+            var found = new List<int>();
+            for (var a = 0x08; a <= 0x77; a++)
+                try { bus.ReceiveByte(a); found.Add(a); } catch (IOException) { }
+            Console.WriteLine($"port {port}: {(found.Count == 0 ? "nothing" : string.Join(' ', found.Select(a => a.ToString("x2"))))}");
+            foreach (var a in found)
+            {
+                string Try(Func<string> read) { try { return read(); } catch (IOException ex) { return "(" + ex.Message + ")"; } }
+                if (a is >= 0x50 and <= 0x57) Console.WriteLine($"  0x{a:x2} hub MR0 = {Try(() => bus.ReadByte(a, 0x00).ToString("x2"))}");
+                if (a is >= 0x48 and <= 0x4F) Console.WriteLine($"  0x{a:x2} PMIC vendor = {Try(() => $"{bus.ReadByte(a, 0x3C):x2}{bus.ReadByte(a, 0x3D):x2}")}");
+                if (a == 0x20) Console.WriteLine($"  0x20 IC_DEVICE_ID = {Try(() => Convert.ToHexString(bus.ReadBlock(a, 0xAD)))}");
+            }
+        }
+        return 0;
     }
 
     // ---- install / uninstall (elevated) ----

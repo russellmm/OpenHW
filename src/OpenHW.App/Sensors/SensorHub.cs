@@ -31,7 +31,8 @@ public sealed class SensorHub : IDisposable
             _windowsNvme = new OpenHW.Hardware.Windows.WindowsNvmeEngine();
             _engines = [new OpenHW.Hardware.Windows.WindowsSystemEngine(),
                 new HwmonEngine(new OpenHW.Hardware.Windows.WindowsKernelSensorsReader(), OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName),
-                new OpenHW.Hardware.Windows.WindowsHsmpEngine(), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
+                new OpenHW.Hardware.Windows.WindowsHsmpEngine(),
+                new BoardVrEngine(vr: BoardVrs.ForWindows(OpenHW.Hardware.Windows.WindowsMachine.BoardVendor, OpenHW.Hardware.Windows.WindowsMachine.BoardName)), Bmc, _windowsNvme, new OpenHW.Hardware.Windows.WindowsNetworkEngine(), _nvidia, WireView, new NutEngine(OpenHW.Hardware.Windows.WindowsHidUps.Query)]; // no NUT server: the UPS over USB HID
             return;
         }
         _hwmon = new HwmonEngine();

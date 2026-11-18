@@ -61,7 +61,7 @@ public sealed class HardwareSnapshot
         {
             Taken = DateTime.Now,
             BoardVendor = machine.BoardVendor, Board = machine.BoardName,
-            Bios = SysFs.ReadText("/sys/class/dmi/id/bios_version"),
+            Bios = OperatingSystem.IsWindows() ? OpenHW.Hardware.Windows.WindowsMachine.BiosVersion : SysFs.ReadText("/sys/class/dmi/id/bios_version"),
             Cpu = machine.CpuModel, Threads = Environment.ProcessorCount,
             Chips = chips, Gpus = gpus,
             Drives = machine.Drives.Select(d => new SnapshotDrive(d.Identity, d.Model, d.Pci,
@@ -96,6 +96,8 @@ public sealed class HardwareSnapshot
 
     private static int MemTotalGiB()
     {
+        // Windows: the physical memory the runtime sees (GlobalMemoryStatusEx's total).
+        if (OperatingSystem.IsWindows()) return (int)Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824.0);
         foreach (var line in SysFs.ReadText("/proc/meminfo").Split('\n'))
             if (line.StartsWith("MemTotal:", StringComparison.Ordinal) &&
                 long.TryParse(line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1], NumberStyles.None, CultureInfo.InvariantCulture, out var kb))
