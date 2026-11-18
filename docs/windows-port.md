@@ -184,6 +184,15 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   go-ahead. After the reboot the BMC reader failed its first start (BMC/IPMI driver not ready) and stayed failed;
   `BmcReader` now retries every 30 s on Windows (`WindowsRetryAfter`).
 
+- **The DIMMs' bus, settled (2026-11-18):** the WRX90E-SAGE SE's DDR5 hubs, TS5111s and PMICs are on the FCH's
+  **DesignWare I2C controllers** (ACPI `AMDI0010`), not its SMBus: Linux reads them as `AMDI0010:01`/`:02`
+  (i2c_designware), HWiNFO probes three "FCH I2C Host" pads (ACPI 0x1E4D/0x1E4F/0x1E51) before its hosts 1–3, and
+  `openhw-helper --spd-scan 2` finds no hub on SMBus port 2 (port 0: VR only; port 1: the ASF/BMC-side bus behind the
+  0x73 switch). OpenFan never read SPD itself — its DIMM values came from HWiNFO's shared memory (`HwinfoBackend`), and
+  on the TRX50 the hubs were on the SMBus PawnIO's SmbusPIIX4 covers. No signed PawnIO module reaches DesignWare I2C:
+  the ways forward are a DesignWare module submitted to PawnIO.Modules (tested once with driver signature enforcement
+  off for one boot), or a Microsoft-signed driver of our own (EV certificate).
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
