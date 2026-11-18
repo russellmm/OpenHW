@@ -238,8 +238,16 @@ crash): one documented value at a time, and commit before any hardware test.
    Memory Integrity back on, normal restart. If it reads: Windows DIMM discovery (hubs 0x50–0x57 on I2C1/I2C2, SPD
    header via the MR11 page select Linux's spd5118 uses), the per-DIMM rows through `Ddr5Reader`, then submit
    `packaging/windows/pawnio-src/AMDI2C.p` to PawnIO.Modules for signing.
-3. **Fan control live** (owner present): one fixed duty on one zone and release; one curve and restore the original;
-   one alarm threshold and restore — the same flash-write rules as Linux.
+3. ~~**Fan control live**~~ — **passed 2026-11-18 on CHA_FAN5 (bmc:5), owner present**, through the service's pipe:
+   - fixed 80 %: the curve read back 80 % at all five points (temperatures kept), 1,440 → 2,520 RPM within 5 s, held
+     25 s on 5-s lease renewals; release wrote the BMC curve back (20:20, 45:40, 65:70, 70:100, 100:100) and the fan
+     returned to 1,440 RPM — 2 writes;
+   - curve 20:25, 45:45, 65:70, 70:100, 100:100 read back as written (the zone's original saved first), "Restore
+     original" put the curve back — 2 writes;
+   - alarm threshold: lower non-critical 360 → 480 RPM read back, restored to 0 / 360 / 360.
+   CHA_FAN1 keeps the custom curve an earlier OpenHW write put there (50:30, 55:52, 60:74, 80:100; its pre-OpenHW
+   original 20:20, 45:20, 65:20 saved). Not yet exercised live: an OpenHW-driven curve (one that reads non-BMC
+   sensors and writes duties as they change).
 4. ~~**GPU power limit live**~~ — **confirmed by the owner 2026-11-18**.
 5. ~~**OpenFan vs OpenHW on Windows**~~ — **checked 2026-11-18**: OpenFan isn't running (no process, service,
    scheduled task or Run entry; it is still installed at `C:\StandAlone\OpenFan` with a Start-menu shortcut). OpenHW

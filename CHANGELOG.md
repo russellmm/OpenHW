@@ -13,6 +13,7 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - Windows: the WireView Pro II group is laid out as in HWiNFO (per-pin rows under their connector row).
 - Windows: the board VR (XDPE19283B) reads the memory rail on PAGE 1, switching PAGE and restoring it per read; Settings → Safety → "VR Page Select (PMBus write)" turns that write off.
 - Windows: Settings switches OpenHW doesn't act on (Safety, SMBus / I2C) are grayed.
+- Windows: fan control tested live (fixed duty, BMC curve, alarm threshold, each restored).
 - OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
   (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
   toasts, single instance, start at login.
