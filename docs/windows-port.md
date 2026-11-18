@@ -193,6 +193,15 @@ changed marked. Commits: 41db191 (phases 0–1) … 5ce98af.
   the ways forward are a DesignWare module submitted to PawnIO.Modules (tested once with driver signature enforcement
   off for one boot), or a Microsoft-signed driver of our own (EV certificate).
 
+- **RAPL (2026-11-18):** `WindowsRapl` reads MSR_PWR_UNIT, MSR_PKG_ENERGY_STAT and each core's MSR_CORE_ENERGY_STAT
+  (pinned to the core) through PawnIO's signed AMDFamily17 (these MSRs are on its read list), totals the wrapping
+  32-bit counters and answers `rapl` in Linux's format: package 58.8 W vs HSMP's 56.5 W, cores 5.8 W.
+- **Fan Control froze (2026-11-18):** after the reboot the BMC answered on **Ethernet 5** (10.0.0.208) but not Ethernet 4
+  (ARP unreachable), which the service had bound to; every `fansources` timed out (~10 s) and Fan Control asks every
+  2 s. `LanBinding` now tries every wired port on the BMC's subnet (2 s connect limit, last good first — never the
+  Tailscale route, which Chrome uses), and `FanSourcesCache` keeps a failure 60 s. Fan Control still calls the
+  service on its UI thread — a slow service shows as lag there (to move off the UI thread).
+
 ## Next steps
 
 In order; anything that writes to the BMC, the CPU or the GPUs only with the owner's go-ahead.
