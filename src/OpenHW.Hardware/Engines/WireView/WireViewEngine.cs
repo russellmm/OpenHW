@@ -7,13 +7,14 @@ namespace OpenHW.Hardware;
 /// one group per device — keyed by its USB serial, not by the GPU it sits on, so moving it to another card changes
 /// nothing — with each 12V-2x6 wire's voltage, current and power, the totals, the connector temperatures, the PSU's
 /// signalled limit, its fan and its fault bits.
-/// On Windows the rows take HWiNFO's layout (owner, 2026-11-18): its names and order, with each wire's voltage,
-/// current and power under a "GPU 12VHPWR Connector …" row (the six wires' average, as HWiNFO shows). The ids are the
-/// same on both systems; Linux keeps its own names and flat order.
+/// The rows take HWiNFO's layout on both systems (owner: Windows 2026-11-18, Linux the same evening): its names and
+/// order, with each wire's voltage, current and power under a "GPU 12VHPWR Connector …" row (the six wires' average,
+/// as HWiNFO shows). The ids are unchanged from the older flat layout (still available with hwinfoLayout: false), so
+/// saved alerts, tray icons and hidden rows keep working.
 /// </summary>
 public sealed class WireViewEngine(Func<int, string>? request = null, bool? hwinfoLayout = null) : ISensorEngine
 {
-    private readonly bool _hwinfo = hwinfoLayout ?? OperatingSystem.IsWindows();
+    private readonly bool _hwinfo = hwinfoLayout ?? true;
     private Dictionary<string, IReadOnlyList<string>> _children = [];
 
     /// <summary>HWiNFO layout only: the three "GPU 12VHPWR Connector …" rows and their six pins each.</summary>

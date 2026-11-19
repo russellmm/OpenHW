@@ -3,6 +3,13 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.41.0 — 2026-11-18 — WireView in HWiNFO's layout on Linux too
+
+- Linux: the WireView Pro II group takes HWiNFO's layout, as on Windows — Temperature In/Out, "GPU 12VHPWR Connector
+  Voltages/Currents/Powers" rows (the six wires' average) with Pin 1–6 under each, Average Pin Voltage, Total
+  Current/Power, Fan Duty, Faults (Status)/(Log), then Wire Current Imbalance, PSU limit and supply. Sensor ids are
+  unchanged, so saved alerts, tray icons and hidden rows still apply.
+
 ## 0.40.0 — 2026-11-18 — Windows 11 port; Fan Control under File on Linux too
 
 Linux behaviour unchanged except the two Linux items below; details in [docs/windows-port.md](docs/windows-port.md).

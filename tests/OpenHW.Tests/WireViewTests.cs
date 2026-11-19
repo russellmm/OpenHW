@@ -97,7 +97,7 @@ public sealed class WireViewTests
         {
             new("208E31635445", "WireView Pro II", "TG-WV-PRO2-FW_20260430_1838", "/dev/ttyACM0", WireViewSample.Parse(Frame()), null),
         });
-        using var engine = new WireViewEngine(_ => reply, hwinfoLayout: false); // Linux's flat layout
+        using var engine = new WireViewEngine(_ => reply, hwinfoLayout: false); // the older flat layout (Linux before 0.41.0)
         var items = engine.Discover();
         Assert.All(items, i => Assert.Equal("wireview:208E31635445", i.Group));
         Assert.Equal(2 + 18 + 4 + 3 + 2, items.Count); // 2 connector temps (no probes), 6 × V/A/W, 3 totals + imbalance, PSU + 2 fault counts, vdd + fan
@@ -116,13 +116,13 @@ public sealed class WireViewTests
     }
 
     [Fact]
-    public void WindowsUsesHwinfosLayout()
+    public void DefaultIsHwinfosLayout()
     {
         var reply = GpuWire.Encode(new List<WireViewDevice>
         {
             new("208E31635445", "WireView Pro II", "TG-WV-PRO2-FW_20260430_1838", "/dev/ttyACM0", WireViewSample.Parse(Frame()), null),
         });
-        using var engine = new WireViewEngine(_ => reply, hwinfoLayout: true);
+        using var engine = new WireViewEngine(_ => reply);
         var items = engine.Discover();
         const string p = "wireview:208E31635445:";
         // HWiNFO's order for the top-level rows (the pins sit under their connector row); the ids are Linux's.
