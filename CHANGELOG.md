@@ -24,6 +24,7 @@ Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.m
 - Windows: the service asks the BMC for its LAN address every 5 minutes and follows a change (a DHCP lease), so
   Redfish keeps working without a restart.
 - Windows: OpenHW program icon (exe, title bars, taskbar) — a chip with a sensor trace; Linux keeps its icon.
+- Windows: Fan Control… is under File (it was under Power); Linux to follow.
 - OpenHW builds, tests and runs on Windows 11: System (PDH), NVIDIA (NVML), NVMe SMART/temperatures/activity
   (unelevated IOCTLs, drive ids as on Linux) and network readers; Win32 tray icons with tooltips and menus, alerts as
   toasts, single instance, start at login.

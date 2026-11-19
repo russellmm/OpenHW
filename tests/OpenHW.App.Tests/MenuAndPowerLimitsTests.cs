@@ -35,7 +35,7 @@ public sealed class MenuAndPowerLimitsTests
         using var hub = new SensorHub();
         hub.Sample();
         var power = new PowerModeController(new CpuFrequencyLimits());
-        var window = new MainWindow(hub, power, new WindowCommands(() => { }, () => { }, () => { }, () => { })) { Height = 600 };
+        var window = new MainWindow(hub, power, new WindowCommands(() => { }, () => { }, () => { }, () => { }) { ShowFanControl = () => { } }) { Height = 600 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-menu.png"));
@@ -43,6 +43,11 @@ public sealed class MenuAndPowerLimitsTests
         var menu = window.GetVisualDescendants().OfType<Menu>().Single();
         Assert.Equal(["_File", "_View", "_Power", "_Help"], menu.Items.OfType<MenuItem>().Select(m => (string)m.Header!));
         Assert.Contains(window.KeyBindings, k => k.Gesture.ToString() == "Ctrl+L");
+        // Fan Control: under File on Windows (owner, 2026-11-18), still under Power on Linux.
+        List<string> Headers(string top) => menu.Items.OfType<MenuItem>().Single(m => (string)m.Header! == top)
+            .Items.OfType<MenuItem>().Select(i => (string)i.Header!).ToList();
+        Assert.Equal(OperatingSystem.IsWindows(), Headers("_File").Contains("Fan _Control…"));
+        Assert.Equal(!OperatingSystem.IsWindows(), Headers("_Power").Contains("Fan _Control…"));
     }
 
     [AvaloniaFact]
