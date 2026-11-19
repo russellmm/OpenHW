@@ -83,7 +83,9 @@ internal static class WindowsHelper
     {
         private readonly BmcReader _bmc;
         private readonly FanDriver? _fans;
-        private readonly BmcRedfish? _redfish;
+        private volatile BmcRedfish? _redfish;
+        private Uri _redfishBase = BmcRedfish.HostInterface;
+        private Timer? _addressCheck;
         private readonly GpuPowerLimits _gpuPower;
         private readonly LiveNvmlFans? _nvmlFans;
         private readonly GpuFanDriver? _gpuFans;
@@ -108,10 +110,42 @@ internal static class WindowsHelper
                 _gpuFans = new GpuFanDriver(_nvmlFans, startWatchdog: true);
             }
             if (_fans?.Status(null) is { Available: false, Reason: { } why }) Console.Error.WriteLine($"openhw-helper: fan control off: {why}");
-            var redfishBase = RedfishBase();
+            UseRedfish(RedfishBase());
+            // The BMC's address can change while the service runs (a DHCP lease): ask the BMC again every 5 minutes.
+            if (oneShot is null && OverrideUrl() is null)
+                _addressCheck = new Timer(_ => RecheckAddress(), null, AddressCheckEvery, AddressCheckEvery);
+        }
+
+        private static readonly TimeSpan AddressCheckEvery = TimeSpan.FromMinutes(5);
+
+        /// <summary>A Redfish connection to <paramref name="baseUrl"/>: the pinned certificate, every wired port on its subnet.</summary>
+        private void UseRedfish(Uri baseUrl)
+        {
             var handler = (SocketsHttpHandler)BmcRedfish.PinnedHandler(Path.Combine(StateDir, "bmc-cert.sha256"));
-            LanBinding.Apply(handler, redfishBase);
-            _redfish = new BmcRedfish(redfishBase, handler, () => BmcLogin.Load(LoginPath));
+            LanBinding.Apply(handler, baseUrl);
+            _redfishBase = baseUrl;
+            _redfish = new BmcRedfish(baseUrl, handler, () => BmcLogin.Load(LoginPath));
+        }
+
+        /// <summary>
+        /// Asks the BMC (over IPMI, through the board — not the network) for its LAN address; when it moved, Redfish
+        /// follows it and the cached fan sources and DIMM inventory are read again. The certificate pin still decides
+        /// whether whatever answers there is this BMC.
+        /// </summary>
+        private void RecheckAddress()
+        {
+            try
+            {
+                if (DiscoverAddress() is not { } address || string.Equals(address, _redfishBase.Host, StringComparison.OrdinalIgnoreCase)) return;
+                Console.Error.WriteLine($"openhw-helper: the BMC's LAN address moved from {_redfishBase.Host} to {address}: Redfish follows it");
+                UseRedfish(new Uri($"https://{address}"));
+                _sources.Clear();
+                _dimmInventory.Clear();
+            }
+            catch (Exception ex) // a timer callback must never throw (it would end the service): IPMI busy, the BMC resetting…
+            {
+                Console.Error.WriteLine($"openhw-helper: BMC address check: {ex.Message} (next check in {AddressCheckEvery.TotalMinutes:0} min)");
+            }
         }
 
         private static string LoginPath => Path.Combine(StateDir, "bmc-login");
@@ -124,19 +158,32 @@ internal static class WindowsHelper
         // address the BMC reports for itself over IPMI, else the host interface (works if its driver is installed).
         private static Uri RedfishBase()
         {
+            if (OverrideUrl() is { } url) return url;
+            if (DiscoverAddress() is { } address)
+            {
+                Console.Error.WriteLine($"openhw-helper: Redfish on the BMC's LAN address {address}");
+                return new Uri($"https://{address}");
+            }
+            return BmcRedfish.HostInterface;
+        }
+
+        /// <summary>%ProgramData%\OpenHWmc-url, when the owner set one (then no address is looked up).</summary>
+        private static Uri? OverrideUrl()
+        {
             var file = Path.Combine(StateDir, "bmc-url");
             try
             {
                 if (File.Exists(file) && Uri.TryCreate(File.ReadAllText(file).Trim(), UriKind.Absolute, out var url) && url.Scheme == "https") return url;
             }
             catch (IOException) { }
+            return null;
+        }
+
+        /// <summary>The BMC's own LAN address (IPMI LAN configuration) on a subnet one of this PC's wired ports is on.</summary>
+        private static string? DiscoverAddress()
+        {
             using var ipmi = WmiIpmiTransport.Open(out _);
-            if (ipmi is not null && BmcLanAddress.Find(ipmi, a => LanBinding.LocalAddressOnSubnet(a) is not null) is { } address)
-            {
-                Console.Error.WriteLine($"openhw-helper: Redfish on the BMC's LAN address {address} (of {string.Join(", ", BmcLanAddress.All(ipmi))})");
-                return new Uri($"https://{address}");
-            }
-            return BmcRedfish.HostInterface;
+            return ipmi is null ? null : BmcLanAddress.Find(ipmi, a => LanBinding.LocalAddressOnSubnet(a) is not null)?.ToString();
         }
 
         private static (AsusBmcFans? Fans, string? Reason) OpenFans()
@@ -206,6 +253,7 @@ internal static class WindowsHelper
 
         public void Dispose()
         {
+            _addressCheck?.Dispose();
             _server?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _gpuFans?.Dispose();
             _nvmlFans?.Dispose();
