@@ -3,6 +3,12 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
+## 0.42.0 — 2026-11-18 — collapsible groups on Sensor Settings → Layout
+
+- Sensor Settings → Layout: groups collapse and expand (▾ / ▸ on a group heading, a double-click, or ← / →), and
+  **Collapse All / Expand All** buttons beside Order show only the group headings, so groups move up and down without
+  scrolling past every sensor. Moves keep working on the whole order while groups are collapsed.
+
 ## 0.41.0 — 2026-11-18 — WireView in HWiNFO's layout on Linux too
 
 - Linux: the WireView Pro II group takes HWiNFO's layout, as on Windows — Temperature In/Out, "GPU 12VHPWR Connector

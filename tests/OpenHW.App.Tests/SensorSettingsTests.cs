@@ -169,6 +169,48 @@ public sealed class SensorSettingsTests
     }
 
     [AvaloniaFact]
+    public void LayoutGroupsCollapseToMoveThem()
+    {
+        Isolate();
+        using var s = Open();
+        var custom = SensorCustomizations.Current;
+        var window = s.Window;
+        window.SelectTab("Layout");
+        var list = window.LayoutList;
+        var groups = list.Entries.Where(e => e.IsGroup).Select(e => e.Key).ToList();
+        Assert.True(groups.Count >= 2);
+        var sensors = list.Entries.Count(e => !e.IsGroup && !e.IsSpacer);
+        var firstSensor = FirstSensor(list);
+        list.Selected = firstSensor;
+
+        // Collapse All: headings only; the selected sensor's group heading takes the selection.
+        list.SetAllCollapsed(true);
+        Assert.All(list.Entries, e => Assert.True(e.IsGroup || e.IsSpacer));
+        Assert.Equal(groups, list.Entries.Where(e => e.IsGroup).Select(e => e.Key).ToList());
+        Assert.Equal((firstSensor.GroupKey, true), (list.Selected?.Key, list.Selected?.IsGroup));
+        Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-collapsed.png"));
+
+        // Moving a group while collapsed works on the whole order, and the groups stay collapsed after the redraw.
+        list.Selected = list.Entries.First(e => e.Key == groups[0]);
+        window.MoveSelected(1);
+        Assert.Equal([groups[1], groups[0]], list.Entries.Where(e => e.IsGroup).Select(e => e.Key).Take(2).ToList());
+        Assert.All(list.Entries, e => Assert.True(e.IsGroup || e.IsSpacer));
+
+        // One group open, then all of them.
+        list.SetCollapsed(groups[0], false);
+        Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-one-open.png"));
+        Assert.Contains(list.Entries, e => !e.IsGroup && !e.IsSpacer && e.GroupKey == groups[0]);
+        Assert.DoesNotContain(list.Entries, e => !e.IsGroup && !e.IsSpacer && e.GroupKey == groups[1]);
+        list.SetAllCollapsed(false);
+        Assert.Equal(sensors, list.Entries.Count(e => !e.IsGroup && !e.IsSpacer));
+        custom.RestoreOriginalOrder();
+        Assert.Equal(groups, list.Entries.Where(e => e.IsGroup).Select(e => e.Key).ToList());
+        window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-tab.png"));
+    }
+
+    [AvaloniaFact]
     public void CustomizeTabIsRenameCustomizeValuesAndLogging()
     {
         Isolate();

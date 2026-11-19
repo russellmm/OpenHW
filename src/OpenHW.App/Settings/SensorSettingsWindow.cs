@@ -38,7 +38,7 @@ public sealed class SensorSettingsWindow : ClassicDialog
     private readonly SensorCustomizations _custom = SensorCustomizations.Current;
     private int _showing; // > 0 while the dialog shows saved values: control events then aren't user changes
 
-    public ClassicEntryList LayoutList { get; } = new("Monitoring", 733.6, 120);
+    public ClassicEntryList LayoutList { get; } = new("Monitoring", 733.6, 120, collapsible: true);
     public ClassicEntryList HiddenList { get; } = new("", 733.6, 120, showValueTitle: false);
     public ClassicEntryList CustomizeList { get; } = new("Logged", 745.6, 108);
     public ClassicEntryList TrayList { get; } = new("In Tray", 767.2, 84);
@@ -337,6 +337,13 @@ public sealed class SensorSettingsWindow : ClassicDialog
             _arrows[i].Click += (_, _) => MoveSelected(by);
         }
         p.Button("__", 762, 535, 800, 561);
+        // OpenHW addition (owner, 2026-11-18): collapse the groups to move them without scrolling past every sensor.
+        var collapseAll = p.Button("Collapse All", 842, 509, 980, 541);
+        var expandAll = p.Button("Expand All", 842, 551, 980, 583);
+        ToolTip.SetTip(collapseAll, "Show only the group headings (▸), to move groups up and down. A group's own ▾ / ▸, a double-click or ← / → open or close one group.");
+        ToolTip.SetTip(expandAll, "Show every group's sensors again.");
+        collapseAll.Click += (_, _) => LayoutList.SetAllCollapsed(true);
+        expandAll.Click += (_, _) => LayoutList.SetAllCollapsed(false);
         p.Label("Hidden items:", 45, 604);
         p.Place(HiddenList, 34, 630, 1138, 869);
 

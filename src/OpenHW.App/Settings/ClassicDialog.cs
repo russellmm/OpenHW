@@ -231,13 +231,19 @@ public sealed class ClassicEntryList : Border
     }
 
     private readonly ListBox _list;
+    private readonly bool _collapsible;
+    private readonly HashSet<string> _collapsed = [];
+    private IReadOnlyList<Entry> _all = [];
 
     public event Action<Entry?>? SelectionChanged;
 
     /// <param name="valueLeft">The first divider, as a distance from the list's left edge (logical px).</param>
     /// <param name="valueWidth">The value column's width (logical px).</param>
-    public ClassicEntryList(string valueTitle, double valueLeft, double valueWidth, bool showValueTitle = true)
+    /// <param name="collapsible">Group headings get a ▾ / ▸ toggle (click it, double-click the heading, or ← / →)
+    /// that hides or shows the group's sensors — an OpenHW addition, so long lists are easy to reorder.</param>
+    public ClassicEntryList(string valueTitle, double valueLeft, double valueWidth, bool showValueTitle = true, bool collapsible = false)
     {
+        _collapsible = collapsible;
         BorderBrush = ClassicColors.ListEdge;
         BorderThickness = new Thickness(1);
         Background = ClassicColors.Window;
@@ -250,11 +256,24 @@ public sealed class ClassicEntryList : Border
                 ColumnDefinitions = new ColumnDefinitions(columns), Height = 18.4,
                 Children =
                 {
-                    new TextBlock { Text = entry.Label, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
+                    Label(entry),
                     new TextBlock { Text = entry.Value, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, [Grid.ColumnProperty] = 1 },
                 },
             }),
         };
+        if (_collapsible)
+        {
+            _list.DoubleTapped += (_, e) =>
+            {
+                if (Selected is { IsGroup: true } group) { Toggle(group.Key); e.Handled = true; }
+            };
+            _list.KeyDown += (_, e) =>
+            {
+                if (Selected is not { IsGroup: true } group || e.Key is not (Key.Left or Key.Right)) return;
+                SetCollapsed(group.Key, e.Key == Key.Left);
+                e.Handled = true;
+            };
+        }
         _list.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0)), new Setter(MinHeightProperty, 0.0) },
@@ -285,20 +304,87 @@ public sealed class ClassicEntryList : Border
         Child = new Panel { Children = { body, dividers } };
     }
 
+    private Control Label(Entry entry)
+    {
+        var text = new TextBlock { Text = entry.Label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        if (!_collapsible) { text.Margin = new Thickness(5, 0, 0, 0); return text; }
+        var row = new DockPanel { Margin = new Thickness(2, 0, 0, 0), LastChildFill = true };
+        if (entry.IsGroup)
+        {
+            var toggle = new TextBlock
+            {
+                Text = IsCollapsed(entry.Key) ? "▸" : "▾", Width = 14, TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            };
+            ToolTip.SetTip(toggle, IsCollapsed(entry.Key) ? "Expand this group" : "Collapse this group");
+            toggle.PointerPressed += (_, e) => { Toggle(entry.Key); e.Handled = true; };
+            DockPanel.SetDock(toggle, Dock.Left);
+            row.Children.Add(toggle);
+        }
+        else if (!entry.IsSpacer) text.Margin = new Thickness(14, 0, 0, 0);
+        row.Children.Add(text);
+        return row;
+    }
+
+    /// <summary>The rows on screen (a collapsed group's sensors are left out).</summary>
     public IReadOnlyList<Entry> Entries => _list.Items.OfType<Entry>().ToList();
     public Entry? Selected { get => _list.SelectedItem as Entry; set => _list.SelectedItem = value; }
     /// <summary>Replaces the rows, keeping the selected one selected (by key) when it is still there.</summary>
     public void Fill(IReadOnlyList<Entry> entries)
     {
-        var selected = Selected;
-        _list.ItemsSource = entries;
-        if (selected is not null)
-            _list.SelectedItem = entries.FirstOrDefault(e => !e.IsSpacer && e.Key == selected.Key && e.IsGroup == selected.IsGroup);
+        _all = entries;
+        Show(Selected);
     }
 
-    /// <summary>The rows as (key, group?, group key), for <see cref="SensorWindow.LayoutWindow.MoveShown"/>.</summary>
+    private void Show(Entry? selected)
+    {
+        // A collapsed group drops its sensors and the blank line after it, so collapsed headings sit together.
+        var visible = _all;
+        if (_collapsed.Count > 0)
+        {
+            var shown = new List<Entry>();
+            var closed = false;
+            foreach (var e in _all)
+            {
+                if (e.IsGroup) closed = _collapsed.Contains(e.Key);
+                else if (closed) continue;
+                shown.Add(e);
+            }
+            visible = shown;
+        }
+        _list.ItemsSource = visible;
+        if (selected is null) return;
+        // A sensor whose group was just collapsed: its group heading takes the selection.
+        _list.SelectedItem = visible.FirstOrDefault(e => !e.IsSpacer && e.Key == selected.Key && e.IsGroup == selected.IsGroup)
+            ?? (selected.IsGroup ? null : visible.FirstOrDefault(e => e.IsGroup && e.Key == selected.GroupKey));
+        if (_list.SelectedItem is { } item) _list.ScrollIntoView(item);
+    }
+
+    public bool IsCollapsed(string groupKey) => _collapsed.Contains(groupKey);
+
+    public void SetCollapsed(string groupKey, bool collapsed)
+    {
+        if (!_collapsible || (collapsed ? !_collapsed.Add(groupKey) : !_collapsed.Remove(groupKey))) return;
+        Show(Selected);
+    }
+
+    private void Toggle(string groupKey) => SetCollapsed(groupKey, !IsCollapsed(groupKey));
+
+    /// <summary>Collapses (true) or expands (false) every group.</summary>
+    public void SetAllCollapsed(bool collapsed)
+    {
+        if (!_collapsible) return;
+        _collapsed.Clear();
+        if (collapsed) _collapsed.UnionWith(_all.Where(e => e.IsGroup).Select(e => e.Key));
+        Show(Selected);
+    }
+
+    /// <summary>
+    /// Every row as (key, group?, group key), collapsed groups' sensors included, for
+    /// <see cref="SensorWindow.LayoutWindow.MoveShown"/>: a move works on the whole order, whatever is collapsed.
+    /// </summary>
     public IReadOnlyList<(string Key, bool IsGroup, string GroupKey)> Shown =>
-        Entries.Where(e => !e.IsSpacer).Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList();
+        _all.Where(e => !e.IsSpacer).Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList();
 
     /// <summary>OpenHW's real groups and sensors as HWiNFO lists them; <paramref name="value"/> gives each sensor's column.</summary>
     public static IReadOnlyList<Entry> FromHub(Sensors.SensorHub hub, Func<string, string> value, string groupValue = "-",
