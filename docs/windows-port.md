@@ -252,7 +252,7 @@ crash): one documented value at a time, and commit before any hardware test.
 5. ~~**OpenFan vs OpenHW on Windows**~~ — **checked 2026-11-18**: OpenFan isn't running (no process, service,
    scheduled task or Run entry; it is still installed at `C:\StandAlone\OpenFan` with a Start-menu shortcut). OpenHW
    alone drives both RTX PRO 6000 cards' fans (`gpufans`: owned, 30 %); the 5060 Ti and every BMC zone run on their
-   own curves. Retire OpenFan (delete the folder and shortcut, owner's call) once 3 is confirmed.
+   own curves. **OpenFan retired by the owner 2026-11-18** (folder and shortcut deleted) after 3 passed.
 6. ~~**Fan Control's service calls off the UI thread**~~ — **done 2026-11-18**: the 6-second status poll (fans, GPU
    fans, BMC fan sources, BMC login) runs in the background and is applied on the window thread (Windows only; Linux keeps the synchronous refresh); a refresh asked for
    while one runs is folded into it. Only the first one, when the window opens, waits. The BMC writes themselves (Apply,
@@ -289,7 +289,7 @@ crash): one documented value at a time, and commit before any hardware test.
     covered, what differs only by name, the gaps and a suggested order. **Gaps closed the same day** (system, CPU
     utility / per-thread effective clocks / Core Ratio and VID, GPU limits, engines and D3D memory, UPS, WireView
     faults — 03bc3d0; Super I/O — 2079199). Left: Memory Timings and EC VRM Vcore
-    (undocumented offsets), DIMMs (#2), and what signed modules / NVML can't reach. Then uninstall HWiNFO; retire OpenFan.
+    (undocumented offsets), DIMMs (#2), and what signed modules / NVML can't reach. **HWiNFO uninstalled and OpenFan retired by the owner 2026-11-18**; the owner also reserved the BMC's IP (10.0.0.200) in the router and re-baselined Hardware Check.
 
 Not reachable with signed modules (left unless a module appears): the chipset (xHCI) temperature, SVI3 telemetry and
 per-core/L3 temperatures (the SMU's PM table — the RyzenSMU module works through the SMU mailbox; only with AMD/PawnIO
