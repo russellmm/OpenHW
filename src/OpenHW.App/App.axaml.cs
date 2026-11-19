@@ -51,7 +51,19 @@ public sealed class App : Application
     private volatile bool _exiting;
     private readonly List<System.Runtime.InteropServices.PosixSignalRegistration> _signals = [];
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        // Windows: every OpenHW window (any Window subclass) gets the program icon in its title bar and the taskbar.
+        if (OperatingSystem.IsWindows())
+        {
+            using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://openhw/Assets/openhw.ico"));
+            Styles.Add(new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.Is<Window>(x))
+            {
+                Setters = { new Avalonia.Styling.Setter(Window.IconProperty, new WindowIcon(stream)) },
+            });
+        }
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

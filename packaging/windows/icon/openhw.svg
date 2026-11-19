@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- OpenHW (Windows): a chip with a warm die and a live sensor trace. Large sizes (48 px and up). -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#363D47"/>
+      <stop offset="1" stop-color="#1C2026"/>
+    </linearGradient>
+    <linearGradient id="die" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2703A"/>
+      <stop offset="1" stop-color="#C0262D"/>
+    </linearGradient>
+  </defs>
+  <g fill="#AAB4C0">
+    <rect x="76" y="10" width="16" height="36" rx="5"/><rect x="120" y="10" width="16" height="36" rx="5"/><rect x="164" y="10" width="16" height="36" rx="5"/>
+    <rect x="76" y="210" width="16" height="36" rx="5"/><rect x="120" y="210" width="16" height="36" rx="5"/><rect x="164" y="210" width="16" height="36" rx="5"/>
+    <rect x="10" y="76" width="36" height="16" rx="5"/><rect x="10" y="120" width="36" height="16" rx="5"/><rect x="10" y="164" width="36" height="16" rx="5"/>
+    <rect x="210" y="76" width="36" height="16" rx="5"/><rect x="210" y="120" width="36" height="16" rx="5"/><rect x="210" y="164" width="36" height="16" rx="5"/>
+  </g>
+  <rect x="34" y="34" width="188" height="188" rx="30" fill="url(#body)" stroke="#8C97A4" stroke-width="6"/>
+  <rect x="62" y="62" width="132" height="132" rx="20" fill="url(#die)"/>
+  <rect x="62" y="62" width="132" height="66" rx="20" fill="#FFFFFF" opacity="0.08"/>
+  <polyline points="76,140 100,140 114,104 134,168 152,88 166,132 180,132" fill="none" stroke="#FFFFFF"
+            stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

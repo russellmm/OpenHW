@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- OpenHW at 16 px: drawn on the pixel grid — one pin pair a side, a single bold pulse. -->
+  <g fill="#AAB4C0">
+    <rect x="5" y="0" width="2" height="2"/><rect x="9" y="0" width="2" height="2"/>
+    <rect x="5" y="14" width="2" height="2"/><rect x="9" y="14" width="2" height="2"/>
+    <rect x="0" y="5" width="2" height="2"/><rect x="0" y="9" width="2" height="2"/>
+    <rect x="14" y="5" width="2" height="2"/><rect x="14" y="9" width="2" height="2"/>
+  </g>
+  <rect x="2" y="2" width="12" height="12" rx="2" fill="#8C97A4"/>
+  <rect x="3" y="3" width="10" height="10" rx="1.5" fill="#D9452F"/>
+  <polyline points="4,9 6,9 7.5,5 9,11 10.5,8 12,8" fill="none" stroke="#FFFFFF" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

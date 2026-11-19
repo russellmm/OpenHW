@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- OpenHW at 16–32 px: two pins a side, a bolder trace (the large drawing's detail blurs at this size). -->
+  <g fill="#AAB4C0">
+    <rect x="10" y="0.5" width="3" height="5" rx="1"/><rect x="19" y="0.5" width="3" height="5" rx="1"/>
+    <rect x="10" y="26.5" width="3" height="5" rx="1"/><rect x="19" y="26.5" width="3" height="5" rx="1"/>
+    <rect x="0.5" y="10" width="5" height="3" rx="1"/><rect x="0.5" y="19" width="5" height="3" rx="1"/>
+    <rect x="26.5" y="10" width="5" height="3" rx="1"/><rect x="26.5" y="19" width="5" height="3" rx="1"/>
+  </g>
+  <rect x="4" y="4" width="24" height="24" rx="4.5" fill="#2A2F37" stroke="#8C97A4" stroke-width="1"/>
+  <rect x="7" y="7" width="18" height="18" rx="3" fill="#D9452F"/>
+  <polyline points="9,17.5 12,17.5 14,12 17,21 19.5,11 21.5,16 23,16" fill="none" stroke="#FFFFFF"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

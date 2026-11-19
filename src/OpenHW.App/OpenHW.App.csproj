@@ -12,6 +12,15 @@
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
+  <!-- Windows builds only: the program icon (Explorer, Start, shortcuts) and the windows' title-bar/taskbar icon.
+       Linux keeps packaging/openhw.svg. Drawn 2026-11-18: packaging/windows/icon (SVGs + every size). -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ApplicationIcon>..\..\packaging\windows\icon\openhw.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <AvaloniaResource Include="..\..\packaging\windows\icon\openhw.ico" Link="Assets\openhw.ico" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Lets the GC compact harder to keep the heap small (~6 MB here); 7 of 9 is a moderate setting. -->
     <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
