@@ -3,9 +3,15 @@
 Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
 once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
 
-## Unreleased — Windows 11 port (2026-11-17)
+## 0.40.0 — 2026-11-18 — Windows 11 port; Fan Control under File on Linux too
 
-Linux behaviour unchanged; details in [docs/windows-port.md](docs/windows-port.md).
+Linux behaviour unchanged except the two Linux items below; details in [docs/windows-port.md](docs/windows-port.md).
+
+- Linux (2026-11-18, as on Windows): Fan Control moved from the Power menu to **File → Fan Control…**.
+- Linux (2026-11-18, as on Windows): Settings switches OpenHW doesn't act on (Safety, SMBus / I2C) are grayed;
+  S.M.A.R.T. Support, Enable NVML and SMBus Support stay live.
+- Linux check (2026-11-18): both test suites pass (194 + 197, 8 Windows-only skipped); NVMe ids match Windows' for
+  all 8 drives; the shared fan configuration in `/mnt/DriveC/StandAlone/OpenHW/configs` matches Linux's own.
 
 - Fan Control no longer freezes while the service is slow: its status poll runs in the background (Windows; Linux unchanged).
 - GPU power limits on Windows confirmed live (2026-11-18).

@@ -78,7 +78,7 @@ further down are kept, with what changed marked. Commits: 41db191 (phases 0–1)
   marked per class. `OsFiles`: config root (XDG / `%APPDATA%`), helper state dir, owner-only files (0600 / private ACL).
   `SensorHub` picks engines per platform. Tests on Windows: 304 pass, 69 Linux-only skipped (`[LinuxFact]`,
   `[LinuxAvaloniaFact]`: lending, card filter, sysfs fakes with ':' names, tests needing Tctl/FCLK, RTXinVM autostart);
-  Windows-only tests are `[WindowsFact]`. **Not yet run on Linux** after these changes.
+  Windows-only tests are `[WindowsFact]`. Run on Linux 2026-11-18: all pass.
 - **Phase 1 — user-mode readers** (no elevation), same sensor ids as Linux so layouts/tray/alerts/logs carry over:
   - System: GetPerformanceInfo + PDH `\Processor Information(*)` (% Processor Time, Frequency × % Performance,
     % C1/C2/C3 Time), cores from GetLogicalProcessorInformationEx. Clocks are Windows' estimate, not MSR readings.
@@ -226,10 +226,12 @@ crash): one documented value at a time, and commit before any hardware test.
    never writes. The app asks for `vr page` only while **Settings → Safety → "VR Page Select (PMBus write)"** is on
    (default on; off = nothing written to the VR, rows blank).
    - **Settings switches that do nothing are grayed on Windows** (owner, 2026-11-18): on Safety only S.M.A.R.T.
-     Support, Enable NVML and VR Page Select act; on SMBus / I2C only SMBus Support. **Linux: still all live — check
-     which do nothing there and gray those too** (on the next Linux boot, with step 1). "EC Support" could later
+     Support, Enable NVML and VR Page Select act; on SMBus / I2C only SMBus Support. **Linux: done 2026-11-18** — the
+     same switches act there (minus VR Page Select, Windows-only), so the same ones are grayed. "EC Support" could later
      turn off the ASUS EC reads (they use the ACPI EC command ports).
-1. **On the next Linux boot**: run both test suites (expected unchanged — every Windows change is gated); check OpenHW
+1. ~~**On the next Linux boot**~~ — **done 2026-11-18**: both suites pass on Linux (194 + 197, 8 Windows-only
+   skipped); all 8 `nvme-health:<id>`s match Windows'; the shared `fan-curves.json` matches Linux's own (key order
+   only); Fan Control moved to File on Linux too. Original item: run both test suites (expected unchanged — every Windows change is gated); check OpenHW
    there loads the shared fan configuration `/mnt/DriveC/StandAlone/OpenHW/configs` (Fan Control's title shows
    `fans.json`); compare a drive's `nvme-health:<id>` with the Windows ids.
 2. **DIMMs — the one-boot test (owner)**: Memory Integrity off (Windows Security → Core isolation) and restart; restart

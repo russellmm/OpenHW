@@ -722,8 +722,8 @@ public sealed class MainWindow : Window
         {
             if (c.ShowAlerts is { } alerts) file.Items.Add(Item("_Alerts…", alerts));
             if (c.ShowTrayIcons is { } trayIcons) file.Items.Add(Item("_Tray Icons…", trayIcons));
-            // Windows: Fan Control lives under File (owner, 2026-11-18); Linux still has it under Power (to move there too).
-            if (OperatingSystem.IsWindows() && c.ShowFanControl is { } fileFanControl) file.Items.Add(Item("Fan _Control…", fileFanControl));
+            // Fan Control lives under File on both systems (owner, 2026-11-18; was under Power).
+            if (c.ShowFanControl is { } fanControl) file.Items.Add(Item("Fan _Control…", fanControl));
             if (c.ShowHardwareCheck is { } hardwareCheck) file.Items.Add(Item("_Hardware Check…", hardwareCheck));
             if (c.ShowBmcLog is { } bmcLog) file.Items.Add(Item("_BMC Status & Event Log…", bmcLog));
             if (c.ShowBiosSetup is { } biosSetup) file.Items.Add(Item("B_IOS Setup…", biosSetup));
@@ -761,7 +761,6 @@ public sealed class MainWindow : Window
             // CPU frequency caps are Linux-only (not part of the Windows port, docs/windows-port.md).
             if (OperatingSystem.IsLinux()) _powerMenu.Items.Add(Item("CPU _Frequency…", commands.ShowCpuFrequency, "Ctrl+F"));
             _powerMenu.Items.Add(Item("Power _Limits…", commands.ShowPowerLimits, "Ctrl+L")); // Windows: NVIDIA limits (WindowsPowerLimitsWindow)
-            if (!OperatingSystem.IsWindows() && commands.ShowFanControl is { } fanControl) _powerMenu.Items.Add(Item("Fan _Control…", fanControl));
             if (commands.ShowGpuLending is { } lending) _powerMenu.Items.Add(Item("GPU Le_nding…", lending));
             _powerMenu.Items.Add(_fixCapItem);
             menu.Items.Add(_powerMenu);

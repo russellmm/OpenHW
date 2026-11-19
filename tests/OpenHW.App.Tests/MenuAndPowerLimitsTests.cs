@@ -43,11 +43,11 @@ public sealed class MenuAndPowerLimitsTests
         var menu = window.GetVisualDescendants().OfType<Menu>().Single();
         Assert.Equal(["_File", "_View", "_Power", "_Help"], menu.Items.OfType<MenuItem>().Select(m => (string)m.Header!));
         Assert.Contains(window.KeyBindings, k => k.Gesture.ToString() == "Ctrl+L");
-        // Fan Control: under File on Windows (owner, 2026-11-18), still under Power on Linux.
+        // Fan Control: under File on both systems (owner, 2026-11-18), no longer under Power.
         List<string> Headers(string top) => menu.Items.OfType<MenuItem>().Single(m => (string)m.Header! == top)
             .Items.OfType<MenuItem>().Select(i => (string)i.Header!).ToList();
-        Assert.Equal(OperatingSystem.IsWindows(), Headers("_File").Contains("Fan _Control…"));
-        Assert.Equal(!OperatingSystem.IsWindows(), Headers("_Power").Contains("Fan _Control…"));
+        Assert.Contains("Fan _Control…", Headers("_File"));
+        Assert.DoesNotContain("Fan _Control…", Headers("_Power"));
     }
 
     [AvaloniaFact]

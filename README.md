@@ -311,7 +311,7 @@ helper runs. The BMC keeps fan settings in its flash, so OpenHW prefers curves t
 duties it would have to keep rewriting. The design, the hardware findings and the BMC's interfaces as they really
 behave are in [docs/fan-control.md](docs/fan-control.md).
 
-**Fan Control (0.25.0–0.32.0)** — **Power → Fan Control…** (also in the tray menu) is one screen, laid out like
+**Fan Control (0.25.0–0.32.0)** — **File → Fan Control…** (under Power until 2026-11-18) (also in the tray menu) is one screen, laid out like
 OpenFan's Home: **Controls** (a card per fan — the BMC's seven zones and every NVIDIA fan — with a Curve box, the curve it runs, its duty and RPM)
 and **Curves**, as in OpenFan: **graphs** (any number of points over any temperature OpenHW reads — or the hottest of
 several, e.g. All DIMMs — drag points, click to add, hysteresis in °C and seconds, max speed; each card shows the

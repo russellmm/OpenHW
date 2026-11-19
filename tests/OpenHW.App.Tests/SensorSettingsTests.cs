@@ -386,17 +386,18 @@ public sealed class SensorSettingsTests
         s.Hub.Sample();
         Assert.Equal(hadSmart, s.Hub.Inventory.Any(i => Smart(i.Id))); // back (on a machine whose helper reads SMART)
 
+        // Both systems: only the switches OpenHW acts on stay live; HWiNFO's others are grayed (owner, 2026-11-18).
+        Assert.True(Box("Safety", "S.M.A.R.T. Support").IsEnabled);
+        Assert.True(Box("Safety", "Enable NVML").IsEnabled);
+        Assert.False(Box("Safety", "EC Support").IsEnabled);
+        Assert.False(Box("Safety", "Debug Write Direct").IsEnabled);
+        Assert.True(Box("SMBus / I2C", "SMBus Support").IsEnabled);
+        Assert.False(Box("SMBus / I2C", "GPU I2C Support").IsEnabled);
         if (OperatingSystem.IsWindows())
         {
-            // Windows: only the switches OpenHW acts on stay live; HWiNFO's others are grayed (owner, 2026-11-18).
             Assert.True(Box("Safety", "VR Page Select (PMBus write)").IsEnabled);
             Box("Safety", "VR Page Select (PMBus write)").IsChecked = false;
             Assert.False(s.Settings.VrPageSelect);
-            Assert.True(Box("Safety", "Enable NVML").IsEnabled);
-            Assert.False(Box("Safety", "EC Support").IsEnabled);
-            Assert.False(Box("Safety", "Debug Write Direct").IsEnabled);
-            Assert.True(Box("SMBus / I2C", "SMBus Support").IsEnabled);
-            Assert.False(Box("SMBus / I2C", "GPU I2C Support").IsEnabled);
         }
 
         Box("General / User Interface", "Validate Window Positions").IsChecked = false;

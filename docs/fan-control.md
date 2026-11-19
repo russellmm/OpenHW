@@ -98,7 +98,7 @@ partition), but endurance isn't documented — hence the write discipline below.
 
 ```
 OpenHW app ──(Unix socket, protocol 18)──► openhw-helper (root, sandboxed)
-  Power → Fan Control… (one screen)            FanDriver ── AsusBmcFans ── IIpmiTransport ── /dev/ipmi0   (BMC fans)
+  File → Fan Control… (one screen)             FanDriver ── AsusBmcFans ── IIpmiTransport ── /dev/ipmi0   (BMC fans)
     FanCurveRunner: BMC-run curves → Apply     BmcRedfish ── HTTPS (pinned cert) ── 169.254.0.17         (sources)
                     driven curves → Tick        GpuFanDriver ── LiveNvmlFans ── NVML                       (NVIDIA fans)
   openhw --fan-test
@@ -149,7 +149,7 @@ AF_INET`, `IPAddressDeny=any`, `IPAddressAllow=169.254.0.0/16` (was `PrivateNetw
 
 ## UI
 
-Power → Fan Control… (also in the tray menu) is one screen, laid out like OpenFan's Home — see "Curves" below for the
+File → Fan Control… (Power → until 2026-11-18) (also in the tray menu) is one screen, laid out like OpenFan's Home — see "Curves" below for the
 details: **fan cards** (BMC zones and NVIDIA fans: Curve box + curve, duty/RPM, where it runs, Apply, friendly name,
 ⋮ move / Edit BMC curve… / Restore original), **curve cards** (flat, graph incl. bulk sensors, mix with its BMC preview),
 New/Duplicate, drag-and-drop order, and configurations in the window's ⋮. A BMC fan's own 5-point curve can still be
@@ -220,7 +220,7 @@ Not yet checked: whether a slot still reads while its card is lent to the VM.
   gate, faster at once, slower only ≥ 5 % and ≥ 60 s after the last change (the driver's 30 s / 3 % rules still apply
   below), counted per day; lease renewed by `fanbeat`; no readings for 20 s → release; app exit → release. Each start
   and stop of a driven fan costs a write (takeover / restore).
-- **UI (0.26.0, owner: "a single screen like OpenFan has")**: Power → Fan Control… = OpenFan's Home — control cards
+- **UI (0.26.0, owner: "a single screen like OpenFan has")**: Power → Fan Control… (File → since 2026-11-18) = OpenFan's Home — control cards
   (BMC zones + NVIDIA fans; Curve box + curve dropdown, duty/RPM, where it runs, Apply when a BMC-run curve isn't on the
   BMC yet, ⋮ Edit BMC curve… / Restore original) and curve cards (flat −/+, graph with source, output, mini preview with
   the live reading as a dot, Edit → graph editor with the green dashed BMC version; mix with function, add, ×). A BMC

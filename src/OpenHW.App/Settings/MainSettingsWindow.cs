@@ -160,9 +160,9 @@ public sealed class MainSettingsWindow : ClassicDialog
         var rightChecks = right.Select(c => p.Check(c.Text, 675, c.Y, c.On)).ToList();
         Bind(rightChecks[0], _settings, _applied, () => _settings.ReadNvidia, v => _settings.ReadNvidia = v,
             "Read the NVIDIA GPUs (NVML, through openhw-helper). Off: the GPU sensors leave the list. GPU Lending works either way.");
-        // Windows: the rest of HWiNFO's switches have nothing behind them yet, so they're grayed (owner, 2026-11-18).
-        // Linux still shows them all live — to gray there too once checked which do nothing (docs/windows-port.md).
-        if (OperatingSystem.IsWindows()) GrayUnwired(p, smart, rightChecks[0], vrPage);
+        // The rest of HWiNFO's switches have nothing behind them yet, so they're grayed on both systems (owner,
+        // 2026-11-18): S.M.A.R.T. Support and Enable NVML act everywhere, VR Page Select on Windows only.
+        GrayUnwired(p, smart, rightChecks[0], vrPage);
         return p;
     }
 
@@ -204,7 +204,7 @@ public sealed class MainSettingsWindow : ClassicDialog
         p.Check("GPU I2C Caching", 489, 368, true);
         p.Button("Reset GPU I2C Cache", 489, 390, 745, 446);
         p.Check("Force GPU I2C Support", 489, 473);
-        if (OperatingSystem.IsWindows()) GrayUnwired(p, smbus); // as on Safety: only SMBus Support acts
+        GrayUnwired(p, smbus); // as on Safety: only SMBus Support acts
         return p;
     }
 
