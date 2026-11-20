@@ -195,7 +195,8 @@ These choices are kept in `~/.config/openhw/sensors.json`.
 with its Monitoring state, **Monitoring** / **Show** checkboxes for the selected sensor, and the order — ⤒ ↑ ↓ ⤓ move
 a sensor within its group, or a whole group among groups. Hidden sensors are listed below (select one and tick Show
 to bring it back); Rename… and Customize values… act on the selection; **Restore Original Order** goes back to
-OpenHW's order. Per-core rows follow their parent row. A sensor or group that appears later (a new drive, a driver
+OpenHW's order. Groups collapse and expand (▾ / ▸, double-click, ← / →; **Collapse All / Expand All**), so a group moves
+up or down without scrolling past every sensor. Per-core rows follow their parent row. A sensor or group that appears later (a new drive, a driver
 update) keeps OpenHW's place for it.
 
 **Customize values** (a sensor's **Customize values…**, or the button in Layout Settings) shows the sensor as
@@ -495,8 +496,8 @@ a display — useful for checking changes headlessly.
 
 ## Versions
 
-Semantic versioning, pre-1.0: the **minor** number goes up with each round of new features, the **patch** number for
-fixes only. The version is set once in `Directory.Build.props` (app, helper and tests share it), every release gets a
+Semantic versioning (1.0.0 on 2026-11-19 ended the 0.x series): the **minor** number goes up with each round of new
+features, the **patch** number for fixes only. The version is set once in `Directory.Build.props` (app, helper and tests share it), every release gets a
 [CHANGELOG.md](CHANGELOG.md) entry and a `vX.Y.Z` git tag, and the window footer / Help → About show
 `OpenHW X.Y.Z · <git revision>` ("-dirty" if built with uncommitted changes — commit before installing).
 

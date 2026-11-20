@@ -359,9 +359,8 @@ public sealed class SensorSettingsWindow : ClassicDialog
             if (!UserChange || LayoutSensor is not { } id) return;
             var hide = _show.IsChecked != true;
             _custom.SetHidden(id, hide);
-            // The sensor moved to the other list: keep it selected there.
-            var list = hide ? HiddenList : LayoutList;
-            list.Selected = list.Entries.FirstOrDefault(e => !e.IsGroup && e.Key == id);
+            // The sensor moved to the other list: keep it selected there (opening its group if that is collapsed).
+            (hide ? HiddenList : LayoutList).SelectSensor(id);
         };
         return p;
     }

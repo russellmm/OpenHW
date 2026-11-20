@@ -216,6 +216,119 @@ public sealed class LayoutAndValuesTests
         layout.Close();
     }
 
+    // A group heading's ▸ / ▾ glyph and its row in View → Layout Settings, as drawn.
+    private static TextBlock Glyph(LayoutWindow layout, string group) =>
+        layout.GetVisualDescendants().OfType<TextBlock>()
+            .First(t => t.Classes.Contains(LayoutWindow.ToggleClass) && t.IsVisible && t.DataContext is LayoutWindow.Entry { IsGroup: true } e && e.Key == group);
+
+    private static ListBoxItem HeadingRow(LayoutWindow layout, string group) =>
+        layout.GetVisualDescendants().OfType<ListBoxItem>()
+            .First(i => i.DataContext is LayoutWindow.Entry { Collapsible: true } e && e.Key == group);
+
+    private static Avalonia.Point Centre(Window window, Control c) =>
+        Avalonia.VisualExtensions.TranslatePoint(c, new Avalonia.Point(c.Bounds.Width / 2, c.Bounds.Height / 2), window)!.Value;
+
+    private static void Click(Window window, Avalonia.Point at, Avalonia.Input.MouseButton button = Avalonia.Input.MouseButton.Left, int times = 1)
+    {
+        for (var i = 0; i < times; i++)
+        {
+            window.MouseDown(at, button);
+            window.MouseUp(at, button);
+        }
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void LayoutWindowGroupsCollapseToMoveThem()
+    {
+        var (hub, window, custom) = Open();
+        using var _ = hub;
+        var layout = new LayoutWindow(hub);
+        layout.ShowFor(null);
+        Dispatcher.UIThread.RunJobs();
+        var groups = layout.ListEntries.Where(e => e.IsGroup).Select(e => e.Key).ToList();
+        Assert.True(groups.Count >= 2);
+        var sensors = layout.ListEntries.Count(e => !e.IsGroup);
+        var first = layout.ListEntries.First(e => !e.IsGroup);
+        layout.Select(first);
+
+        // The glyph collapses its group; the selected sensor's heading takes the selection, and the glyph turns ▸.
+        Click(layout, Centre(layout, Glyph(layout, first.GroupKey)));
+        Assert.True(layout.IsCollapsed(first.GroupKey));
+        Assert.DoesNotContain(layout.ListEntries, e => !e.IsGroup && e.GroupKey == first.GroupKey);
+        Assert.Equal("▸", Glyph(layout, first.GroupKey).Text);
+        Assert.Equal((first.GroupKey, true), (layout.SelectedEntry?.Key, layout.SelectedEntry?.IsGroup));
+
+        // → on the heading opens it again, ← closes it.
+        void Press(Avalonia.Input.Key key)
+        {
+            HeadingRow(layout, first.GroupKey).RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = key });
+            Dispatcher.UIThread.RunJobs();
+        }
+        Press(Avalonia.Input.Key.Right);
+        Assert.False(layout.IsCollapsed(first.GroupKey));
+        Assert.Equal("▾", Glyph(layout, first.GroupKey).Text);
+        Press(Avalonia.Input.Key.Left);
+        Assert.True(layout.IsCollapsed(first.GroupKey));
+
+        // Double-clicking another heading toggles that one; double-clicking a glyph toggles only its own group (twice);
+        // a right-click does nothing.
+        Click(layout, Centre(layout, HeadingRow(layout, groups[1])), times: 2);
+        Assert.True(layout.IsCollapsed(groups[1]));
+        layout.Select(layout.ListEntries.First(e => e.Key == groups[0]));
+        Click(layout, Centre(layout, Glyph(layout, groups[1])), times: 2);
+        Assert.True(layout.IsCollapsed(groups[0]));
+        Assert.True(layout.IsCollapsed(groups[1]));
+        Click(layout, Centre(layout, Glyph(layout, groups[1])), Avalonia.Input.MouseButton.Right);
+        Assert.True(layout.IsCollapsed(groups[1]));
+
+        // Collapse All: headings only; moving a group works on the whole order and the groups stay collapsed.
+        layout.SetAllCollapsed(true);
+        Dispatcher.UIThread.RunJobs();
+        layout.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-window-collapsed.png"));
+        Assert.All(layout.ListEntries, e => Assert.True(e.IsGroup));
+        layout.Select(layout.ListEntries.First(e => e.Key == groups[0]));
+        layout.MoveSelected(1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal([groups[1], groups[0]], layout.ListEntries.Select(e => e.Key).Take(2).ToList());
+        Assert.All(layout.ListEntries, e => Assert.True(e.IsGroup));
+
+        // Showing a hidden sensor while its group is collapsed opens the group and keeps the sensor selected.
+        var boxes = layout.GetVisualDescendants().OfType<CheckBox>().ToList();
+        var show = boxes.Single(b => (string)b.Content! == "Show");
+        custom.SetHidden(first.Key, true);
+        Dispatcher.UIThread.RunJobs();
+        layout.Select(layout.HiddenEntries.Single(e => e.Key == first.Key));
+        show.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(layout.IsCollapsed(first.GroupKey));
+        Assert.Contains(layout.ListEntries, e => e.Key == first.Key && !e.IsGroup);
+        Assert.Equal((first.Key, false), (layout.SelectedEntry?.Key, layout.SelectedEntry?.IsGroup));
+        Assert.Contains(layout.ListEntries, e => e == layout.SelectedEntry); // in the main list, not the hidden one
+
+        // A group that comes back after Collapse All arrives collapsed; Expand All shows every sensor again.
+        var last = groups[^1];
+        layout.SetAllCollapsed(false);
+        var lastSensors = layout.ListEntries.Where(e => !e.IsGroup && e.GroupKey == last).Select(e => e.Key).ToList();
+        foreach (var id in lastSensors) custom.SetHidden(id, true);
+        layout.SetAllCollapsed(true);
+        custom.SetHidden(lastSensors[0], false);
+        Assert.True(layout.IsCollapsed(last));
+        foreach (var id in lastSensors) custom.SetHidden(id, false);
+        layout.SetAllCollapsed(false);
+        Assert.Equal(sensors, layout.ListEntries.Count(e => !e.IsGroup));
+        custom.RestoreOriginalOrder();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(groups, layout.ListEntries.Where(e => e.IsGroup).Select(e => e.Key).ToList());
+        layout.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-window.png"));
+        layout.Width = layout.MinWidth; // the narrowest the window goes still shows Collapse All
+        Dispatcher.UIThread.RunJobs();
+        var collapseAll = layout.GetVisualDescendants().OfType<Button>().Single(b => b.Content is "Collapse All");
+        Assert.True(Avalonia.VisualExtensions.TranslatePoint(collapseAll, new Avalonia.Point(collapseAll.Bounds.Width, 0), layout)!.Value.X <= layout.Width);
+        layout.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-window-narrow.png"));
+        layout.Close();
+    }
+
     [AvaloniaFact]
     public void PausingWhileHiddenKeepsOnlyPinnedSensorsLive()
     {

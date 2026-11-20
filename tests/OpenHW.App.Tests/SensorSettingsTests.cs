@@ -210,6 +210,102 @@ public sealed class SensorSettingsTests
         window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "openhw-layout-tab.png"));
     }
 
+    // A group heading's ▸ / ▾ glyph and its row, as drawn.
+    private static TextBlock Glyph(ClassicEntryList list, string group) =>
+        list.GetVisualDescendants().OfType<TextBlock>()
+            .First(t => t.Classes.Contains("group-toggle") && t.DataContext is ClassicEntryList.Entry { IsGroup: true } e && e.Key == group);
+
+    private static ListBoxItem Row(ClassicEntryList list, string group) =>
+        list.GetVisualDescendants().OfType<ListBoxItem>()
+            .First(i => i.DataContext is ClassicEntryList.Entry { IsGroup: true } e && e.Key == group);
+
+    private static Avalonia.Point Centre(Window window, Control c) =>
+        Avalonia.VisualExtensions.TranslatePoint(c, new Avalonia.Point(c.Bounds.Width / 2, c.Bounds.Height / 2), window)!.Value;
+
+    private static void DoubleClick(Window window, Avalonia.Point at)
+    {
+        for (var i = 0; i < 2; i++)
+        {
+            window.MouseDown(at, Avalonia.Input.MouseButton.Left);
+            window.MouseUp(at, Avalonia.Input.MouseButton.Left);
+        }
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Press(ClassicEntryList list, string group, Avalonia.Input.Key key)
+    {
+        Row(list, group).RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = key });
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void LayoutGroupTogglesActOnTheGroupTheyBelongTo()
+    {
+        Isolate();
+        using var s = Open();
+        var custom = SensorCustomizations.Current;
+        var window = s.Window;
+        window.SelectTab("Layout");
+        var list = window.LayoutList;
+        Dispatcher.UIThread.RunJobs();
+        var groups = list.Entries.Where(e => e.IsGroup).Select(e => e.Key).ToList();
+        Assert.True(groups.Count >= 2);
+
+        // ← / → on a heading collapse and expand it, and its glyph follows.
+        list.Selected = list.Entries.First(e => e.Key == groups[0]);
+        Press(list, groups[0], Avalonia.Input.Key.Left);
+        Assert.True(list.IsCollapsed(groups[0]));
+        Assert.Equal("▸", Glyph(list, groups[0]).Text);
+        Press(list, groups[0], Avalonia.Input.Key.Right);
+        Assert.False(list.IsCollapsed(groups[0]));
+        Assert.Equal("▾", Glyph(list, groups[0]).Text);
+
+        // Double-clicking a heading toggles that heading (the first group closed, so the second is on screen).
+        list.SetCollapsed(groups[0], true);
+        Dispatcher.UIThread.RunJobs();
+        DoubleClick(window, Centre(window, Row(list, groups[1])));
+        Assert.True(list.IsCollapsed(groups[1]));
+
+        // Double-clicking another group's glyph toggles only that group (twice), never the selected one.
+        list.Selected = list.Entries.First(e => e.Key == groups[0]);
+        Dispatcher.UIThread.RunJobs();
+        DoubleClick(window, Centre(window, Glyph(list, groups[1])));
+        Assert.True(list.IsCollapsed(groups[0]));
+        Assert.True(list.IsCollapsed(groups[1]));
+
+        // A right-click on the glyph does nothing.
+        var glyph = Centre(window, Glyph(list, groups[1]));
+        window.MouseDown(glyph, Avalonia.Input.MouseButton.Right);
+        window.MouseUp(glyph, Avalonia.Input.MouseButton.Right);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(list.IsCollapsed(groups[1]));
+        list.SetAllCollapsed(false);
+
+        // Showing a hidden sensor while its group is collapsed opens the group and keeps the sensor selected.
+        var sensor = FirstSensor(list, e => e.GroupKey == groups[0]);
+        list.Selected = sensor;
+        window.ShowBox.IsChecked = false;
+        Assert.True(custom.IsHidden(sensor.Key));
+        list.SetAllCollapsed(true);
+        window.HiddenList.Selected = FirstSensor(window.HiddenList, e => e.Key == sensor.Key);
+        window.ShowBox.IsChecked = true;
+        Assert.False(custom.IsHidden(sensor.Key));
+        Assert.Equal((sensor.Key, false), (list.Selected?.Key, list.Selected?.IsGroup));
+        Assert.False(list.IsCollapsed(groups[0]));
+        Assert.True(list.IsCollapsed(groups[1]));
+
+        // After Collapse All, a group that comes back later arrives collapsed too.
+        var last = groups[^1];
+        var lastSensors = list.Shown.Where(e => !e.IsGroup && e.GroupKey == last).Select(e => e.Key).ToList();
+        foreach (var id in lastSensors) custom.SetHidden(id, true);
+        Assert.DoesNotContain(list.Shown, e => e.Key == last);
+        list.SetAllCollapsed(true);
+        custom.SetHidden(lastSensors[0], false);
+        Assert.Contains(list.Entries, e => e.Key == last && e.IsGroup);
+        Assert.True(list.IsCollapsed(last));
+        foreach (var id in lastSensors) custom.SetHidden(id, false);
+    }
+
     [AvaloniaFact]
     public void CustomizeTabIsRenameCustomizeValuesAndLogging()
     {

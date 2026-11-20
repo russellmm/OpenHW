@@ -1,7 +1,25 @@
 # Changelog
 
-Versioning: semantic, pre-1.0 — **minor** for a round of new features, **patch** for fixes only. The version is set
-once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows `X.Y.Z · <git revision>`.
+Versioning: semantic — **minor** for a round of new features, **patch** for fixes only (1.0.0 ended the 0.x series).
+The version is set once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
+`X.Y.Z · <git revision>`.
+
+## 1.0.0 — 2026-11-19 — first 1.x release; collapsible groups in View → Layout Settings too
+
+- View → Layout Settings: groups collapse and expand as on Sensor Settings → Layout — ▾ / ▸ on a group heading, a
+  double-click, ← / →, and **Collapse All / Expand All** beside Rename… / Customize values…. Moves work on the whole
+  order while groups are collapsed; a row's "Layout settings…" opens the sensor's group. The window's minimum width is
+  now 600 px, so the buttons always fit.
+- Fixes to 0.42.0's collapsible groups (both windows):
+  - A double-click toggles the heading that was double-clicked, not the selected group, and double-clicking a ▸ / ▾
+    no longer also toggles the selected group.
+  - ← / → work (the list consumed the arrow keys before).
+  - The ▸ / ▾ glyph and its tooltip always follow the group's state.
+  - Ticking Show on a hidden sensor whose group is collapsed opens the group and keeps the sensor selected.
+  - Right and middle clicks on the glyph do nothing.
+  - After Collapse All, a group that appears later (a sensor shown again, new hardware) starts collapsed too.
+  - The Hidden items, Customize, Tray Icon and Alerts lists behave as before 0.42.0 (no heading fallback, no scroll
+    back to the selection after a save).
 
 ## 0.42.0 — 2026-11-18 — collapsible groups on Sensor Settings → Layout
 

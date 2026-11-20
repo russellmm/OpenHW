@@ -2,9 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using OpenHW.App.Sensors;
 
 namespace OpenHW.App.SensorWindow;
@@ -13,7 +15,8 @@ namespace OpenHW.App.SensorWindow;
 /// View → Layout Settings… (and a sensor's "Layout settings…"), HWiNFO's Layout tab: every group and sensor with
 /// its Monitoring state, the order of groups and of sensors within a group, show/hide, and the hidden items below.
 /// Changes are saved and applied at once (sensors.json); Restore Original Order goes back to OpenHW's order.
-/// Per-core rows aren't listed: they follow their parent row.
+/// Per-core rows aren't listed: they follow their parent row. Groups in the main list collapse (▾ / ▸, a double-click,
+/// ← / →, Collapse All / Expand All) so they can be reordered without scrolling past every sensor.
 /// </summary>
 public sealed class LayoutWindow : Window
 {
@@ -21,8 +24,15 @@ public sealed class LayoutWindow : Window
     public sealed record Entry(string Key, string GroupKey, bool IsGroup, string Label, string Monitoring)
     {
         public FontWeight Weight => IsGroup ? FontWeight.Bold : FontWeight.Normal;
-        public Thickness Indent => new(IsGroup ? 4 : 22, 0, 0, 0);
+        public Thickness Indent => new(IsGroup ? Collapsible ? 2 : 4 : 22, 0, 0, 0);
+        /// <summary>A main-list group heading can collapse; part of the row's value, so a toggle redraws its glyph.</summary>
+        public bool Collapsible { get; init; }
+        public bool Collapsed { get; init; }
+        public string Glyph => Collapsible ? Collapsed ? "▸" : "▾" : "";
+        public string GlyphTip => Collapsed ? "Expand this group" : "Collapse this group";
     }
+
+    internal const string ToggleClass = "group-toggle";
 
     private readonly SensorHub _hub;
     private readonly SensorCustomizations _custom = SensorCustomizations.Current;
@@ -33,6 +43,9 @@ public sealed class LayoutWindow : Window
     private readonly Button _top, _up, _down, _bottom, _rename, _customize, _restore;
     private readonly TextBlock _status = new() { Foreground = Palette.Footnote, TextWrapping = TextWrapping.Wrap };
     private IReadOnlyList<SensorGroupView> _groups = [];
+    private List<Entry> _shownAll = []; // the main list with every group open, for moves
+    private readonly HashSet<string> _collapsed = [];
+    private bool _collapseNew; // after Collapse All, groups that turn up later start collapsed too
     private bool _filling; // the window is setting the checkboxes: not a user change
 
     public LayoutWindow(SensorHub hub)
@@ -41,7 +54,7 @@ public sealed class LayoutWindow : Window
         Title = "OpenHW Layout Settings";
         Width = 640;
         Height = 760;
-        MinWidth = 520;
+        MinWidth = 600; // room for Collapse All / Expand All beside the order buttons
         MinHeight = 520;
         Background = Palette.Window;
         Foreground = Palette.Text;
@@ -54,6 +67,8 @@ public sealed class LayoutWindow : Window
         _rename = Button("Rename…", null, () => _ = RenameAsync());
         _customize = Button("Customize values…", null, () => _ = CustomizeAsync());
         _restore = Button("Restore Original Order", "Back to OpenHW's order for every group and sensor", _custom.RestoreOriginalOrder);
+        var collapseAll = Button("Collapse All", "Show only the group headings (▸), to move groups up and down. A group's own ▾ / ▸, a double-click or ← / → open or close one group.", () => SetAllCollapsed(true));
+        var expandAll = Button("Expand All", "Show every group's sensors again.", () => SetAllCollapsed(false));
 
         _list.SelectionChanged += (_, _) => { if (_list.SelectedItem is not null) _hidden.SelectedItem = null; UpdateControls(); };
         _hidden.SelectionChanged += (_, _) => { if (_hidden.SelectedItem is not null) _list.SelectedItem = null; UpdateControls(); };
@@ -63,8 +78,37 @@ public sealed class LayoutWindow : Window
         };
         _show.IsCheckedChanged += (_, _) =>
         {
-            if (!_filling && Selected is { IsGroup: false } e) _custom.SetHidden(e.Key, _show.IsChecked != true);
+            if (_filling || Selected is not { IsGroup: false } e) return;
+            var hide = _show.IsChecked != true;
+            if (!hide) _collapsed.Remove(e.GroupKey); // back in the main list: open its group so it stays selected
+            _custom.SetHidden(e.Key, hide);
         };
+        // The heading that was double-clicked (not the selected row); the ▸ / ▾ glyph already toggled on its clicks.
+        _list.DoubleTapped += (_, e) =>
+        {
+            if (e.Source is not Control source || source.Classes.Contains(ToggleClass)) return;
+            if (source.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is Entry { Collapsible: true } group)
+            {
+                Toggle(group.Key);
+                e.Handled = true;
+            }
+        };
+        // Tunnel, so ← / → reach this before the list's own handling of the arrow keys.
+        _list.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (_list.SelectedItem is not Entry { Collapsible: true } group || e.Key is not (Key.Left or Key.Right)) return;
+            SetCollapsed(group.Key, e.Key == Key.Left);
+            e.Handled = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        _list.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.Source is Control { DataContext: Entry { Collapsible: true } group } glyph && glyph.Classes.Contains(ToggleClass)
+                && e.GetCurrentPoint(glyph).Properties.IsLeftButtonPressed)
+            {
+                Toggle(group.Key);
+                e.Handled = true;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
         var order = new Border
         {
@@ -87,6 +131,7 @@ public sealed class LayoutWindow : Window
                 new StackPanel { Spacing = 2, Children = { _monitoring, _show } },
                 order,
                 new StackPanel { Spacing = 6, Children = { _rename, _customize } },
+                new StackPanel { Spacing = 6, Children = { collapseAll, expandAll } },
             },
         };
         var content = new DockPanel { Margin = new Thickness(12) };
@@ -108,6 +153,8 @@ public sealed class LayoutWindow : Window
     /// <summary>Shows the window with <paramref name="sensorId"/> (a row's "Layout settings…") selected.</summary>
     public void ShowFor(string? sensorId)
     {
+        // A collapsed group opens to show the sensor asked for.
+        if (sensorId is not null && _shownAll.FirstOrDefault(e => !e.IsGroup && e.Key == sensorId) is { } row) _collapsed.Remove(row.GroupKey);
         Refill();
         if (sensorId is not null)
         {
@@ -127,6 +174,24 @@ public sealed class LayoutWindow : Window
     internal IReadOnlyList<Entry> HiddenEntries => Entries(_hidden).ToList();
     internal void Select(Entry entry) => (Entries(_list).Contains(entry) ? _list : _hidden).SelectedItem = entry;
     internal void MoveSelected(int by) => Move(by);
+    internal Entry? SelectedEntry => Selected;
+    internal bool IsCollapsed(string groupKey) => _collapsed.Contains(groupKey);
+
+    internal void SetCollapsed(string groupKey, bool collapsed)
+    {
+        if (collapsed ? _collapsed.Add(groupKey) : _collapsed.Remove(groupKey)) Refill();
+    }
+
+    private void Toggle(string groupKey) => SetCollapsed(groupKey, !IsCollapsed(groupKey));
+
+    /// <summary>Collapses (true) or expands (false) every group in the main list.</summary>
+    internal void SetAllCollapsed(bool collapsed)
+    {
+        _collapseNew = collapsed;
+        _collapsed.Clear();
+        if (collapsed) _collapsed.UnionWith(_shownAll.Where(e => e.IsGroup).Select(e => e.Key));
+        Refill();
+    }
 
     private static IEnumerable<Entry> Entries(ListBox list) => list.Items.OfType<Entry>();
     private Entry? Selected => (_list.SelectedItem ?? _hidden.SelectedItem) as Entry;
@@ -146,7 +211,7 @@ public sealed class LayoutWindow : Window
             var monitored = visible.Any(s => !_custom.IsDisabled(s.Id)) ? "Yes" : "No";
             if (visible.Count > 0)
             {
-                shown.Add(new Entry(group.Key, group.Key, true, $"[{group.Title}]", monitored));
+                shown.Add(new Entry(group.Key, group.Key, true, $"[{group.Title}]", monitored) { Collapsible = true });
                 shown.AddRange(visible.Select(s => new Entry(s.Id, group.Key, false, s.Name, Monitoring(s.Id))));
             }
             if (gone.Count > 0)
@@ -155,14 +220,36 @@ public sealed class LayoutWindow : Window
                 hidden.AddRange(gone.Select(s => new Entry(s.Id, group.Key, false, s.Name, Monitoring(s.Id))));
             }
         }
-        _list.ItemsSource = shown;
+        if (_collapseNew)
+        {
+            var known = _shownAll.Where(e => e.IsGroup).Select(e => e.Key).ToHashSet();
+            _collapsed.UnionWith(shown.Where(e => e.IsGroup && !known.Contains(e.Key)).Select(e => e.Key));
+        }
+        _shownAll = shown;
+        // A collapsed group shows its heading only.
+        var onScreen = new List<Entry>();
+        var closed = false;
+        foreach (var e in shown)
+        {
+            if (e.IsGroup)
+            {
+                closed = _collapsed.Contains(e.Key);
+                onScreen.Add(closed ? e with { Collapsed = true } : e);
+            }
+            else if (!closed) onScreen.Add(e);
+        }
+        _list.ItemsSource = onScreen;
         _hidden.ItemsSource = hidden;
         if (selected is not null)
         {
-            var again = shown.FirstOrDefault(e => e.Key == selected.Key && e.IsGroup == selected.IsGroup);
+            var again = onScreen.FirstOrDefault(e => e.Key == selected.Key && e.IsGroup == selected.IsGroup);
             var hiddenAgain = again is null ? hidden.FirstOrDefault(e => e.Key == selected.Key && e.IsGroup == selected.IsGroup) : null;
+            // A sensor whose group was just collapsed: its group heading takes the selection.
+            if (again is null && hiddenAgain is null && !selected.IsGroup)
+                again = onScreen.FirstOrDefault(e => e.IsGroup && e.Key == selected.GroupKey);
             _list.SelectedItem = again;
             _hidden.SelectedItem = hiddenAgain;
+            if (again is not null) _list.ScrollIntoView(again);
         }
         _restore.IsEnabled = _custom.HasCustomOrder;
         UpdateControls();
@@ -188,7 +275,8 @@ public sealed class LayoutWindow : Window
     private void Move(int by)
     {
         if (_list.SelectedItem is not Entry entry) return;
-        MoveShown(_custom, _groups, Entries(_list).Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList(), entry.Key, entry.IsGroup, entry.GroupKey, by);
+        // The whole order, collapsed groups' sensors included.
+        MoveShown(_custom, _groups, _shownAll.Select(e => (e.Key, e.IsGroup, e.GroupKey)).ToList(), entry.Key, entry.IsGroup, entry.GroupKey, by);
     }
 
     /// <summary>
@@ -250,10 +338,23 @@ public sealed class LayoutWindow : Window
                 label.Bind(TextBlock.TextProperty, new Binding(nameof(Entry.Label)));
                 label.Bind(TextBlock.FontWeightProperty, new Binding(nameof(Entry.Weight)));
                 label.Bind(MarginProperty, new Binding(nameof(Entry.Indent)));
+                // The ▾ / ▸ toggle of a main-list group (empty, so not shown, elsewhere); clicks are handled by the window.
+                var glyph = new TextBlock
+                {
+                    Width = 14, TextAlignment = TextAlignment.Center, Background = Brushes.Transparent,
+                    Cursor = new Cursor(StandardCursorType.Hand), Classes = { ToggleClass },
+                };
+                glyph.Bind(TextBlock.TextProperty, new Binding(nameof(Entry.Glyph)));
+                glyph.Bind(IsVisibleProperty, new Binding(nameof(Entry.Collapsible)));
+                glyph.Bind(ToolTip.TipProperty, new Binding(nameof(Entry.GlyphTip)));
+                var name = new DockPanel { LastChildFill = true };
+                DockPanel.SetDock(glyph, Dock.Left);
+                name.Children.Add(glyph);
+                name.Children.Add(label);
                 var monitoring = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center };
                 monitoring.Bind(TextBlock.TextProperty, new Binding(nameof(Entry.Monitoring)));
                 Grid.SetColumn(monitoring, 1);
-                grid.Children.Add(label);
+                grid.Children.Add(name);
                 grid.Children.Add(monitoring);
                 return grid;
             }, supportsRecycling: true),

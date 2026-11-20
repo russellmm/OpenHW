@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Path = Avalonia.Controls.Shapes.Path;
 using OpenHW.App.SensorWindow;
 
@@ -228,11 +229,16 @@ public sealed class ClassicEntryList : Border
     public sealed record Entry(string Key, bool IsGroup, string Label, string Value, string GroupKey = "")
     {
         public bool IsSpacer => Key.Length == 0;
+        /// <summary>A group heading shown collapsed (▸). Part of the row's value, so a toggle redraws its glyph.</summary>
+        public bool Collapsed { get; init; }
     }
+
+    private const string ToggleClass = "group-toggle";
 
     private readonly ListBox _list;
     private readonly bool _collapsible;
     private readonly HashSet<string> _collapsed = [];
+    private bool _collapseNew; // after Collapse All, groups that turn up later start collapsed too
     private IReadOnlyList<Entry> _all = [];
 
     public event Action<Entry?>? SelectionChanged;
@@ -263,16 +269,23 @@ public sealed class ClassicEntryList : Border
         };
         if (_collapsible)
         {
+            // The heading that was double-clicked (not the selected row); the ▸ / ▾ glyph already toggled on its clicks.
             _list.DoubleTapped += (_, e) =>
             {
-                if (Selected is { IsGroup: true } group) { Toggle(group.Key); e.Handled = true; }
+                if (e.Source is not Control source || source.Classes.Contains(ToggleClass)) return;
+                if (source.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is Entry { IsGroup: true } group)
+                {
+                    Toggle(group.Key);
+                    e.Handled = true;
+                }
             };
-            _list.KeyDown += (_, e) =>
+            // Tunnel, so ← / → reach this before any list or scroller handling of the arrow keys.
+            _list.AddHandler(KeyDownEvent, (_, e) =>
             {
                 if (Selected is not { IsGroup: true } group || e.Key is not (Key.Left or Key.Right)) return;
                 SetCollapsed(group.Key, e.Key == Key.Left);
                 e.Handled = true;
-            };
+            }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
         _list.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
@@ -313,11 +326,17 @@ public sealed class ClassicEntryList : Border
         {
             var toggle = new TextBlock
             {
-                Text = IsCollapsed(entry.Key) ? "▸" : "▾", Width = 14, TextAlignment = TextAlignment.Center,
+                Text = entry.Collapsed ? "▸" : "▾", Width = 14, TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
             };
-            ToolTip.SetTip(toggle, IsCollapsed(entry.Key) ? "Expand this group" : "Collapse this group");
-            toggle.PointerPressed += (_, e) => { Toggle(entry.Key); e.Handled = true; };
+            toggle.Classes.Add(ToggleClass);
+            ToolTip.SetTip(toggle, entry.Collapsed ? "Expand this group" : "Collapse this group");
+            toggle.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(toggle).Properties.IsLeftButtonPressed) return;
+                Toggle(entry.Key);
+                e.Handled = true;
+            };
             DockPanel.SetDock(toggle, Dock.Left);
             row.Children.Add(toggle);
         }
@@ -332,8 +351,23 @@ public sealed class ClassicEntryList : Border
     /// <summary>Replaces the rows, keeping the selected one selected (by key) when it is still there.</summary>
     public void Fill(IReadOnlyList<Entry> entries)
     {
+        if (_collapseNew)
+        {
+            var known = _all.Where(e => e.IsGroup).Select(e => e.Key).ToHashSet();
+            _collapsed.UnionWith(entries.Where(e => e.IsGroup && !known.Contains(e.Key)).Select(e => e.Key));
+        }
         _all = entries;
         Show(Selected);
+    }
+
+    /// <summary>Selects a sensor, opening its group first when that is collapsed; false when it isn't in the list.</summary>
+    public bool SelectSensor(string id)
+    {
+        if (_all.FirstOrDefault(e => !e.IsGroup && !e.IsSpacer && e.Key == id) is not { } entry) { Selected = null; return false; }
+        if (_collapsed.Remove(entry.GroupKey)) Show(null);
+        Selected = Entries.FirstOrDefault(e => !e.IsGroup && e.Key == id);
+        if (Selected is { } item) _list.ScrollIntoView(item);
+        return Selected is not null;
     }
 
     private void Show(Entry? selected)
@@ -346,17 +380,22 @@ public sealed class ClassicEntryList : Border
             var closed = false;
             foreach (var e in _all)
             {
-                if (e.IsGroup) closed = _collapsed.Contains(e.Key);
-                else if (closed) continue;
-                shown.Add(e);
+                if (e.IsGroup)
+                {
+                    closed = _collapsed.Contains(e.Key);
+                    shown.Add(closed ? e with { Collapsed = true } : e);
+                }
+                else if (!closed) shown.Add(e);
             }
             visible = shown;
         }
         _list.ItemsSource = visible;
         if (selected is null) return;
-        // A sensor whose group was just collapsed: its group heading takes the selection.
-        _list.SelectedItem = visible.FirstOrDefault(e => !e.IsSpacer && e.Key == selected.Key && e.IsGroup == selected.IsGroup)
-            ?? (selected.IsGroup ? null : visible.FirstOrDefault(e => e.IsGroup && e.Key == selected.GroupKey));
+        _list.SelectedItem = visible.FirstOrDefault(e => !e.IsSpacer && e.Key == selected.Key && e.IsGroup == selected.IsGroup);
+        if (!_collapsible) return;
+        // A sensor whose group was just collapsed: its group heading takes the selection, and stays in view.
+        if (_list.SelectedItem is null && !selected.IsGroup)
+            _list.SelectedItem = visible.FirstOrDefault(e => e.IsGroup && e.Key == selected.GroupKey);
         if (_list.SelectedItem is { } item) _list.ScrollIntoView(item);
     }
 
@@ -374,6 +413,7 @@ public sealed class ClassicEntryList : Border
     public void SetAllCollapsed(bool collapsed)
     {
         if (!_collapsible) return;
+        _collapseNew = collapsed;
         _collapsed.Clear();
         if (collapsed) _collapsed.UnionWith(_all.Where(e => e.IsGroup).Select(e => e.Key));
         Show(Selected);
