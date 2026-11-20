@@ -489,7 +489,7 @@ Headless: the helper protocol, its validation and the client/server socket round
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
 HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
-against a fake machine's UEFI variables. 375 tests (184 library + 191 headless UI) as of 0.39.0.
+against a fake machine's UEFI variables. 394 tests (194 library + 200 headless UI; 8 Windows-only skipped on Linux) as of 1.0.0.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.
