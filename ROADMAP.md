@@ -228,8 +228,9 @@ when firmware clamps or rejects the value. Nothing a client sends may become a p
 - [x] **GPU power limit** — NVML, within each card's constraints, read back (helper `gpupower`). Live until reboot.
 - [x] **CPU socket power limit (PPT)** — `amd_hsmp_hwmon` `power1_cap`, 50 W to the SMU's reported max, read back
       (helper `cpuppt`); shows the active frequency limit and its source. Live until reboot.
-- [x] **Keep power limits after reboot** — in the existing boot services' config: hsmp-control's `ppt_mw` (100–300 W)
-      and an OpenHW drop-in for `nvidia-power-limit.service` (helper `cpupptboot` / `gpupowerboot`).
+- [x] **Keep power limits after reboot** — the CPU's in `/etc/openhw/cpu-ppt-mw`, applied by openhw-helper once per
+      boot (1.0.1; was hsmp-control's `ppt_mw`, 9970X-only, retired), and an OpenHW drop-in for
+      `nvidia-power-limit.service` (helper `cpupptboot` / `gpupowerboot`).
 - [x] **Settings window** — poll interval, start at login (`--tray`), tray icons (sensor + colour, no limit since 0.20.2),
       single instance.
 - [x] **Power modes** — switch power-profiles-daemon's profile from the footer and tray, and lift the base-clock

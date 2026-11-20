@@ -4,6 +4,17 @@ Versioning: semantic — **minor** for a round of new features, **patch** for fi
 The version is set once, in `Directory.Build.props`; each release is tagged `vX.Y.Z`. The app shows
 `X.Y.Z · <git revision>`.
 
+## 1.0.1 — 2026-11-19 — the CPU boot power limit works on the WRX90E; hsmp-control retired
+
+- The CPU's **At boot** power limit (Power Limits) is applied by openhw-helper, once per boot as it starts, from
+  OpenHW's own `/etc/openhw/cpu-ppt-mw`. It used to rely on `hsmp-control-apply.service`, a Threadripper 9970X-only
+  tool that refused the 9975WX after the board swap: the boot limit was silently never applied, and the service
+  restarted every 10 s (over 4,000 times a boot). A helper restart later in the same boot (an upgrade, RTXinVM's
+  switch) leaves a live limit alone; if the HSMP driver isn't there yet it retries for a minute.
+- The package keeps the saved value (moved from `/etc/hsmp-control/ppt_mw`) and retires the old service: stopped,
+  disabled, and its unit, binary and config moved to `/var/lib/openhw/retired/hsmp-control` (not deleted).
+- The boot range is now the live one: 50 W up to the SMU's maximum (was hsmp-control's 100–300 W).
+
 ## 1.0.0 — 2026-11-19 — first 1.x release; collapsible groups in View → Layout Settings too
 
 - View → Layout Settings: groups collapse and expand as on Sensor Settings → Layout — ▾ / ▸ on a group heading, a

@@ -131,9 +131,9 @@ public sealed class GpuPowerLimits : IGpuPowerLimitReader, IDisposable
 /// <summary>
 /// The CPU socket power limit through amd_hsmp_hwmon's <c>power1_cap</c> (µW), which the kernel turns into HSMP
 /// SET_SOCKET_POWER_LIMIT. Readable by anyone; <see cref="Set"/> needs root. The live limit lasts until reboot, when
-/// firmware (and hsmp-control-apply.service, from <c>/etc/hsmp-control/ppt_mw</c>) sets it again.
+/// firmware (and openhw-helper, from <c>/etc/openhw/cpu-ppt-mw</c>) sets it again.
 /// </summary>
-public sealed class CpuPowerLimits(string hwmonRoot = "/sys/class/hwmon", string bootConfig = "/etc/hsmp-control/ppt_mw", Action<string, long>? write = null)
+public sealed class CpuPowerLimits(string hwmonRoot = "/sys/class/hwmon", string bootConfig = "/etc/openhw/cpu-ppt-mw", Action<string, long>? write = null)
 {
     private readonly Action<string, long> _write = write ?? ((path, value) =>
         File.WriteAllText(path, value.ToString(CultureInfo.InvariantCulture) + "\n"));
@@ -156,8 +156,7 @@ public sealed class CpuPowerLimits(string hwmonRoot = "/sys/class/hwmon", string
     }
 
     /// <summary>
-    /// Root only. Sets the socket limit to <paramref name="milliwatts"/> (null = the boot value from hsmp-control's
-    /// config), between <see cref="CpuPowerLimit.MinMW"/> and the SMU's reported maximum, and reads it back.
+    /// Root only. Sets the socket limit to <paramref name="milliwatts"/> (null = the boot value OpenHW keeps), between <see cref="CpuPowerLimit.MinMW"/> and the SMU's reported maximum, and reads it back.
     /// </summary>
     public long Set(long? milliwatts)
     {

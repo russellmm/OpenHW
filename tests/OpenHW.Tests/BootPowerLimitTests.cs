@@ -3,7 +3,7 @@ using Xunit;
 
 namespace OpenHW.Tests;
 
-/// <summary>Boot-time limits against a fake /etc shaped like the owner's: hsmp-control and nvidia-power-limit.service.</summary>
+/// <summary>Boot-time limits against a fake /etc shaped like the owner's: OpenHW's CPU value and nvidia-power-limit.service.</summary>
 public sealed class BootPowerLimitTests : IDisposable
 {
     private readonly string _etc = Directory.CreateTempSubdirectory("openhw-etc").FullName;
@@ -18,12 +18,25 @@ public sealed class BootPowerLimitTests : IDisposable
     private static readonly GpuPowerLimit[] Trx50 = [Card(Ti, Gpu0), Card(Pro1, Gpu1), Card(Pro2, Gpu2)];
     private static readonly GpuPowerLimit[] Wrx90 = [Card(Ti, "00000000:11:00.0"), Card(Pro2, "00000000:C1:00.0"), Card(Pro1, "00000000:F1:00.0")];
 
+    private readonly string _sys = Directory.CreateTempSubdirectory("openhw-hsmp").FullName;
+    private string CapFile => Path.Combine(_sys, "hwmon3", "power1_cap");
+
+    // A fake amd_hsmp_hwmon at the 9975WX's firmware default (350 W).
+    private CpuPowerLimits Cpu()
+    {
+        var dir = Path.Combine(_sys, "hwmon3");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "name"), "amd_hsmp_hwmon\n");
+        if (!File.Exists(CapFile)) File.WriteAllText(CapFile, "350000000\n");
+        File.WriteAllText(Path.Combine(dir, "power1_cap_max"), "2000000000\n");
+        return new CpuPowerLimits(_sys, Path.Combine(_etc, "openhw", "cpu-ppt-mw"));
+    }
+
     public BootPowerLimitTests()
     {
-        Directory.CreateDirectory(Path.Combine(_etc, "hsmp-control"));
+        Directory.CreateDirectory(Path.Combine(_etc, "openhw"));
         Directory.CreateDirectory(Path.Combine(Units, "nvidia-power-limit.service.d"));
-        File.WriteAllText(Path.Combine(_etc, "hsmp-control", "ppt_mw"), "250000\n");
-        File.WriteAllText(Path.Combine(Units, "hsmp-control-apply.service"), "[Service]\nExecStart=/usr/local/bin/hsmp-control apply\n");
+        File.WriteAllText(Path.Combine(_etc, "openhw", "cpu-ppt-mw"), "250000\n");
         File.WriteAllText(Path.Combine(Units, "nvidia-power-limit.service"), $"""
             [Service]
             Type=oneshot
@@ -35,7 +48,11 @@ public sealed class BootPowerLimitTests : IDisposable
             """);
     }
 
-    public void Dispose() => Directory.Delete(_etc, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_etc, recursive: true);
+        Directory.Delete(_sys, recursive: true);
+    }
 
     [LinuxFact]
     public void ReadsTheBootServicesValues()
@@ -105,17 +122,17 @@ public sealed class BootPowerLimitTests : IDisposable
     public void WithoutTheBootServiceNothingIsWritten()
     {
         File.Delete(Path.Combine(Units, "nvidia-power-limit.service"));
-        File.Delete(Path.Combine(Units, "hsmp-control-apply.service"));
         var boot = new BootPowerLimits(_etc);
         Assert.Throws<IOException>(() => boot.SetGpu(Ti, 160));
-        Assert.Throws<IOException>(() => boot.SetCpu(200_000));
         Assert.False(File.Exists(DropIn));
-        Assert.Equal(250_000, boot.CpuBootMW());
+        boot.SetCpu(200_000, 2_000_000); // the CPU's needs no boot service: openhw-helper applies it
+        Assert.Equal(200_000, boot.CpuBootMW());
     }
 
     [LinuxTheory]
     [InlineData("cpupptboot 0")]
-    [InlineData("cpupptboot 350000")]
+    [InlineData("cpupptboot 40000")] // below 50 W
+    [InlineData("cpupptboot 2500000")] // above the SMU's maximum
     [InlineData("cpupptboot ../ppt_mw")]
     [InlineData("gpupowerboot GPU-1 200")]
     [InlineData("gpupowerboot GPU-12345678-1234-1234-1234-123456789abc 20000")]
@@ -123,7 +140,7 @@ public sealed class BootPowerLimitTests : IDisposable
     public void HelperRejectsBadBootLimits(string line)
     {
         using var gpus = new GpuPowerLimits();
-        var session = new HelperSession(new NoSmart(), gpuPower: gpus, boot: new BootPowerLimits(_etc));
+        var session = new HelperSession(new NoSmart(), gpuPower: gpus, cpuPower: Cpu(), boot: new BootPowerLimits(_etc));
         Assert.StartsWith("err", session.HandleLine(line));
         Assert.Equal(250_000, new BootPowerLimits(_etc).CpuBootMW());
         Assert.False(File.Exists(DropIn));
@@ -132,9 +149,41 @@ public sealed class BootPowerLimitTests : IDisposable
     [LinuxFact]
     public void HelperSetsTheCpuBootLimit()
     {
-        var session = new HelperSession(new NoSmart(), boot: new BootPowerLimits(_etc));
+        var session = new HelperSession(new NoSmart(), cpuPower: Cpu(), boot: new BootPowerLimits(_etc));
         Assert.Equal("ok 200000", session.HandleLine("cpupptboot 200000"));
+        Assert.Equal("ok 350000", session.HandleLine("cpupptboot 350000")); // above hsmp-control's old 300 W ceiling
         Assert.Equal("ok none", session.HandleLine("cpupptboot none"));
+        Assert.StartsWith("err", new HelperSession(new NoSmart(), boot: new BootPowerLimits(_etc)).HandleLine("cpupptboot 200000")); // no HSMP: no range to check
+    }
+
+    [LinuxFact]
+    public void TheHelperAppliesTheCpuBootLimitOncePerBoot()
+    {
+        var boot = new BootPowerLimits(_etc);
+        var cpu = Cpu();
+        var marker = Path.Combine(_sys, "cpu-ppt-applied");
+        Assert.Contains("250", boot.ApplyCpuOncePerBoot(cpu, marker));
+        Assert.Equal("250000000", File.ReadAllText(CapFile).Trim());
+
+        // A helper restart later this boot leaves a live limit the owner set alone.
+        cpu.Set(300_000);
+        Assert.Contains("already", boot.ApplyCpuOncePerBoot(cpu, marker));
+        Assert.Equal("300000000", File.ReadAllText(CapFile).Trim());
+
+        // Next boot (marker gone): the boot value again. None set: firmware's stays.
+        File.Delete(marker);
+        boot.ApplyCpuOncePerBoot(cpu, marker);
+        Assert.Equal("250000000", File.ReadAllText(CapFile).Trim());
+        File.Delete(marker);
+        boot.SetCpu(null, 2_000_000);
+        Assert.Contains("firmware", boot.ApplyCpuOncePerBoot(cpu, marker));
+        Assert.False(File.Exists(marker));
+
+        // No HSMP driver yet: it throws (the helper retries) and leaves no marker.
+        boot.SetCpu(250_000, 2_000_000);
+        Directory.Delete(Path.Combine(_sys, "hwmon3"), recursive: true);
+        Assert.Throws<IOException>(() => boot.ApplyCpuOncePerBoot(cpu, marker));
+        Assert.False(File.Exists(marker));
     }
 
     private sealed class NoSmart : INvmeSmartReader

@@ -20,8 +20,9 @@ public static class HelperSocket
 /// <c>cpufreqmax &lt;all|id,id,…&gt; &lt;kHz|max&gt;</c> (cpufreq ceilings; every id an existing policy, every value
 /// within its minimum and hardware maximum), <c>cpufreqrestore</c> (every capped policy to its hardware maximum),
 /// <c>gpupower &lt;uuid&gt; &lt;mW|default&gt;</c> (an enumerated card, within NVML's constraints for it) and
-/// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or hsmp-control's boot value),
-/// and the boot-time limits: <c>cpupptboot &lt;mW|none&gt;</c> (hsmp-control's config, 100–300 W as it accepts) and
+/// <c>cpuppt &lt;mW|boot&gt;</c> (socket power limit, 50 W up to the SMU's reported maximum, or the boot value),
+/// and the boot-time limits: <c>cpupptboot &lt;mW|none&gt;</c> (/etc/openhw/cpu-ppt-mw, same range; the helper applies it
+/// once per boot as it starts) and
 /// <c>gpupowerboot &lt;uuid&gt; &lt;W|default&gt;</c> (OpenHW's drop-in for nvidia-power-limit.service). Each is read back.
 /// Root-only reads: <c>nvmesmart</c>, <c>rapl</c> (the RAPL package and core energy counters), <c>ddr5</c> (each DIMM's
 /// thermal sensors and PMIC; the PMIC's ADC select R30 is the one register set, and restored) and <c>vr</c> (this
@@ -102,9 +103,10 @@ public sealed partial class HelperSession(INvmeSmartReader smart, CpuFrequencyLi
             case "cpupptboot" when parts.Length == 2:
                 if (boot is null) return "err boot limits unavailable";
                 if (parts[1] != "none" && !MilliWatts().IsMatch(parts[1])) return "err expected mW or none";
+                if (cpuPower?.Read() is not { } cpuNow) return "err CPU power limit unavailable";
                 try
                 {
-                    boot.SetCpu(parts[1] == "none" ? null : long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
+                    boot.SetCpu(parts[1] == "none" ? null : long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), cpuNow.MaxMW);
                     return "ok " + (boot.CpuBootMW()?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none");
                 }
                 catch (ArgumentException ex) { return "err " + ex.Message; }

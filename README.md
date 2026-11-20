@@ -292,11 +292,12 @@ what is limiting the cores right now (HSMP's active frequency limit and its sour
 the power limit is what bites). Ranges come from the hardware: NVML's min/max per card, and for the CPU 50 W up to
 the SMU's reported maximum (`power1_cap_max`); every write is read back, so a value firmware clamps shows as an
 error, not as a limit that isn't real. **Default** puts a card back to NVML's default limit; **Boot value** puts
-the CPU back to `/etc/hsmp-control/ppt_mw`. A live limit lasts until reboot.
+the CPU back to its boot value (below). A live limit lasts until reboot.
 
-**At boot** sets the value applied at every boot, in the existing boot services rather than a new one: the CPU's goes
-in `/etc/hsmp-control/ppt_mw` for `hsmp-control-apply.service` (100–300 W, the range hsmp-control accepts — a value
-outside it would silently not apply), and a card's goes in OpenHW's own drop-in,
+**At boot** sets the value applied at every boot: the CPU's goes in `/etc/openhw/cpu-ppt-mw` (same range as live),
+which openhw-helper applies once per boot as it starts (a helper restart later in the session leaves a live limit
+alone; until 1.0.1 this was hsmp-control's job, a 9970X-only tool the package now retires), and a card's goes in
+OpenHW's own drop-in,
 `/etc/systemd/system/nvidia-power-limit.service.d/openhw.conf`. The drop-in names the **card**, not its slot
 (`nvidia-smi -i GPU-<uuid> -pl <W>`), so a card keeps its limit when it moves to another PCIe slot or a new
 motherboard. It repeats the unit's own per-slot lines first and OpenHW's per-card lines after them (OpenHW's win), each
@@ -461,8 +462,8 @@ and lending (`lendstatus`, `cardvms`, `cardvm`, `lend`, `vmreturn`, `lendinstall
 values `cpupptboot <mW|none>` and `gpupowerboot <uuid> <W|default>` (see [Power limits](#power-limits)). No client input becomes a path. It caps request lines at 1024 bytes, reads each drive
 at most once per 10 s, and runs under a hardened systemd unit (capabilities `CAP_SYS_ADMIN`, `CAP_CHOWN`, `CAP_BPF`,
 `CAP_NET_ADMIN`, `CAP_SYS_PTRACE`, `CAP_DAC_READ_SEARCH`; read-only filesystem except `/sys/devices/system/cpu`,
-`/sys/devices/platform` (HSMP power cap), `/etc/hsmp-control`, the nvidia-power-limit drop-in directory,
-`/etc/openhw` and `/sys/fs/bpf` (the card filter, the BMC login and certificate pin), `/var/lib/openhw` (the fan
+`/sys/devices/platform` (HSMP power cap), the nvidia-power-limit drop-in directory,
+`/etc/openhw` and `/sys/fs/bpf` (the card filter, the CPU boot power limit, the BMC login and certificate pin), `/var/lib/openhw` (the fan
 restore journal, saved original curves and alarm thresholds), and for GPU Lending's install/uninstall its own drop-in folder,
 `/etc/udev/rules.d`, `/etc/libvirt/hooks/qemu.d` and `/etc/wireplumber/wireplumber.conf.d` (fixed file names only); kernel tunables, `/sys/kernel`, `/sys/module`, `/sys/power` and
 `/sys/firmware` read-only; network only to the BMC's link-local host interface (169.254.0.0/16, for Redfish); devices limited to NVMe (read), the NVIDIA nodes NVML needs, `/dev/i2c-*`, `/dev/ipmi*` and `/dev/ttyACM*` (the WireView)).
@@ -489,7 +490,7 @@ Headless: the helper protocol, its validation and the client/server socket round
 rows draw — e.g. that frozen rows render dimmed; it reads this machine's live sensors. `SensorSettingsTests` also
 saves a render of every Sensor Settings / Settings tab (to `$OPENHW_CAPTURES`, default `/tmp`) for comparing with the
 HWiNFO captures in `reference/settings_menu/`. `BiosSetupTests` renders every BIOS Setup page and checks the plan
-against a fake machine's UEFI variables. 394 tests (194 library + 200 headless UI; 8 Windows-only skipped on Linux) as of 1.0.0.
+against a fake machine's UEFI variables. 396 tests (196 library + 200 headless UI; 8 Windows-only skipped on Linux) as of 1.0.1.
 
 `dotnet src/OpenHW.App/bin/Debug/net8.0/openhw.dll --dump` prints the sensor tree as the window shows it, without
 a display — useful for checking changes headlessly.

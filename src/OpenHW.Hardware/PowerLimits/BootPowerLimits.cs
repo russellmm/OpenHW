@@ -11,10 +11,12 @@ public enum BootLimitSource { None, BootService, OpenHW }
 public sealed record BootLimit(long MilliWatts, BootLimitSource Source);
 
 /// <summary>
-/// Boot-time power limits, kept in the owner's existing boot services rather than a new boot path:
+/// Boot-time power limits:
 /// <list type="bullet">
-///   <item>CPU: <c>/etc/hsmp-control/ppt_mw</c>, which hsmp-control-apply.service re-asserts at boot. hsmp-control
-///   refuses anything outside 100–300 W, so OpenHW does too — a value it would reject would silently not apply.</item>
+///   <item>CPU: <c>/etc/openhw/cpu-ppt-mw</c>, which openhw-helper applies once per boot as it starts
+///   (<see cref="ApplyCpuOncePerBoot"/>), between <see cref="CpuPowerLimit.MinMW"/> and the SMU's maximum. Until 1.0.1
+///   this was <c>/etc/hsmp-control/ppt_mw</c> for hsmp-control-apply.service, a Threadripper 9970X-only tool that
+///   refused every start after the board swap; the package moves the value over and retires that service.</item>
 ///   <item>GPUs: nvidia-power-limit.service runs <c>nvidia-smi -i &lt;bus&gt; -pl &lt;W&gt;</c> per slot. OpenHW never
 ///   edits that unit; it writes its own drop-in (<c>openhw.conf</c>) that repeats the unit's lines and adds the cards
 ///   the owner set, by GPU UUID. Deleting the drop-in returns every card to the unit's own values.</item>
@@ -23,18 +25,15 @@ public sealed record BootLimit(long MilliWatts, BootLimitSource Source);
 /// </summary>
 public sealed partial class BootPowerLimits(string etc = "/etc")
 {
-    public const long CpuMinMW = 100_000, CpuMaxMW = 300_000; // hsmp-control's own accepted range
     public const string GpuUnit = "nvidia-power-limit.service";
-    public const string CpuUnit = "hsmp-control-apply.service";
 
-    private string PptFile => Path.Combine(etc, "hsmp-control", "ppt_mw");
+    private string PptFile => Path.Combine(etc, "openhw", "cpu-ppt-mw");
     private string UnitFile => Path.Combine(etc, "systemd", "system", GpuUnit);
     private string DropIn => Path.Combine(etc, "systemd", "system", GpuUnit + ".d", "openhw.conf");
 
-    public bool CpuServiceInstalled => File.Exists(Path.Combine(etc, "systemd", "system", CpuUnit));
     public bool GpuServiceInstalled => File.Exists(UnitFile);
 
-    /// <summary>The CPU limit hsmp-control will apply at boot, or null (firmware default).</summary>
+    /// <summary>The CPU limit openhw-helper applies at boot, or null (firmware default).</summary>
     public long? CpuBootMW() =>
         long.TryParse(SysFs.ReadText(PptFile), NumberStyles.None, CultureInfo.InvariantCulture, out var mw) ? mw : null;
 
@@ -88,17 +87,19 @@ public sealed partial class BootPowerLimits(string etc = "/etc")
         PowerLines(DropIn).Where(l => IsUuid(l.Target)).GroupBy(l => l.Target, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Last().Watts, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Root only. Sets (or with null removes) the CPU boot limit; hsmp-control applies it at the next boot.</summary>
-    public void SetCpu(long? milliwatts)
+    /// <summary>
+    /// Root only. Sets (or with null removes) the CPU boot limit, between <see cref="CpuPowerLimit.MinMW"/> and
+    /// <paramref name="maxMW"/> (the SMU's maximum); openhw-helper applies it from the next boot.
+    /// </summary>
+    public void SetCpu(long? milliwatts, long maxMW)
     {
-        if (!CpuServiceInstalled) throw new IOException($"{CpuUnit} isn't installed, so a boot limit would never be applied");
         if (milliwatts is null)
         {
             File.Delete(PptFile);
             return;
         }
-        if (milliwatts < CpuMinMW || milliwatts > CpuMaxMW)
-            throw new ArgumentException($"{milliwatts / 1000.0:0.#} W is outside the {CpuMinMW / 1000} to {CpuMaxMW / 1000} W hsmp-control applies at boot");
+        if (milliwatts < CpuPowerLimit.MinMW || milliwatts > maxMW)
+            throw new ArgumentException($"{milliwatts / 1000.0:0.#} W is outside {CpuPowerLimit.MinMW / 1000} to {maxMW / 1000} W");
         WriteAtomically(PptFile, milliwatts.Value.ToString(CultureInfo.InvariantCulture) + "\n",
             UnixFileMode.UserRead | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
         if (CpuBootMW() != milliwatts) throw new IOException("the boot limit did not read back");
@@ -140,6 +141,21 @@ public sealed partial class BootPowerLimits(string etc = "/etc")
         WriteAtomically(DropIn, text.ToString(),
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
         if (watts is { } check && CardLines().GetValueOrDefault(uuid) != check) throw new IOException("the boot limit did not read back");
+    }
+
+    /// <summary>
+    /// Root only (openhw-helper as it starts). Sets the CPU's boot limit once per boot: <paramref name="marker"/> (in
+    /// /run, gone at reboot) records that it was done, so a helper restart later in the session (a package upgrade,
+    /// RTXinVM's switch) never undoes a live limit the owner set since. Returns what happened, for the journal;
+    /// throws when the limit can't be set yet (no HSMP driver) so the caller can retry.
+    /// </summary>
+    public string ApplyCpuOncePerBoot(CpuPowerLimits cpu, string marker)
+    {
+        if (File.Exists(marker)) return "CPU boot limit already applied this boot";
+        if (CpuBootMW() is not { } mw) return "no CPU boot limit set (firmware default)";
+        var set = cpu.Set(mw);
+        File.WriteAllText(marker, set.ToString(CultureInfo.InvariantCulture) + "\n");
+        return $"CPU boot limit applied: {set / 1000.0:0.#} W";
     }
 
     public static bool IsUuid(string target) => target.StartsWith("GPU-", StringComparison.OrdinalIgnoreCase);

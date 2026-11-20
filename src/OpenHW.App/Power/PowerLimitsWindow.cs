@@ -12,13 +12,12 @@ namespace OpenHW.App.Power;
 /// <summary>
 /// CPU socket power limit (PPT) and each NVIDIA card's power limit, live and at boot. Readings need no root; every
 /// change goes through openhw-helper, which checks the range and reads the result back. A live limit lasts until
-/// reboot; the "At boot" row writes the owner's boot services' config (see <see cref="BootPowerLimits"/>).
+/// reboot; the "At boot" row sets the value applied at every boot (see <see cref="BootPowerLimits"/>).
 /// </summary>
 public sealed class PowerLimitsWindow : Window
 {
     private static readonly IBrush Bad = new SolidColorBrush(Color.Parse("#F07070"));
     private static readonly IBrush Good = new SolidColorBrush(Color.Parse("#7BC97B"));
-    private static readonly string[] BootUnits = ["nvidia-power-limit.service", "hsmp-control-apply.service"];
 
     private readonly IGpuPowerLimitReader _gpus;
     private readonly CpuPowerLimits _cpu;
@@ -55,10 +54,10 @@ public sealed class PowerLimitsWindow : Window
                     : "Not available",
                 CpuPowerLimit.MinMW, c.MaxMW, c.LimitMW,
                 mw => $"cpuppt {mw}", c.BootMW is null ? null : ("Boot value", "cpuppt boot"),
-                BootRow("CPU", _boot.CpuServiceInstalled,
-                    () => _boot.CpuBootMW() is { } b ? $"At boot: {W(b)} (hsmp-control)" : "At boot: firmware default",
-                    $"At boot: firmware default ({BootPowerLimits.CpuUnit} isn't installed)",
-                    BootPowerLimits.CpuMinMW, BootPowerLimits.CpuMaxMW, _boot.CpuBootMW() ?? c.LimitMW,
+                BootRow("CPU", true,
+                    () => _boot.CpuBootMW() is { } b ? $"At boot: {W(b)} (set by openhw-helper as it starts)" : "At boot: firmware default",
+                    "",
+                    CpuPowerLimit.MinMW, c.MaxMW, _boot.CpuBootMW() ?? c.LimitMW,
                     w => $"cpupptboot {w * 1000}", ("Firmware default", "cpupptboot none"))));
         }
         var index = 0;
@@ -82,14 +81,12 @@ public sealed class PowerLimitsWindow : Window
         if (sections.Children.Count == 0)
             sections.Children.Add(new TextBlock { Text = "No CPU or NVIDIA power limits found.", Margin = new Thickness(12) });
 
-        var units = BootUnits.Where(u => File.Exists(Path.Combine("/etc/systemd/system", u))).ToArray();
         var note = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Palette.Footnote, Margin = new Thickness(12, 10, 12, 4),
             Text = "Apply sets a live limit, which lasts until reboot. The \"At boot\" row sets the value applied at every " +
-                   "boot — " + (units.Length > 0
-                       ? $"stored in {string.Join(" and ", units)}'s configuration (OpenHW adds no boot service of its own)."
-                       : "but no boot service for it is installed, so firmware sets its own values at boot."),
+                   "boot: the CPU's by openhw-helper as it starts, the GPUs' by " +
+                   (_boot.GpuServiceInstalled ? $"{BootPowerLimits.GpuUnit} (OpenHW's drop-in for it)." : $"{BootPowerLimits.GpuUnit}, which isn't installed (driver defaults at boot)."),
         };
         Content = new StackPanel { Children = { note, sections, _status } };
 

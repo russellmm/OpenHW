@@ -107,6 +107,27 @@ fi
 
 # The card filter's list (/etc/openhw/card-filter.json): the sandbox can write there but can't create the directory.
 install -d -m 755 /etc/openhw
+
+# The CPU's boot power limit is OpenHW's own since 1.0.1 (/etc/openhw/cpu-ppt-mw, applied by the helper once per
+# boot). It used to live with hsmp-control-apply.service, a Threadripper 9970X-only tool installed with OpenHW's
+# power-limit work; it refuses every other CPU and, with Restart=on-failure, retried every 10 s forever after the
+# board swap. Keep its value, then retire it: stopped, disabled and moved to /var/lib/openhw/retired (not deleted).
+if [ -f /etc/hsmp-control/ppt_mw ] && [ ! -f /etc/openhw/cpu-ppt-mw ]; then
+    install -m 644 /etc/hsmp-control/ppt_mw /etc/openhw/cpu-ppt-mw
+fi
+if [ -f /etc/systemd/system/hsmp-control-apply.service ] && grep -q '/usr/local/bin/hsmp-control apply' /etc/systemd/system/hsmp-control-apply.service; then
+    if [ -d /run/systemd/system ]; then
+        systemctl disable --now hsmp-control-apply.service 2>/dev/null || true
+        systemctl reset-failed hsmp-control-apply.service 2>/dev/null || true
+    fi
+    retired=/var/lib/openhw/retired/hsmp-control
+    install -d -m 700 /var/lib/openhw /var/lib/openhw/retired "$retired"
+    mv -f /etc/systemd/system/hsmp-control-apply.service "$retired/"
+    rm -f /etc/systemd/system/multi-user.target.wants/hsmp-control-apply.service
+    [ -f /usr/local/bin/hsmp-control ] && mv -f /usr/local/bin/hsmp-control "$retired/"
+    [ -d /etc/hsmp-control ] && rm -rf "$retired/etc-hsmp-control" && mv /etc/hsmp-control "$retired/etc-hsmp-control"
+    echo "Retired hsmp-control-apply.service (9970X only); OpenHW applies the CPU boot limit now. Files kept in $retired."
+fi
 # GPU Lending's boot-order drop-in for the helper (written and removed by the helper; same reason).
 install -d -m 755 /etc/systemd/system/openhw-helper.service.d
 # GPU Lending's WirePlumber rule (keeps desktop audio off the lent card's HDMI audio; same reason).

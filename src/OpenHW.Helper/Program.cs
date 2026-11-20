@@ -55,7 +55,24 @@ using var lending = new CardLending(card, () => { gpuFans.Suspend(); nvmlFans.Su
 // Fan control: puts back any curve a crashed run left taken over (journal) before clients can connect.
 using var fans = FanDriver.Live();
 if (fans.Status(null) is { Available: false, Reason: { } why }) Console.WriteLine($"openhw-helper: fan control off: {why}");
-var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, new CpuPowerLimits(), new BootPowerLimits(), new RaplReader(), ddr5, vr, gpus, card, lending, bmc, fans,
+var cpuPower = new CpuPowerLimits();
+var bootLimits = new BootPowerLimits();
+// The CPU's boot power limit (Power Limits → At boot), once per boot; retried while the HSMP driver isn't there yet.
+_ = Task.Run(async () =>
+{
+    var marker = Path.Combine(Path.GetDirectoryName(socketPath)!, "cpu-ppt-applied");
+    for (var attempt = 1; ; attempt++)
+    {
+        try { Console.WriteLine("openhw-helper: " + bootLimits.ApplyCpuOncePerBoot(cpuPower, marker)); return; }
+        catch (ArgumentException ex) { Console.Error.WriteLine("openhw-helper: CPU boot limit not applied: " + ex.Message); return; } // out of range: retrying won't help
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (attempt == 30) { Console.Error.WriteLine("openhw-helper: CPU boot limit not applied: " + ex.Message); return; }
+        }
+        await Task.Delay(TimeSpan.FromSeconds(2));
+    }
+});
+var server = new HelperServer(smart, socketPath, new CpuFrequencyLimits(), gpuPower, cpuPower, bootLimits, new RaplReader(), ddr5, vr, gpus, card, lending, bmc, fans,
     fans.Status(null).Available ? BmcRedfish.Live() : null, gpuFans, wireView);
 // The card filter, if the owner enabled it: back in force (pinned program reused) before clients connect, and — at
 // boot, where the unit orders the helper before the login screen — before GNOME starts. Waits for the card's nodes.
